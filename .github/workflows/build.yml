@@ -12,61 +12,61 @@ jobs:
       contents: write
 
     steps:
-      # 1. Checkout 当前仓库（你的 fork），完整历史
+      # 1. Checkout 当前仓库
       - name: Checkout current repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: recursive
 
-      # 2. 配置 git 身份（push 需要）
+      # 2. 配置 git
       - name: Configure git user
         run: |
           git config user.name "GitHub Actions Bot"
           git config user.email "actions@github.com"
 
-      # 3. 添加上游 remote 并 fetch
+      # 3. 添加上游并 fetch
       - name: Add upstream and fetch
         run: |
           git remote add upstream https://github.com/hq450/fancyss.git
           git fetch upstream --no-tags
 
-      # 4. 对比 fancyss/ 目录的最后提交时间（输出可读日期）
+      # 4. 对比 fancyss/ 目录最后提交时间（只显示东八区时间，纯日期格式）
       - name: Compare fancyss directory last commit time
         id: compare_time
         run: |
-          # 上游 fancyss/ 目录最新 commit 的时间戳（Unix 秒）
           UPSTREAM_TIME=$(git log upstream/3.0 --pretty=format:%ct -- fancyss | head -n 1)
-          
-          # 当前仓库 fancyss/ 目录最新 commit 的时间戳
           CURRENT_TIME=$(git log HEAD --pretty=format:%ct -- fancyss | head -n 1)
           
-          # 转成可读日期（UTC）
-          UPSTREAM_DATE=$(date -d "@$UPSTREAM_TIME" '+%Y-%m-%d %H:%M:%S UTC' 2>/dev/null || echo "未知时间")
-          CURRENT_DATE=$(date -d "@$CURRENT_TIME" '+%Y-%m-%d %H:%M:%S UTC' 2>/dev/null || echo "未知时间")
+          # 东八区时间 = UTC + 8小时（28800秒）
+          UPSTREAM_CST_TIME=$((UPSTREAM_TIME + 28800))
+          CURRENT_CST_TIME=$((CURRENT_TIME + 28800))
           
-          echo "上游 fancyss/ 最后提交时间: $UPSTREAM_DATE ($UPSTREAM_TIME)"
-          echo "当前仓库 fancyss/ 最后提交时间: $CURRENT_DATE ($CURRENT_TIME)"
+          UPSTREAM_DATE=$(date -d "@$UPSTREAM_CST_TIME" '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo "未知时间")
+          CURRENT_DATE=$(date -d "@$CURRENT_CST_TIME" '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo "未知时间")
+          
+          echo "上游 fancyss/ 最后提交时间: $UPSTREAM_DATE"
+          echo "当前仓库 fancyss/ 最后提交时间: $CURRENT_DATE"
           
           if [ -z "$UPSTREAM_TIME" ] || [ -z "$CURRENT_TIME" ]; then
-            echo "无法获取时间戳，强制视为需要同步"
+            echo "无法获取时间戳，强制同步"
             echo "needs_sync=true" >> $GITHUB_OUTPUT
           elif [ "$UPSTREAM_TIME" -gt "$CURRENT_TIME" ]; then
-            echo "上游 fancyss/ 目录有更新（时间更晚），需要同步"
+            echo "上游有更新，需要同步"
             echo "needs_sync=true" >> $GITHUB_OUTPUT
           else
-            echo "上游 fancyss/ 目录无更新，跳过"
+            echo "上游无更新，跳过"
             echo "needs_sync=false" >> $GITHUB_OUTPUT
           fi
 
-      # 5. 如果不需要同步，直接结束
+      # 5. 跳过无更新
       - name: Skip if no update
         if: steps.compare_time.outputs.needs_sync == 'false'
         run: |
           echo "上游 fancyss 目录无更新，流程结束"
           exit 0
 
-      # 6. 执行完整同步上游仓库，并推送回你的仓库
+      # 6. 同步上游并推送
       - name: Sync upstream repository and push
         if: steps.compare_time.outputs.needs_sync == 'true'
         run: |
@@ -78,8 +78,7 @@ jobs:
           git commit -m "Sync upstream hq450/fancyss@3.0 (fancyss directory updated)" || echo "No changes"
           git push origin HEAD:${{ github.ref_name }} --force-with-lease
 
-      # ==================== 以下步骤只有上游有更新时执行 ====================
-
+      # 后续步骤
       - name: Install jq
         if: steps.compare_time.outputs.needs_sync == 'true'
         run: sudo apt-get update && sudo apt-get install -y jq
@@ -99,7 +98,7 @@ jobs:
         run: |
           sed -i '/系统及自定义任务已注入成功/d' fancyss/ss/ssconfig.sh || true
           sed -i '/定时任务已注入成功/d' fancyss/ss/ssconfig.sh || true
-          sed -i '/Across the Great Wall/i echo_date "================== 系统及自定义任务已注入成功  cru l 查看 =================="' fancyss/ss/ssconfig.sh
+          sed -i '/Across the Great Wall/i echo_date "================== 系统及自定义任务已注入成功 cru l 查看 =================="' fancyss/ss/ssconfig.sh
 
       - name: Remove annoying signature lines
         if: steps.compare_time.outputs.needs_sync == 'true'
@@ -123,7 +122,7 @@ jobs:
 
       - name: Create/Update Release
         if: steps.compare_time.outputs.needs_sync == 'true'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v2.0.8
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         with:
