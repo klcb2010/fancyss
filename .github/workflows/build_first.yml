@@ -1,5 +1,8 @@
 name: FancySS Mod Build
 
+permissions:
+  contents: write  # 這行確保 GITHUB_TOKEN 有權限去 finalize release（create/update + set latest）
+
 on:
   schedule:
     - cron: '0 3 * * *'  # 每天 3 点
