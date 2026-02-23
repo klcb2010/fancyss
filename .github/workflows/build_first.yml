@@ -44,12 +44,16 @@ jobs:
           mkdir -p release_packages
           cp packages/fancyss_*_full.tar.gz release_packages/ || true
 
+      - name: Set release body with current date
+        run: |
+          echo 'RELEASE_BODY=Automated build'"$(date +%y%m%d)"': patched ss_rule_update.sh + ssconfig.sh cron' >> $GITHUB_ENV
+
       - name: Create or Update Release and Upload Artifacts
         uses: softprops/action-gh-release@v2
         with:
           tag_name: mod
           name: FancySS mod build
-          body: Automated build$(date +%y%m%d): patched ss_rule_update.sh + ssconfig.sh cron
+          body: ${{ env.RELEASE_BODY }}
           make_latest: true
           generate_release_notes: false
           files: release_packages/fancyss_*_full.tar.gz
