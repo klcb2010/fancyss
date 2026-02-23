@@ -10,24 +10,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ 拉取源码
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # 2️⃣ 安装依赖
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y jq tar
 
-      # 3️⃣ Patch ss_rule_update.sh 第9行 URL
       - name: Patch ss_rule_update.sh URL
         run: |
           sed -i '9s|.*|URL_MAIN="https://raw.githubusercontent.com/qxzg/Actions/3.0/fancyss_rules"|' fancyss/scripts/ss_rule_update.sh
-          echo "第9行内容:"
           sed -n '9p' fancyss/scripts/ss_rule_update.sh
 
-      # 4️⃣ 从 cron_task.txt 插入定时任务到 ssconfig.sh
       - name: Add cron task from file
         run: |
           CRON_FILE="cron_task.txt"
@@ -39,33 +34,29 @@ jobs:
             echo "⚠️ $CRON_FILE not found!"
           fi
 
-      # 5️⃣ 构建离线安装包
       - name: Build packages
         run: |
           chmod +x build.sh
           ./build.sh
 
-      # 6️⃣ 过滤 debug 包，只保留 release
       - name: Prepare release artifacts
         run: |
           mkdir -p release_packages
           cp packages/fancyss_*_full.tar.gz release_packages/ || true
           cp packages/fancyss_*_lite.tar.gz release_packages/ || true
 
-      # 7️⃣ 创建或更新 GitHub Release
       - name: Create/Update Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: mod
           release_name: FancySS mod build
           body: |
-            Automated build: patched ss_rule_update.sh + ssconfig.sh cron
+            Automated build$(date +%y%m%d): patched ss_rule_update.sh + ssconfig.sh cron
           allowUpdates: true
           makeLatest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # 8️⃣ 上传 release 包到 Release
       - name: Upload release packages
         uses: softprops/action-gh-release@v2
         with:
