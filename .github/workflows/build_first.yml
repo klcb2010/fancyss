@@ -24,7 +24,7 @@ jobs:
       # 3. Patch ss_rule_update.sh
       - name: Patch ss_rule_update.sh
         run: |
-          sed -i '9s|.*|URL_MAIN="https://raw.githubusercontent.com/qxzg/Actions/3.0/fancyss_rules"|' fancyss/ss/ss_rule_update.sh
+          sed -i '9s|.*|URL_MAIN="https://raw.githubusercontent.com/qxzg/Actions/3.0/fancyss_rules"|' fancyss/scripts/ss_rule_update.sh
 
       # 4. Patch ssconfig.sh 末尾插入 cron_task.txt
       - name: Append cron_task.txt to ssconfig.sh
