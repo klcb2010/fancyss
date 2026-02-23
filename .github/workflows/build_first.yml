@@ -39,7 +39,7 @@ jobs:
           sed -i '/定时任务已注入成功/d' fancyss/ss/ssconfig.sh || true
           
           # 在 "Across the Great Wall" 这一行上面插入新消息
-          sed -i '/Across the Great Wall/i echo_date "================== 系统及自定义任务已注入成功， cru l 查看 =================="' fancyss/ss/ssconfig.sh
+          sed -i '/Across the Great Wall/i echo_date "================== 系统及自定义任务已注入成功 cru l 查看 =================="' fancyss/ss/ssconfig.sh
 
       # 6. 删除讨厌的多余通知
       - name: Remove annoying signature lines
