@@ -22,7 +22,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: hq450/fancyss
-          ref: 3.0
+          ref: refs/heads/3.0  # ← 关键修正！明确指定 branch refs/heads/3.0
           path: upstream
           fetch-depth: 1
 
@@ -75,7 +75,7 @@ jobs:
           sed -i '/定时任务已注入成功/d' fancyss/ss/ssconfig.sh || true
           
           # 插入到 Across the Great Wall 上面
-          sed -i '/Across the Great Wall/i echo_date "================== 系统及自定义任务已注入成功 cru l 查看 =================="' fancyss/ss/ssconfig.sh
+          sed -i '/Across the Great Wall/i echo_date "================== 系统及自定义任务已注入成功  cru l 查看 =================="' fancyss/ss/ssconfig.sh
 
       # 删除通知
       - name: Remove annoying signature lines
