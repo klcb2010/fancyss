@@ -1,75 +1,114 @@
-name: FancySS Auto Build
+name: FancySS Mod Build
 
 on:
   schedule:
-    # 每三天凌晨 3 点执行
-    - cron: '0 3 */3 * *'
+    - cron: '0 3 * * *'  # 每天凌晨3点
   workflow_dispatch:
 
 jobs:
-  sync-build-release:
+  check-and-build:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. 拉取你的 fork
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      # 1. Checkout 当前仓库（你的 fork）
+      - name: Checkout current repository
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          submodules: recursive
 
-      # 2. 添加 upstream 并 fetch
-      - name: Fetch upstream fancyss
-        run: |
-          git remote add upstream https://github.com/hq450/fancyss.git || true
-          git fetch upstream 3.0
+      # 2. Checkout 上游仓库（hq450/fancyss）
+      - name: Checkout upstream repository
+        uses: actions/checkout@v4
+        with:
+          repository: hq450/fancyss
+          ref: 3.0
+          path: upstream
+          fetch-depth: 1
 
-      # 3. 检查是否有更新
-      - name: Check for upstream updates
+      # 3. 检查上游是否有更新
+      - name: Check if upstream has updates
         id: check_update
         run: |
-          UPSTREAM_HASH=$(git rev-parse upstream/3.0)
-          LOCAL_HASH=$(git rev-parse HEAD)
-          echo "upstream=$UPSTREAM_HASH" >> $GITHUB_OUTPUT
-          echo "local=$LOCAL_HASH" >> $GITHUB_OUTPUT
-          if [ "$UPSTREAM_HASH" = "$LOCAL_HASH" ]; then
-            echo "no_changes=true" >> $GITHUB_OUTPUT
+          UPSTREAM_SHA=$(cd upstream && git rev-parse HEAD)
+          CURRENT_SHA=$(git rev-parse HEAD)
+
+          echo "上游最新 commit: $UPSTREAM_SHA"
+          echo "当前仓库 commit: $CURRENT_SHA"
+
+          if [ "$UPSTREAM_SHA" = "$CURRENT_SHA" ]; then
+            echo "上游仓库没有更新，跳过后续构建"
+            echo "skip_build=true" >> $GITHUB_OUTPUT
           else
-            echo "no_changes=false" >> $GITHUB_OUTPUT
+            echo "上游有更新，继续构建"
+            echo "skip_build=false" >> $GITHUB_OUTPUT
           fi
 
-      # 4. 跳过无更新的构建
-      - name: Skip if no updates
-        if: ${{ steps.check_update.outputs.no_changes == 'true' }}
+      # 4. 无更新则结束流程
+      - name: Skip if no update
+        if: steps.check_update.outputs.skip_build == 'true'
         run: |
-          echo "No upstream changes. Build skipped."
+          echo "无更新，流程结束"
           exit 0
 
-      # 5. 合并 upstream
-      - name: Merge upstream
-        if: ${{ steps.check_update.outputs.no_changes == 'false' }}
-        run: |
-          git merge upstream/3.0 --ff-only
+      # ==================== 以下步骤只有上游有更新时执行 ====================
 
-      # 6. 插入自定义 cron 任务
-      - name: Insert custom cron task
-        if: ${{ steps.check_update.outputs.no_changes == 'false' }}
+      # 安装 jq
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      # Patch ss_rule_update.sh
+      - name: Patch ss_rule_update.sh
         run: |
-          sed -i '/# BEGIN CUSTOM CRON TASK/,/# END CUSTOM CRON TASK/d' fancyss/ss/ssconfig.sh
+          sed -i '9s|.*|URL_MAIN="https://raw.githubusercontent.com/qxzg/Actions/3.0/fancyss_rules"|' fancyss/scripts/ss_rule_update.sh
+
+      # 追加 cron_task.txt
+      - name: Append cron_task.txt to ssconfig.sh
+        run: |
           cat cron_task.txt >> fancyss/ss/ssconfig.sh
 
-      # 7. 构建 fancyss 插件（根目录 build.sh）
-      - name: Build FancySS plugin
-        if: ${{ steps.check_update.outputs.no_changes == 'false' }}
+      # 添加自定义注入日志消息
+      - name: Add custom injected tasks log message
         run: |
-          sh build.sh
+          # 删除旧的自定义消息（防重复）
+          sed -i '/系统及自定义任务已注入成功/d' fancyss/ss/ssconfig.sh || true
+          sed -i '/定时任务已注入成功/d' fancyss/ss/ssconfig.sh || true
+          
+          # 插入到 Across the Great Wall 上面
+          sed -i '/Across the Great Wall/i echo_date "================== 系统及自定义任务已注入成功 cru l 查看 =================="' fancyss/ss/ssconfig.sh
 
-      # 8. 发布到 Release mod（支持首次发布和覆盖）
-      - name: Publish to GitHub Release
-        if: ${{ steps.check_update.outputs.no_changes == 'false' }}
-        uses: ncipollo/release-action@v1
+      # 删除通知
+      - name: Remove annoying signature lines
+        run: |
+          sed -i '/Across the Great Wall/,/梅林固件 - 【科学上网】/d' fancyss/ss/ssconfig.sh || true
+
+      # 设置 build.sh 可执行
+      - name: Make build.sh executable
+        run: chmod +x build.sh
+
+      # 打包
+      - name: Build FancySS packages
+        run: |
+          ./build.sh
+          find packages -type f ! -name "fancyss_hnd_full.tar.gz" ! -name "fancyss_hnd_v8_full.tar.gz" -delete
+
+      # 生成 release body
+      - name: Generate release body
+        run: |
+          echo "编译版本 build $(date +%y%m%d): patched + custom log + removed signature (upstream updated)" > release_body.txt
+
+      # 创建/更新 Release
+      - name: Create/Update Release
+        uses: softprops/action-gh-release@v2.0.8
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         with:
-          tag: mod
+          tag_name: mod
           name: FancySS mod build
-          artifacts: packages
-          allowUpdates: true
-          makeLatest: true
+          body_path: release_body.txt
+          make_latest: true
+          generate_release_notes: false
+          files: |
+            packages/fancyss_hnd_full.tar.gz
+            packages/fancyss_hnd_v8_full.tar.gz
+          overwrite_files: true
