@@ -1,12 +1,12 @@
-name: FancySS Mod Build
+name: FancySS mod build
 
 on:
   schedule:
-    - cron: '0 3 * * *'  # 每天 3 点
+    - cron: '0 3 * * *'  # 每天凌晨 3 点执行
   workflow_dispatch:
 
 jobs:
-  build-and-release:
+  build:
     runs-on: ubuntu-latest
 
     steps:
@@ -15,38 +15,32 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y jq tar
-
-      - name: Patch ss_rule_update.sh URL
+      - name: Set up environment
         run: |
+          sudo apt-get update
+          sudo apt-get install -y jq tar gzip
+
+      - name: Apply patches
+        run: |
+          # patch ss_rule_update.sh 第9行
           sed -i '9s|.*|URL_MAIN="https://raw.githubusercontent.com/qxzg/Actions/3.0/fancyss_rules"|' fancyss/scripts/ss_rule_update.sh
-          sed -n '9p' fancyss/scripts/ss_rule_update.sh
+          # ssconfig.sh 末尾调用 cron_task.txt
+          echo 'sh $(dirname "$0")/../../cron_task.txt' >> fancyss/ss/ssconfig.sh
 
-      - name: Add cron task from file
+      - name: Build only hnd/hnd_v8 full release packages
         run: |
-          CRON_FILE="cron_task.txt"
-          if [ -f "$CRON_FILE" ]; then
-            echo '' >> fancyss/ss/ssconfig.sh
-            echo "# Auto add sss_task cron from $CRON_FILE" >> fancyss/ss/ssconfig.sh
-            cat "$CRON_FILE" >> fancyss/ss/ssconfig.sh
-          else
-            echo "⚠️ $CRON_FILE not found!"
-          fi
-
-      - name: Build only full packages
-        run: |
-          chmod +x build.sh
-          FULL_ONLY=1 ./build.sh
+          chmod +x fancyss/build.sh
+          ./fancyss/build.sh
 
       - name: Prepare release artifacts
         run: |
           mkdir -p release_packages
-          cp packages/fancyss_*_full.tar.gz release_packages/ || true
+          cp packages/fancyss_hnd_full.tar.gz release_packages/ || true
+          cp packages/fancyss_hnd_v8_full.tar.gz release_packages/ || true
 
-      - name: Set release body with current date
+      - name: Set release body
         run: |
-          echo 'RELEASE_BODY=Automated build'"$(date +%y%m%d)"': patched ss_rule_update.sh + ssconfig.sh cron' >> $GITHUB_ENV
+          echo "RELEASE_BODY=Automated build $(date +%y%m%d): patched ss_rule_update.sh + ssconfig.sh cron" >> $GITHUB_ENV
 
       - name: Create or Update Release and Upload Artifacts
         uses: softprops/action-gh-release@v2
@@ -56,7 +50,8 @@ jobs:
           body: ${{ env.RELEASE_BODY }}
           make_latest: true
           generate_release_notes: false
-          files: release_packages/fancyss_*_full.tar.gz
+          files: release_packages/fancyss_hnd_full.tar.gz,release_packages/fancyss_hnd_v8_full.tar.gz
           overwrite_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_BODY: ${{ env.RELEASE_BODY }}
