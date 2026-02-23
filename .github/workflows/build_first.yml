@@ -2,8 +2,8 @@ name: FancySS Mod Build
 
 on:
   schedule:
-    - cron: '0 3 * * *'  # 每天凌晨3点
-  workflow_dispatch:
+    - cron: '0 3 * * *'  # 每天凌晨3点自动运行
+  workflow_dispatch:     # 支持手动触发
 
 jobs:
   build-and-release:
@@ -17,7 +17,7 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
-      # 2. 安装 jq
+      # 2. 安装 jq 工具
       - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
 
@@ -26,36 +26,38 @@ jobs:
         run: |
           sed -i '9s|.*|URL_MAIN="https://raw.githubusercontent.com/qxzg/Actions/3.0/fancyss_rules"|' fancyss/scripts/ss_rule_update.sh
 
-      # 4. 追加 cron_task.txt 到 ssconfig.sh（你的原有步骤）
+      # 4. 把 cron_task.txt 追加到 ssconfig.sh
       - name: Append cron_task.txt to ssconfig.sh
         run: |
           cat cron_task.txt >> fancyss/ss/ssconfig.sh
 
-      # 新增：替换或追加自定义注入成功日志（加在启动完毕附近或末尾，确保执行）
+      # 5. 添加自定义日志消息（防止重复，先删除旧的，再插入到固定位置）
       - name: Add custom injected tasks log message
         run: |
-          # 方式1：如果有“启动完毕”行，直接替换成带自定义消息的版本（推荐，如果匹配得上）
-          sed -i 's/echo_date.*启动完毕.*/echo_date "================== 系统及自定义任务已注入成功， cru l 查看 =================="/' fancyss/ss/ssconfig.sh || true
+          # 先删除所有旧的自定义注入消息行（防止重复追加）
+          sed -i '/系统及自定义任务已注入成功/d' fancyss/ss/ssconfig.sh || true
+          sed -i '/定时任务已注入成功/d' fancyss/ss/ssconfig.sh || true
+          
+          # 在 "Across the Great Wall" 这一行上面插入新消息（这个位置肯定会被执行）
+          sed -i '/Across the Great Wall/i echo_date "================== 系统及自定义任务已注入成功， cru l 查看 =================="' fancyss/ss/ssconfig.sh
 
-          # 方式2：如果上面没匹配到，就在文件末尾追加（保底）
-          echo 'echo_date "================== 系统及自定义任务已注入成功， cru l 查看 =================="' >> fancyss/ss/ssconfig.sh
-
-      # 5. 加执行权限
+      # 6. 设置 build.sh 可执行权限
       - name: Make build.sh executable
         run: chmod +x build.sh
 
-      # 6. 执行打包，只保留 full 包
+      # 7. 执行打包，只保留 hnd / hnd_v8 full 包
       - name: Build FancySS packages
         run: |
           ./build.sh
+          # 删除不需要的包
           find packages -type f ! -name "fancyss_hnd_full.tar.gz" ! -name "fancyss_hnd_v8_full.tar.gz" -delete
 
-      # 7. 生成 release body
+      # 8. 生成 release 描述
       - name: Generate release body
         run: |
           echo "Automated build $(date +%y%m%d): patched ss_rule_update.sh + ssconfig.sh cron + 自定义任务注入日志" > release_body.txt
 
-      # 8. 创建/更新 Release
+      # 9. 创建/更新 Release 并上传包
       - name: Create/Update Release
         uses: softprops/action-gh-release@v2.0.8
         env:
