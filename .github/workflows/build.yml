@@ -1,0 +1,68 @@
+name: FancySS Auto Build
+
+on:
+  schedule:
+    # 每天凌晨 3 点同步源码
+    - cron: '0 3 * * *'
+  workflow_dispatch: # 支持手动触发
+
+jobs:
+  build-fancyss:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout your fork
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0 # 全量拉取，便于检测更新
+
+      - name: Add upstream remote
+        run: |
+          git remote add upstream https://github.com/hq450/fancyss.git || true
+          git fetch upstream
+
+      - name: Check for updates
+        id: check_update
+        run: |
+          git fetch upstream 3.0
+          # 查看你 fork 的 HEAD 与 upstream 3.0 是否一致
+          UPSTREAM_HASH=$(git rev-parse upstream/3.0)
+          LOCAL_HASH=$(git rev-parse HEAD)
+          echo "upstream=$UPSTREAM_HASH" >> $GITHUB_OUTPUT
+          echo "local=$LOCAL_HASH" >> $GITHUB_OUTPUT
+          if [ "$UPSTREAM_HASH" = "$LOCAL_HASH" ]; then
+            echo "no_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "no_changes=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Skip if no update
+        if: ${{ steps.check_update.outputs.no_changes == 'true' }}
+        run: |
+          echo "No updates from upstream, skipping build."
+          exit 0
+
+      - name: Merge upstream changes
+        if: ${{ steps.check_update.outputs.no_changes == 'false' }}
+        run: |
+          git merge upstream/3.0 --ff-only
+
+      - name: Insert custom cron task
+        if: ${{ steps.check_update.outputs.no_changes == 'false' }}
+        run: |
+          # 假设 cron_task.txt 放在仓库根目录
+          # 先删除旧任务块，再追加新的
+          sed -i '/# BEGIN CUSTOM CRON TASK/,/# END CUSTOM CRON TASK/d' fancyss/ss/ssconfig.sh
+          cat cron_task.txt >> fancyss/ss/ssconfig.sh
+
+      - name: Build FancySS plugin
+        if: ${{ steps.check_update.outputs.no_changes == 'false' }}
+        run: |
+          cd fancyss
+          sh build.sh
+
+      - name: Upload plugin artifact
+        if: ${{ steps.check_update.outputs.no_changes == 'false' }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: fancyss-plugin
+          path: fancyss/packages/*
