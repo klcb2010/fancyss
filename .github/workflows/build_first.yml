@@ -1,42 +1,28 @@
 name: FancySS First Build
 
 on:
-  workflow_dispatch:   # 手动触发首次打包
-  schedule:
-    - cron: '0 3 */3 * *'  # 后续可以自动三天一次
+  workflow_dispatch:
 
 jobs:
-  build-release:
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. 拉取你的 fork
-      - name: Checkout repository
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@v3
 
-      # 2. 添加 upstream 并 fetch（可选）
-      - name: Fetch upstream fancyss
+      - name: Build FancySS
         run: |
-          git remote add upstream https://github.com/hq450/fancyss.git || true
-          git fetch upstream 3.0
-          git merge upstream/3.0 --ff-only || echo "No upstream updates"
+          chmod +x build.sh
+          ./build.sh
 
-      # 3. 构建插件
-      - name: Build FancySS plugin
-        run: |
-          sh build.sh
+      - name: Show packages
+        run: ls -lh packages
 
-      # 4. 上传多架构包到 Release mod
-      - name: Publish to GitHub Release
+      - name: Publish Release
         uses: ncipollo/release-action@v1
         with:
           tag: mod
           name: FancySS mod build
-          artifacts: |
-            packages/fancyss_arm*.tar.gz
-            packages/fancyss_x64*.tar.gz
-            packages/fancyss_mips*.tar.gz
+          artifacts: packages/*.tar.gz
           allowUpdates: true
           makeLatest: true
