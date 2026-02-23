@@ -43,7 +43,6 @@ jobs:
         run: |
           mkdir -p release_packages
           cp packages/fancyss_*_full.tar.gz release_packages/ || true
-          cp packages/fancyss_*_lite.tar.gz release_packages/ || true
 
       - name: Create/Update Release
         uses: softprops/action-gh-release@v2
@@ -61,6 +60,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: mod
-          files: release_packages/*.tar.gz
+          files: release_packages/fancyss_*_full.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
