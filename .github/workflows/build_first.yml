@@ -29,7 +29,9 @@ jobs:
       # 4. 把 cron_task.txt 追加到 ssconfig.sh
       - name: Append cron_task.txt to ssconfig.sh
         run: |
+          echo "" >> fancyss/ss/ssconfig.sh   # 强制加换行防粘连
           cat cron_task.txt >> fancyss/ss/ssconfig.sh
+          echo "" >> fancyss/ss/ssconfig.sh   # 再加一行，确保下次追加不粘h
 
       # 5. 添加自定义日志消息（先删除旧的，再插入到固定位置）
       - name: Add custom injected tasks log message
