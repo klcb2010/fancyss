@@ -46,7 +46,7 @@ jobs:
           CURRENT_DATE=$(date -d "@$CURRENT_CST_TIME" '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo "未知时间")
           
           echo "上游 fancyss/ 最后提交时间: $UPSTREAM_DATE"
-          echo "当前仓库 fancyss/ 最后提交时间: $CURRENT_DATE"
+          echo "当前 fancyss/ 最后提交时间: $CURRENT_DATE"
           
           if [ -z "$UPSTREAM_TIME" ] || [ -z "$CURRENT_TIME" ]; then
             echo "无法获取时间戳，强制同步"
