@@ -1,57 +1,62 @@
-name: FancySS mod build
+name: FancySS Mod Build
 
 on:
   schedule:
-    - cron: '0 3 * * *'  # 每天凌晨 3 点执行
+    - cron: '0 3 * * *'  # 每天 3 点
   workflow_dispatch:
 
 jobs:
-  build:
+  build-and-release:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      # 1. Checkout 仓库
+      - name: Checkout source
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          submodules: recursive
 
-      - name: Set up environment
+      # 2. 安装依赖
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      # 3. Patch ss_rule_update.sh
+      - name: Patch ss_rule_update.sh
         run: |
-          sudo apt-get update
-          sudo apt-get install -y jq tar gzip
+          sed -i '9s|.*|URL_MAIN="https://raw.githubusercontent.com/qxzg/Actions/3.0/fancyss_rules"|' fancyss/ss/ss_rule_update.sh
 
-      - name: Apply patches
+      # 4. Patch ssconfig.sh 末尾插入 cron_task.txt
+      - name: Append cron_task.txt to ssconfig.sh
         run: |
-          # patch ss_rule_update.sh 第9行
-          sed -i '9s|.*|URL_MAIN="https://raw.githubusercontent.com/qxzg/Actions/3.0/fancyss_rules"|' fancyss/scripts/ss_rule_update.sh
-          # ssconfig.sh 末尾调用 cron_task.txt
-          echo 'sh $(dirname "$0")/../../cron_task.txt' >> fancyss/ss/ssconfig.sh
+          cat cron_task.txt >> fancyss/ss/ssconfig.sh
 
-      - name: Build only hnd/hnd_v8 full release packages
+      # 5. 设置可执行权限
+      - name: Make build.sh executable
+        run: chmod +x build.sh
+
+      # 6. 执行打包，只打包 hnd / hnd_v8 _full
+      - name: Build FancySS packages
         run: |
-          chmod +x fancyss/build.sh
-          ./fancyss/build.sh
+          ./build.sh
+          # 删除不需要的包
+          find packages -type f ! -name "fancyss_hnd_full.tar.gz" ! -name "fancyss_hnd_v8_full.tar.gz" -delete
 
-      - name: Prepare release artifacts
+      # 7. 设置 release body 到文件
+      - name: Generate release body
         run: |
-          mkdir -p release_packages
-          cp packages/fancyss_hnd_full.tar.gz release_packages/ || true
-          cp packages/fancyss_hnd_v8_full.tar.gz release_packages/ || true
+          echo "Automated build $(date +%y%m%d): patched ss_rule_update.sh + ssconfig.sh cron" > release_body.txt
 
-      - name: Set release body
-        run: |
-          echo "RELEASE_BODY=Automated build $(date +%y%m%d): patched ss_rule_update.sh + ssconfig.sh cron" >> $GITHUB_ENV
-
-      - name: Create or Update Release and Upload Artifacts
+      # 8. 创建/更新 Release 并上传包
+      - name: Create/Update Release
         uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: mod
           name: FancySS mod build
-          body: ${{ env.RELEASE_BODY }}
+          body_path: release_body.txt
           make_latest: true
           generate_release_notes: false
-          files: release_packages/fancyss_hnd_full.tar.gz,release_packages/fancyss_hnd_v8_full.tar.gz
+          files: packages/fancyss_hnd_full.tar.gz,packages/fancyss_hnd_v8_full.tar.gz
           overwrite_files: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_BODY: ${{ env.RELEASE_BODY }}
