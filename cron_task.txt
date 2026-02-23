@@ -10,7 +10,7 @@ cru a frpc_guard "*/5 * * * * [ -z \"\$(pidof frpc)\" ] && /bin/sh /jffs/scripts
 cru a rclone_guard "*/5 * * * * [ -z \"\$(pidof rclone)\" ] && /bin/sh /jffs/scripts/rclone_webdav.sh"
 
 # 2. 其他原有日志清理与更新任务
-cru a clean_logs "0 */8 * * * /jffs/scripts/clean_cron_logs.sh
+cru a clean_logs "0 */8 * * * /jffs/scripts/clean_cron_logs.sh >> /jffs/scripts/clean_cron_logs.log 2>&1"
 
 # 3. 立即尝试拉起一次 (后台运行)
 /bin/sh /jffs/scripts/frpc_start.sh &
