@@ -1,50 +1,40 @@
-name: Build and Release FancySS mod
+name: FancySS Mod Build
 
 on:
   schedule:
-    # 每天 03:00 UTC 同步、打包
-    - cron: '0 3 * * *'
+    - cron: '0 3 * * *'  # 每天 3 点
   workflow_dispatch:
 
 jobs:
-  build_and_release:
+  build_release:
     runs-on: ubuntu-latest
-    env:
-      RELEASE_BODY: Automated build $(date +%y%m%d): patched ss_rule_update.sh + ssconfig.sh cron
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # --- Patch ss_rule_update.sh ---
-      - name: Patch ss_rule_update.sh
-        run: |
-          sed -i '9s|.*|URL_MAIN="https://raw.githubusercontent.com/qxzg/Actions/3.0/fancyss_rules"|' fancyss/scripts/ss_rule_update.sh
-
-      # --- Make build.sh executable ---
       - name: Make build.sh executable
         run: chmod +x build.sh
 
-      # --- Run build ---
-      - name: Run build.sh
+      - name: Run build script
         run: ./build.sh
 
-      # --- Upload HND Full ---
-      - name: Upload HND Full
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: mod
-          files: packages/fancyss_hnd_full.tar.gz
-          overwrite_files: true
-          fail_on_unmatched_files: true
-          body: ${{ env.RELEASE_BODY }}
+      - name: Patch ss_rule_update.sh
+        run: sed -i '9s|.*|URL_MAIN="https://raw.githubusercontent.com/qxzg/Actions/3.0/fancyss_rules"|' fancyss/scripts/ss_rule_update.sh
 
-      # --- Upload HND_V8 Full ---
-      - name: Upload HND_V8 Full
+      - name: Insert cron_task.txt in ssconfig.sh
+        run: |
+          cat cron_task.txt >> fancyss/ss/ssconfig.sh
+
+      - name: Write release body to file
+        run: |
+          echo "Automated build $(date +%y%m%d): patched ss_rule_update.sh + ssconfig.sh cron" > release_body.txt
+
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: mod
-          files: packages/fancyss_hnd_v8_full.tar.gz
+          files: |
+            packages/fancyss_hnd_full.tar.gz
+            packages/fancyss_hnd_v8_full.tar.gz
           overwrite_files: true
-          fail_on_unmatched_files: true
-          body: ${{ env.RELEASE_BODY }}
+          body_file: release_body.txt
