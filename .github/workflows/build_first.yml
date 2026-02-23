@@ -16,7 +16,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 2️⃣ 安装工具
+      # 2️⃣ 安装依赖
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y jq tar
 
@@ -58,7 +58,8 @@ jobs:
         with:
           tag_name: mod
           release_name: FancySS mod build
-          body: Automated build: patched ss_rule_update.sh + ssconfig.sh cron
+          body: |
+            Automated build: patched ss_rule_update.sh + ssconfig.sh cron
           allowUpdates: true
           makeLatest: true
         env:
