@@ -1,65 +1,50 @@
-name: FancySS Mod Build
-
-permissions:
-  contents: write  # 這行確保 GITHUB_TOKEN 有權限去 finalize release（create/update + set latest）
+name: Build and Release FancySS mod
 
 on:
   schedule:
-    - cron: '0 3 * * *'  # 每天 3 点
+    # 每天 03:00 UTC 同步、打包
+    - cron: '0 3 * * *'
   workflow_dispatch:
 
 jobs:
-  build-and-release:
+  build_and_release:
     runs-on: ubuntu-latest
+    env:
+      RELEASE_BODY: Automated build $(date +%y%m%d): patched ss_rule_update.sh + ssconfig.sh cron
 
     steps:
-      # 1. Checkout 仓库
-      - name: Checkout source
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          submodules: recursive
 
-      # 2. 安装依赖
-      - name: Install jq
-        run: sudo apt-get update && sudo apt-get install -y jq
-
-      # 3. Patch ss_rule_update.sh
+      # --- Patch ss_rule_update.sh ---
       - name: Patch ss_rule_update.sh
         run: |
           sed -i '9s|.*|URL_MAIN="https://raw.githubusercontent.com/qxzg/Actions/3.0/fancyss_rules"|' fancyss/scripts/ss_rule_update.sh
 
-      # 4. Patch ssconfig.sh 末尾插入 cron_task.txt
-      - name: Append cron_task.txt to ssconfig.sh
-        run: |
-          cat cron_task.txt >> fancyss/ss/ssconfig.sh
-
-      # 5. 设置可执行权限
+      # --- Make build.sh executable ---
       - name: Make build.sh executable
         run: chmod +x build.sh
 
-      # 6. 执行打包，只打包 hnd / hnd_v8 _full
-      - name: Build FancySS packages
-        run: |
-          ./build.sh
-          # 删除不需要的包
-          find packages -type f ! -name "fancyss_hnd_full.tar.gz" ! -name "fancyss_hnd_v8_full.tar.gz" -delete
+      # --- Run build ---
+      - name: Run build.sh
+        run: ./build.sh
 
-      # 7. 设置 release body 到文件
-      - name: Generate release body
-        run: |
-          echo "Automated build $(date +%y%m%d): patched ss_rule_update.sh + ssconfig.sh cron" > release_body.txt
-
-      # 8. 创建/更新 Release 并上传包
-      - name: Create/Update Release
+      # --- Upload HND Full ---
+      - name: Upload HND Full
         uses: softprops/action-gh-release@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: mod
-          name: FancySS mod build
-          body_path: release_body.txt
-          make_latest: true
-          generate_release_notes: false
-          files: packages/fancyss_hnd_full.tar.gz,packages/fancyss_hnd_v8_full.tar.gz
+          files: packages/fancyss_hnd_full.tar.gz
           overwrite_files: true
+          fail_on_unmatched_files: true
+          body: ${{ env.RELEASE_BODY }}
+
+      # --- Upload HND_V8 Full ---
+      - name: Upload HND_V8 Full
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: mod
+          files: packages/fancyss_hnd_v8_full.tar.gz
+          overwrite_files: true
+          fail_on_unmatched_files: true
+          body: ${{ env.RELEASE_BODY }}
