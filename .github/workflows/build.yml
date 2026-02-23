@@ -2,29 +2,30 @@ name: FancySS Auto Build
 
 on:
   schedule:
-    # 每天凌晨 3 点同步源码
-    - cron: '0 3 * * *'
-  workflow_dispatch: # 支持手动触发
+    # 每三天凌晨 3 点触发
+    - cron: '0 3 */3 * *'
+  workflow_dispatch:
 
 jobs:
   build-fancyss:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout your fork
+      # 1. 拉取你 fork 的仓库
+      - name: Checkout source
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0 # 全量拉取，便于检测更新
+          fetch-depth: 0
 
-      - name: Add upstream remote
+      # 2. 添加 upstream 并 fetch
+      - name: Fetch upstream
         run: |
           git remote add upstream https://github.com/hq450/fancyss.git || true
-          git fetch upstream
+          git fetch upstream 3.0
 
+      # 3. 检查是否有更新
       - name: Check for updates
         id: check_update
         run: |
-          git fetch upstream 3.0
-          # 查看你 fork 的 HEAD 与 upstream 3.0 是否一致
           UPSTREAM_HASH=$(git rev-parse upstream/3.0)
           LOCAL_HASH=$(git rev-parse HEAD)
           echo "upstream=$UPSTREAM_HASH" >> $GITHUB_OUTPUT
@@ -35,34 +36,40 @@ jobs:
             echo "no_changes=false" >> $GITHUB_OUTPUT
           fi
 
+      # 4. 跳过无更新情况
       - name: Skip if no update
         if: ${{ steps.check_update.outputs.no_changes == 'true' }}
         run: |
-          echo "No updates from upstream, skipping build."
+          echo "No upstream updates, skipping build."
           exit 0
 
-      - name: Merge upstream changes
+      # 5. 有更新 → 合并 upstream
+      - name: Merge upstream
         if: ${{ steps.check_update.outputs.no_changes == 'false' }}
         run: |
           git merge upstream/3.0 --ff-only
 
+      # 6. 插入自定义 cron_task.txt
       - name: Insert custom cron task
         if: ${{ steps.check_update.outputs.no_changes == 'false' }}
         run: |
-          # 假设 cron_task.txt 放在仓库根目录
-          # 先删除旧任务块，再追加新的
+          # 删除原有 CUSTOM CRON TASK 块
           sed -i '/# BEGIN CUSTOM CRON TASK/,/# END CUSTOM CRON TASK/d' fancyss/ss/ssconfig.sh
+          # 追加 cron_task.txt 到末尾
           cat cron_task.txt >> fancyss/ss/ssconfig.sh
 
+      # 7. 构建 fancyss 插件
       - name: Build FancySS plugin
         if: ${{ steps.check_update.outputs.no_changes == 'false' }}
         run: |
           cd fancyss
           sh build.sh
 
-      - name: Upload plugin artifact
+      # 8. 上传到 Releases mod 版本
+      - name: Upload to GitHub Release
         if: ${{ steps.check_update.outputs.no_changes == 'false' }}
-        uses: actions/upload-artifact@v3
+        uses: ncipollo/release-action@v1
         with:
-          name: fancyss-plugin
-          path: fancyss/packages/*
+          tag: mod
+          name: FancySS-mod
+          files: fancyss/packages/*
