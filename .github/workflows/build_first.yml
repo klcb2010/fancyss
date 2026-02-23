@@ -31,33 +31,38 @@ jobs:
         run: |
           cat cron_task.txt >> fancyss/ss/ssconfig.sh
 
-      # 5. 添加自定义日志消息（防止重复，先删除旧的，再插入到固定位置）
+      # 5. 添加自定义日志消息（先删除旧的，再插入到固定位置）
       - name: Add custom injected tasks log message
         run: |
-          # 先删除所有旧的自定义注入消息行（防止重复追加）
+          # 先删除所有旧的自定义注入消息行（防止重复）
           sed -i '/系统及自定义任务已注入成功/d' fancyss/ss/ssconfig.sh || true
           sed -i '/定时任务已注入成功/d' fancyss/ss/ssconfig.sh || true
           
-          # 在 "Across the Great Wall" 这一行上面插入新消息（这个位置肯定会被执行）
+          # 在 "Across the Great Wall" 这一行上面插入新消息
           sed -i '/Across the Great Wall/i echo_date "================== 系统及自定义任务已注入成功， cru l 查看 =================="' fancyss/ss/ssconfig.sh
 
-      # 6. 设置 build.sh 可执行权限
+      # 6. 删除讨厌的多余通知
+      - name: Remove annoying signature lines
+        run: |
+          sed -i '/Across the Great Wall/,/梅林固件 - 【科学上网】/d' fancyss/ss/ssconfig.sh || true
+
+      # 7. 设置 build.sh 可执行权限
       - name: Make build.sh executable
         run: chmod +x build.sh
 
-      # 7. 执行打包，只保留 hnd / hnd_v8 full 包
+      # 8. 执行打包，只保留 hnd / hnd_v8 full 包
       - name: Build FancySS packages
         run: |
           ./build.sh
           # 删除不需要的包
           find packages -type f ! -name "fancyss_hnd_full.tar.gz" ! -name "fancyss_hnd_v8_full.tar.gz" -delete
 
-      # 8. 生成 release 描述
+      # 9. 生成 release 描述
       - name: Generate release body
         run: |
-          echo "Automated build $(date +%y%m%d): patched ss_rule_update.sh + ssconfig.sh cron + 自定义任务注入日志" > release_body.txt
+          echo "编译版本 build $(date +%y%m%d): patched ss_rule_update.sh + ssconfig.sh cron + 自定义任务注入日志 + 删除通知" > release_body.txt
 
-      # 9. 创建/更新 Release 并上传包
+      # 10. 创建/更新 Release
       - name: Create/Update Release
         uses: softprops/action-gh-release@v2.0.8
         env:
