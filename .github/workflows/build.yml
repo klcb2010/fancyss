@@ -2,7 +2,7 @@ name: FancySS Auto Build
 
 on:
   schedule:
-    # 每三天凌晨3点执行
+    # 每三天凌晨 3 点执行
     - cron: '0 3 */3 * *'
   workflow_dispatch:
 
@@ -63,14 +63,13 @@ jobs:
         run: |
           sh build.sh
 
-      # 8. 发布到 Release mod（覆盖旧 Release）
+      # 8. 发布到 Release mod（支持首次发布和覆盖）
       - name: Publish to GitHub Release
         if: ${{ steps.check_update.outputs.no_changes == 'false' }}
         uses: ncipollo/release-action@v1
         with:
           tag: mod
           name: FancySS mod build
-          files: |
-            packages/*.tar.gz
-            packages/*.zip
-          overwrite: true
+          artifacts: packages
+          allowUpdates: true
+          makeLatest: true
