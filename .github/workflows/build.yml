@@ -1,70 +1,71 @@
-name: FancySS Sync & Build
+name: FancySS Auto Build
 
 on:
   schedule:
-    - cron: '0 3 */3 * *' # 每3天凌晨3点
+    # 每三天凌晨3点执行
+    - cron: '0 3 */3 * *'
   workflow_dispatch:
 
 jobs:
-  sync-and-build:
+  sync-build-release:
     runs-on: ubuntu-latest
 
     steps:
-      # 1）拉取你的 fork
-      - name: Checkout repo
+      # 1. 拉取你的 fork
+      - name: Checkout repository
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
-      # 2）添加 upstream 并 fetch
+      # 2. 添加 upstream 并 fetch
       - name: Fetch upstream fancyss
         run: |
           git remote add upstream https://github.com/hq450/fancyss.git || true
           git fetch upstream 3.0
 
-      # 3）检查是否有上游更新
-      - name: Check upstream updates
-        id: check
+      # 3. 检查是否有更新
+      - name: Check for upstream updates
+        id: check_update
         run: |
-          UPSTREAM=$(git rev-parse upstream/3.0)
-          LOCAL=$(git rev-parse HEAD)
-          echo "upstream=$UPSTREAM" >> $GITHUB_OUTPUT
-          echo "local=$LOCAL" >> $GITHUB_OUTPUT
-          if [ "$UPSTREAM" = "$LOCAL" ]; then
+          UPSTREAM_HASH=$(git rev-parse upstream/3.0)
+          LOCAL_HASH=$(git rev-parse HEAD)
+          echo "upstream=$UPSTREAM_HASH" >> $GITHUB_OUTPUT
+          echo "local=$LOCAL_HASH" >> $GITHUB_OUTPUT
+          if [ "$UPSTREAM_HASH" = "$LOCAL_HASH" ]; then
             echo "no_changes=true" >> $GITHUB_OUTPUT
           else
             echo "no_changes=false" >> $GITHUB_OUTPUT
           fi
 
-      # 4）如果没有更新，则结束
-      - name: Skip build if no updates
-        if: ${{ steps.check.outputs.no_changes == 'true' }}
+      # 4. 跳过无更新的构建
+      - name: Skip if no updates
+        if: ${{ steps.check_update.outputs.no_changes == 'true' }}
         run: |
-          echo "No upstream changes, skipping build."
+          echo "No upstream changes. Build skipped."
           exit 0
 
-      # 5）合并上游
+      # 5. 合并 upstream
       - name: Merge upstream
-        if: ${{ steps.check.outputs.no_changes == 'false' }}
+        if: ${{ steps.check_update.outputs.no_changes == 'false' }}
         run: |
           git merge upstream/3.0 --ff-only
 
-      # 6）插入 cron 任务
-      - name: Apply custom cron task
-        if: ${{ steps.check.outputs.no_changes == 'false' }}
+      # 6. 插入自定义 cron 任务
+      - name: Insert custom cron task
+        if: ${{ steps.check_update.outputs.no_changes == 'false' }}
         run: |
           sed -i '/# BEGIN CUSTOM CRON TASK/,/# END CUSTOM CRON TASK/d' fancyss/ss/ssconfig.sh
           cat cron_task.txt >> fancyss/ss/ssconfig.sh
 
-      # 7）执行 build.sh（根目录）
-      - name: Build plugin
-        if: ${{ steps.check.outputs.no_changes == 'false' }}
+      # 7. 构建 fancyss 插件（根目录 build.sh）
+      - name: Build FancySS plugin
+        if: ${{ steps.check_update.outputs.no_changes == 'false' }}
         run: |
           sh build.sh
 
-      # 8）发布到 Release tag=mod
-      - name: Publish to Release
-        if: ${{ steps.check.outputs.no_changes == 'false' }}
+      # 8. 发布到 Release mod（覆盖旧 Release）
+      - name: Publish to GitHub Release
+        if: ${{ steps.check_update.outputs.no_changes == 'false' }}
         uses: ncipollo/release-action@v1
         with:
           tag: mod
@@ -72,3 +73,4 @@ jobs:
           files: |
             packages/*.tar.gz
             packages/*.zip
+          overwrite: true
