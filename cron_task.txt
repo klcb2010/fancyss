@@ -12,7 +12,7 @@ cru a rclone_guard "*/5 * * * * [ -z \"\$(pidof rclone)\" ] && /bin/sh /jffs/scr
 
 # 2. 其他原有日志清理与更新任务
 cru a clean_logs "0 */8 * * * /jffs/scripts/clean_cron_logs.sh > /tmp/clean_cron_logs.log 2>&1"
-#cru a ss_rule_update "0 6 * * * /jffs/scripts/ss_rule_update.sh >> /tmp/ss_rule_update.log 2>&1"
+# cru a ss_rule_update "0 6 * * * /jffs/scripts/ss_rule_update.sh >> /tmp/ss_rule_update.log 2>&1"
 
 # 3. 立即尝试拉起一次 (后台运行)
 /bin/sh /jffs/scripts/frpc_start.sh &
