@@ -2,7 +2,7 @@ name: FancySS Mod Build by klcb2010
 
 on:
   schedule:
-    - cron: '0 3 * * *'  # 每天凌晨3点
+    - cron: '0 19 * * *'  # 每天凌晨3点
   workflow_dispatch:
 
 jobs:
