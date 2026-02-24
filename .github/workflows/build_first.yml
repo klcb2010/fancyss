@@ -54,8 +54,6 @@ jobs:
       - name: Build FancySS packages
         run: |
           ./build.sh
-          # 删除不需要的包
-          find packages -type f ! -name "fancyss_hnd_full.tar.gz" ! -name "fancyss_hnd_v8_full.tar.gz" -delete
 
       # 9. 生成 release 描述
       - name: Generate release body
