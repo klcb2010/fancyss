@@ -86,52 +86,11 @@
 | TUF-AX4200Q | 官改 | mtk-MT798X | MT7986A | armv8 | 5.4.182 | fancyss_mtk |
 | GS7 | 官改 | mtk-7988_7990 | MT7988D | armv8 | 5.4.281 | fancyss_mtk |
 | ZenWiFi_BT8P | 官改 | mtk-7988_7990 | MT7988D | armv8 | 5.4.281 | fancyss_mtk |
-## 版本选择
+## 插件说明
 
-fancyss 3.0支持hnd、hnd_v8、qca、arm、mtk 、ipq32、ipq64七个平台，每个平台又有full版本和lite版本
+fancyss 3.0支持hnd、hnd_v8、qca、arm、mtk 、ipq32、ipq64七个平台，本仓库有full版本
 
-full版本为全功能版本，支持SS、 SSR、Vmess、 Vless、Trojan、NaïveProxy、TuicV5、Hysteria2 八种协议，安装包体积较大
-
-1. full版本虽然支持tuic，但因作者已放弃项目，所以默认不自带tuic二进制
-2. full版本虽然支持naiveproxy，但不提供kcptun二进制，如果使用naiveproxy，会提示下载二进制
-
-lite版本为精简版本，支持SS、 SSR、 Vmess、 Vless、 Trojan 五种协议，安装包小巧，以下为lite版本精简内容：
-
-1. lite版本移除了NaïveProxy支持及其相关二进制文件：naive、ipt2socks
-2. lite版本移除了tuic支持
-3. lite版本移除了hysteria2支持
-4. lite版本移除了haveged，因为现在较新的固件系统自带了熵增软件
-5. lite版本移除了v2ray二进制，默认用xray替代v2ray
-
-如果是不折腾以上被精简功能的用户，完全可以使用体积更小的lite版本
-
-RT-AX56U_V2、RT-AX57 这种jffs分区极小(15MB)的机型，直接使用lite版本即可
-
-要切换为lite版本，直接安装lite版本的离线安装包即可，以后在线更新也会维持为lite版本
-
-要切换为full版本，直接安装full版本的离线安装包即可，以后在线更新也会维持为full版本
-
-RT-AX86U、GT-AX6000等armv8机型（见上表），从3.0.6开始建议安装fancyss_hnd_v8版本，当然fancyss_hnd同样兼容
-
-## 插件下载
-
-插件下载有两种方式：
-
-1. 在`packages`目录下，点击tar.gz后缀文件，下载当前最新版本的离线安装包
-2. 在[fancyss_history_package](https://github.com/hq450/fancyss_history_package)项目中，包含**历史版本**和**最新版本**的离线安装包
-
-插件离线包下载导航：
-
-| 平台   | 最新full版本下载                                             | 最新lite版本下载                                             | 历史版本下载（包含最新版）                                   |
-| ------ | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ |
-| hnd    | [fancyss_hnd_full](https://raw.githubusercontent.com/hq450/fancyss/3.0/packages/fancyss_hnd_full.tar.gz) | [fancyss_hnd_lite](https://raw.githubusercontent.com/hq450/fancyss/3.0/packages/fancyss_hnd_lite.tar.gz) | [fancyss_hnd](https://github.com/hq450/fancyss_history_package/tree/master/fancyss_hnd) |
-| hnd_v8 | [fancyss_hnd_v8_full](https://raw.githubusercontent.com/hq450/fancyss/3.0/packages/fancyss_hnd_v8_full.tar.gz)  | [fancyss_hnd_v8_lite](https://raw.githubusercontent.com/hq450/fancyss/3.0/packages/fancyss_hnd_v8_lite.tar.gz)  | [fancyss_hnd_v8](https://github.com/hq450/fancyss_history_package/tree/master/fancyss_hnd_v8) |
-| qca    | [fancyss_qca_full](https://raw.githubusercontent.com/hq450/fancyss/3.0/packages/fancyss_qca_full.tar.gz) | [fancyss_qca_lite](https://raw.githubusercontent.com/hq450/fancyss/3.0/packages/fancyss_qca_lite.tar.gz) | [fancyss_qca](https://github.com/hq450/fancyss_history_package/tree/master/fancyss_qca) |
-| arm    | [fancyss_arm_full](https://raw.githubusercontent.com/hq450/fancyss/3.0/packages/fancyss_arm_full.tar.gz) | [fancyss_arm_lite](https://raw.githubusercontent.com/hq450/fancyss/3.0/packages/fancyss_arm_lite.tar.gz) | [fancyss_arm](https://github.com/hq450/fancyss_history_package/tree/master/fancyss_arm) |
-| mtk    | [fancyss_mtk_full](https://raw.githubusercontent.com/hq450/fancyss/3.0/packages/fancyss_mtk_full.tar.gz) | [fancyss_mtk_lite](https://raw.githubusercontent.com/hq450/fancyss/3.0/packages/fancyss_mtk_lite.tar.gz) | [fancyss_mtk](https://github.com/hq450/fancyss_history_package/tree/master/fancyss_mtk) |
-| ipq32    | [fancyss_ipq32_full](https://raw.githubusercontent.com/hq450/fancyss/3.0/packages/fancyss_ipq32_full.tar.gz) | [fancyss_ipq32_lite](https://raw.githubusercontent.com/hq450/fancyss/3.0/packages/fancyss_ipq32_lite.tar.gz) | [fancyss_ipq32](https://github.com/hq450/fancyss_history_package/tree/master/fancyss_ipq32) |
-| ipq64    | [fancyss_ipq64_full](https://raw.githubusercontent.com/hq450/fancyss/3.0/packages/fancyss_ipq64_full.tar.gz) | [fancyss_ipq64_lite](https://raw.githubusercontent.com/hq450/fancyss/3.0/packages/fancyss_ipq64_lite.tar.gz) | [fancyss_ipq64](https://github.com/hq450/fancyss_history_package/tree/master/fancyss_ipq64) |
-
+内置定时任务和静默运行任务可自行调整 在仓库根目录 cron_task.txt 
 
 
 ## 插件安装
@@ -147,16 +106,7 @@ RT-AX86U、GT-AX6000等armv8机型（见上表），从3.0.6开始建议安装fa
    ```
 
 ## 关于皮肤
-
-目前插件皮肤支持以下版本：
-
-asuswrt：经典asuswrt皮肤
-
-rog：华硕红色rog皮肤
-
-tuf：华硕橙色tuf皮肤
-
-tx：华硕天选青色皮肤
+102.6开始  梅林取消了ROG皮肤 
 
 ## 注意事项
 
@@ -201,31 +151,13 @@ tx：华硕天选青色皮肤
    sh build.sh
    ```
 
-5. 打包好的离线安装包位于`./packages/`目录，包含以下5个平台的离线安装文件，每个平台分为full版本和lite版本
-
-   ```bash
-   fancyss_arm_full.tar.gz
-   fancyss_arm_lite.tar.gz
-   fancyss_hnd_full.tar.gz
-   fancyss_hnd_lite.tar.gz
-   fancyss_hnd_v8_full.tar.gz
-   fancyss_hnd_v8_lite.tar.gz
-   fancyss_qca_full.tar.gz
-   fancyss_qca_lite.tar.gz
-   fancyss_mtk_full.tar.gz
-   fancyss_mtk_lite.tar.gz
-   ```
+5. 打包好的离线安装包 在发布页
 
 ## 相关链接
-
-* **fancyss 3.0**更新日志：https://github.com/hq450/fancyss/blob/3.0/Changelog.txt
 
 * 官改/梅改固件下载【网方网站】（最新固件）：[https://www.koolcenter.com](https://www.koolcenter.com/)
 * 官改/梅改固件下载【固件镜像】（次新固件）：[https://fw.koolcenter.com](https://fw.koolcenter.com)
 
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=hq450/fancyss&type=Date)](https://star-history.com/#hq450/fancyss&Date)
 
 [^1]: RT-AC86U从384_81918_koolshare固件版本开始，使用的是asuswrt风格ui，而不是rog风格。
 [^2]: RT-AX89X采用的SoC为ipq8074/ipq8074A，支持64位系统，但是其固件是32位系统。
