@@ -63,12 +63,6 @@ fancyss 3.0支持hnd、hnd_v8、qca、arm、mtk 、ipq32、ipq64七个平台，�
 
 到发布页下载后通过软件中心本地安装
 
-   ```bash
-   mv /tmp/fancyss_hnd_lite.tar.gz /tmp/shadowsocks.tar.gz
-   tar -zxvf /tmp/shadowsocks.tar.gz
-   sh /tmp/shadowsocks/install.sh
-   ```
-
 ## 关于皮肤
 102.6开始  梅林取消了ROG皮肤 
 
