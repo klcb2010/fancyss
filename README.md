@@ -61,9 +61,7 @@ fancyss 3.0支持hnd、hnd_v8、qca、arm、mtk 、ipq32、ipq64七个平台，�
 
 ## 插件安装
 
-1. 离线安装：下载并校验好离线安装包后，在软件中心内使用**离线安装**/**手动安装**功能，选择安装包后上传并安装即可。
-
-2. 命令安装：(以fancyss_hnd_lite.tar.gz为例，先下载好安装包，并将其上传到路由器的/tmp目录)
+到发布页下载后通过软件中心本地安装
 
    ```bash
    mv /tmp/fancyss_hnd_lite.tar.gz /tmp/shadowsocks.tar.gz
