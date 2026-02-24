@@ -45,18 +45,7 @@ jobs:
       - name: Remove annoying signature lines
         run: |
           sed -i '/Across the Great Wall/,/梅林固件 - 【科学上网】/d' fancyss/ss/ssconfig.sh || true
-      # 7. 追加 grok.com到fancyss/ss/rules/udplist.txt
-      - name: Add grok.com to udplist
-        run: |
-         FILE="fancyss/ss/rules/udplist.txt"
 
-         if
-            grep -qxF "grok.com" "$FILE"; then
-         echo "[SKIP] grok.com already exists"
-         else
-          echo "grok.com" >> "$FILE"
-          echo "[ADD ] grok.com added"
-         fi
       # 8. 设置 build.sh 可执行权限
       - name: Make build.sh executable
         run: chmod +x build.sh
