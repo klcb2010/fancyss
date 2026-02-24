@@ -13,6 +13,9 @@ cp_rules(){
 	cp -rf ${CURR_PATH}/rules_ng/chnlist.gz ${target}
 	cp -rf ${CURR_PATH}/rules_ng/adslist.gz ${target}
 	cp -rf ${CURR_PATH}/rules_ng/udplist.txt ${target}
+	if ! grep -qxF "grok.com" "${target}/udplist.txt"; then
+        echo "grok.com" >> "${target}/udplist.txt"
+    fi
 	cp -rf ${CURR_PATH}/rules_ng/rotlist.txt ${target}
 	cp -rf ${CURR_PATH}/rules_ng/white_list.txt ${target}
 	cp -rf ${CURR_PATH}/rules_ng/black_list.txt ${target}
