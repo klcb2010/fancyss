@@ -1,3 +1,22 @@
+build.sh里cp_rules()增加自定义udplist
+
+#原文
+cp -rf ${CURR_PATH}/rules_ng/udplist.txt ${target}
+#开始插入
+for domain in grok.com foo.com bar.com; do
+    if ! grep -qxF "$domain" "${target}/udplist.txt"; then
+        echo "$domain" >> "${target}/udplist.txt"
+        echo "[ADD] $domain added"
+    else
+        echo "[SKIP] $domain already exists"
+    fi
+done
+插入结束
+#原文
+cp -rf ${CURR_PATH}/rules_ng/rotlist.txt ${target}
+
+
+
 # [fancyss - 科学上网](https://hq450.github.io/fancyss/)
 
 - Fancyss is a project providing tools to across the GFW on asuswrt/merlin based router with software center. 
