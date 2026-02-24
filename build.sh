@@ -356,28 +356,12 @@ make(){
 	papare
 	# --- for release ---
 	pack hnd full release
-	pack hnd lite release
-	pack hnd_v8 full release
-	pack hnd_v8 lite release
-	pack hnd lite release
-	pack qca full release
-	pack qca lite release
-	pack arm full release
-	pack arm lite release
-	pack mtk full release
-	pack mtk lite release
-	pack ipq32 full release
-	pack ipq32 lite release
-	pack ipq64 full release
-	pack ipq64 lite release
-	# --- for debug ---
-	pack hnd full debug
-	pack hnd_v8 full debug
-	pack qca full debug
-	pack arm full debug
-	pack mtk full debug
-	pack ipq32 full debug
-	pack ipq64 full debug
+    pack hnd_v8 full release
+    pack qca full release
+    pack arm full release
+    pack mtk full release
+    pack ipq32 full release
+    pack ipq64 full release
 	finish
 }
 
