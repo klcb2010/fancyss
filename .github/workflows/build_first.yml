@@ -71,7 +71,5 @@ jobs:
           body_path: release_body.txt
           make_latest: true
           generate_release_notes: false
-          files: |
-            packages/fancyss_hnd_full.tar.gz
-            packages/fancyss_hnd_v8_full.tar.gz
+          files: packages/*.tar.gz
           overwrite_files: true
