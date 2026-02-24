@@ -301,30 +301,6 @@ build_pkg() {
 	fi
 }
 
-do_backup(){
-	if [ "${CURR_PATH}/../fancyss_history_package" ];then
-		local platform=$1
-		local pkgtype=$2
-		local release_type=$3
-		if [ ${release_type} == "release" ];then
-			cd ${CURR_PATH}
-			HISTORY_DIR="${CURR_PATH}/../fancyss_history_package/fancyss_${platform}"
-			mkdir -p ${HISTORY_DIR}
-			# backup latested package after pack
-			local backup_version=${VERSION}
-			local backup_tar_md5=${md5value}
-			
-			echo "备份：fancyss_${platform}_${pkgtype}_${backup_version}.tar.gz"
-			cp ${CURR_PATH}/packages/fancyss_${platform}_${pkgtype}.tar.gz ${HISTORY_DIR}/fancyss_${platform}_${pkgtype}_${backup_version}.tar.gz
-			sed -i "/fancyss_${platform}_${pkgtype}_${backup_version}/d" ${HISTORY_DIR}/md5sum.txt
-			if [ ! -f ${HISTORY_DIR}/md5sum.txt ];then
-				touch ${HISTORY_DIR}/md5sum.txt
-			fi
-			echo ${backup_tar_md5} fancyss_${platform}_${pkgtype}_${backup_version}.tar.gz >> ${HISTORY_DIR}/md5sum.txt
-		fi
-	fi
-}
-
 papare(){
 	rm -f ${CURR_PATH}/packages/*
 	cp_rules
@@ -346,9 +322,9 @@ finish(){
 pack(){
 	gen_folder $1 $2 $3
 	build_pkg $1 $2 $3
-	if [ "$3" == "release" ];then
-		do_backup  $1 $2 $3
-	fi
+	#if [ "$3" == "release" ];then
+		#do_backup  $1 $2 $3
+	#fi
 	rm -rf ${CURR_PATH}/shadowsocks/
 }
 
