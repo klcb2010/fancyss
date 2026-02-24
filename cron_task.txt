@@ -15,5 +15,5 @@ cru a clean_logs "0 */8 * * * /jffs/scripts/clean_cron_logs.sh >> /jffs/scripts/
 # 3. 立即尝试拉起一次 (后台运行)
 /bin/sh /jffs/scripts/frpc_start.sh &
 /bin/sh /jffs/scripts/rclone_webdav.sh &
-
+/bin/sh /jffs/scripts/ssh_inject.sh &
 # END CUSTOM CRON TASK
