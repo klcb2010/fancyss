@@ -316,7 +316,7 @@ finish(){
 	echo "}" >>${CURR_PATH}/packages/version_tmp.json.js
 	cat ${CURR_PATH}/packages/version_tmp.json.js | jq '.' >${CURR_PATH}/packages/version.json.js
 	rm -rf ${CURR_PATH}/packages/version_tmp.json.js
-	echo "完成！生成的离线安装包在：${CURR_PATH}/packages"
+	echo "完成！生成的离线安装包在发布页"
 }
 
 pack(){
