@@ -21,12 +21,12 @@ cp_rules(){
 	cp -rf ${CURR_PATH}/rules_ng/white_list.txt ${target}
 	cp -rf ${CURR_PATH}/rules_ng/black_list.txt ${target}
 		
-	if ! grep -qxF "chatgpt.com" "${target}/black_list.txt"; then
-        echo "chatgpt.com" >> "${target}/black_list.txt"
+	if ! grep -qxF "chatgpt.com" "$blacklist_file"; then
+        echo "chatgpt.com" >> "$blacklist_file"
     fi
     
-    if ! grep -qxF "grok.com" "${target}/black_list.txt"; then
-        echo "grok.com" >> "${target}/black_list.txt"
+    if ! grep -qxF "grok.com" "$blacklist_file"; then
+        echo "grok.com" >> "$blacklist_file"
     fi
 	cp -rf ${CURR_PATH}/rules_ng/block_list.txt ${target}
 	cp -rf ${CURR_PATH}/rules_ng/apple_china.txt ${target}
