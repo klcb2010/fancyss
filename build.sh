@@ -13,14 +13,19 @@ cp_rules(){
 	cp -rf ${CURR_PATH}/rules_ng/chnlist.gz ${target}
 	cp -rf ${CURR_PATH}/rules_ng/adslist.gz ${target}
 	cp -rf ${CURR_PATH}/rules_ng/udplist.txt ${target}
-	if ! grep -qxF "grok.com" "${target}/udplist.txt"; then
-        echo "grok.com" >> "${target}/udplist.txt"
+	# 追加 grok.com到 udplist.txt
+    local udplist_file="${target}/udplist.txt"
+    tail -c 1 "$blacklist_file" | grep -q $'\n' || echo "" >> "$udplist_file"
+    if ! grep -qxF "grok.com" "$udplist_file"; then
+        echo "grok.com" >> "$udplist_file"
     fi
 
 	cp -rf ${CURR_PATH}/rules_ng/rotlist.txt ${target}
 	cp -rf ${CURR_PATH}/rules_ng/white_list.txt ${target}
 	cp -rf ${CURR_PATH}/rules_ng/black_list.txt ${target}
-		
+	# 追加 ai.com 和 eo.com 到 black_list.txt
+	local blacklist_file="${target}/black_list.txt"	
+	tail -c 1 "$blacklist_file" | grep -q $'\n' || echo "" >> "$blacklist_file"
 	if ! grep -qxF "chatgpt.com" "$blacklist_file"; then
         echo "chatgpt.com" >> "$blacklist_file"
     fi
