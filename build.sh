@@ -15,7 +15,7 @@ cp_rules(){
 	cp -rf ${CURR_PATH}/rules_ng/udplist.txt ${target}
 	# 追加 grok.com到 udplist.txt
     local udplist_file="${target}/udplist.txt"
-    printf "\n" >> "$udplist_file"
+    # printf "\n" >> "$udplist_file" 
     if ! grep -qxF "grok.com" "$udplist_file"; then
         echo "grok.com" >> "$udplist_file"
     fi
