@@ -1,4 +1,4 @@
-name: FancySS Mod Build
+name: FancySS Mod Build test
 
 on:
   schedule:
