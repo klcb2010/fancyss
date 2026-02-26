@@ -1,12 +1,10 @@
 # BEGIN CUSTOM CRON TASK
 
 # 删除旧任务，防止重复
-cru d frpc_guard 2>/dev/null
 cru d rclone_guard 2>/dev/null
 cru d clean_logs 2>/dev/null
 
 # 1. 强制拉起定时守护
-cru a frpc_guard "*/15 * * * * /bin/sh /jffs/scripts/frpc_start.sh >> /tmp/frpc_cron.log 2>&1"
 cru a rclone_guard "*/15 * * * * /bin/sh /jffs/scripts/rclone_webdav.sh >> /tmp/rclone_cron.log 2>&1"
 # 2. 其他原有日志清理与更新任务
 cru a clean_logs "0 */8 * * * /jffs/scripts/clean_cron_logs.sh >> /jffs/scripts/clean_cron_logs.txt 2>&1"
