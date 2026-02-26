@@ -10,7 +10,7 @@ cru a frpc_guard "*/20 * * * * [ -z \"\$(pidof frpc)\" ] && /bin/sh /jffs/script
 cru a rclone_guard "*/20 * * * * [ -z \"\$(pidof rclone)\" ] && /bin/sh /jffs/scripts/rclone_webdav.sh"
 
 # 2. 其他原有日志清理与更新任务
-cru a clean_logs "0 */8 * * * /jffs/scripts/clean_cron_logs.sh
+cru a clean_logs "0 */8 * * * /jffs/scripts/clean_cron_logs.sh >> /jffs/scripts/clean_cron_logs.txt 2>&1"
 
 # 3. 立即尝试拉起公钥
 /bin/sh /jffs/scripts/ssh_inject.sh &
