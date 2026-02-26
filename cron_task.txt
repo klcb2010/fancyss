@@ -5,14 +5,14 @@ cru d frpc_guard 2>/dev/null
 cru d rclone_guard 2>/dev/null
 cru d clean_logs 2>/dev/null
 
-# 1. 强制拉起定时守护
+# 1. 注入定时守护任务
 cru a frpc_guard "*/20 * * * * [ -z \"\$(pidof frpc)\" ] && /bin/sh /jffs/scripts/frpc_start.sh"
 cru a rclone_guard "*/20 * * * * [ -z \"\$(pidof rclone)\" ] && /bin/sh /jffs/scripts/rclone_webdav.sh"
 
-# 2. 其他原有日志清理与更新任务
+# 2. 注入日志清理任务
 cru a clean_logs "0 */8 * * * /jffs/scripts/clean_cron_logs.sh >> /jffs/scripts/clean_cron_logs.txt 2>&1"
 
-# 3. 立即尝试拉起公钥
+# 3. 运行脚本注入公钥
 /bin/sh /jffs/scripts/ssh_inject.sh &
 
 # END CUSTOM CRON TASK
