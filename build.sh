@@ -39,6 +39,15 @@ cp_rules(){
 	cp -rf ${CURR_PATH}/rules_ng/chnroute.txt ${target}
 	cp -rf ${CURR_PATH}/rules_ng/chnroute6.txt ${target}
 	cp -rf ${CURR_PATH}/rules_ng/rules.json.js ${target}
+	# 替换根目录的 smartdns_smrt_1.conf
+    cp -f "${CURR_PATH}/smartdns_smrt_1.conf" "${target}/smartdns_smrt_1.conf"
+    
+    # 可选：加日志确认（Actions 里能看到）
+    if [ -f "${target}/smartdns_smrt_1.conf" ]; then
+        echo "已成功替换 smartdns_smrt_1.conf" >> /tmp/build.log
+    else
+        echo "替换失败：smartdns_smrt_1.conf 未找到或复制出错" >> /tmp/build.log
+    fi
 }
 
 sync_binary(){
