@@ -7,7 +7,7 @@
 融合通知
 
 
-
+以下为官方 部分原文
 
 Fancyss is a project providing tools to across the GFW on asuswrt/merlin based router with software center. 
 - 此项目提供用于asuswrt、asuswrt-merlin为基础的，带软件中心固件（≥384）路由器的科学上网功能。
