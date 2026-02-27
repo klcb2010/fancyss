@@ -54,22 +54,3 @@ jobs:
       - name: Build FancySS packages
         run: |
           ./build.sh
-
-      # 10. 生成 release 描述
-      - name: Generate release body
-        run: |
-          echo "编译版本 build $(date +%y%m%d): patched ss_rule_update.sh + ssconfig.sh cron + 自定义任务注入日志 + 删除通知" > release_body.txt
-
-      # 11. 创建/更新 Release
-      - name: Create/Update Release
-        uses: softprops/action-gh-release@v2.0.8
-        env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-        with:
-          tag_name: mod
-          name: FancySS mod build
-          body_path: release_body.txt
-          make_latest: true
-          generate_release_notes: false
-          files: packages/*.tar.gz
-          overwrite_files: true
