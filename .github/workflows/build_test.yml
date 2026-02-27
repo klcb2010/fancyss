@@ -54,7 +54,7 @@ jobs:
       - name: Build FancySS packages
         run: |
           ./build.sh
-           # 10. 获取上游版本 + 生成 release 描述（只保留北京时间）
+      # 10. 获取上游版本 + 生成 release 描述（只保留北京时间）
       - name: Generate release body and tag
         id: release_info
         run: |
