@@ -39,7 +39,7 @@ cp_rules(){
 	cp -rf ${CURR_PATH}/rules_ng/chnroute.txt ${target}
 	cp -rf ${CURR_PATH}/rules_ng/chnroute6.txt ${target}
 	cp -rf ${CURR_PATH}/rules_ng/rules.json.js ${target}
-	# 替换根目录的 smartdns_smrt_1.conf
+	# 替换智能DNS配置文件1为根目录的 smartdns_smrt_1.conf
     cp -f "${CURR_PATH}/smartdns_smrt_1.conf" "${target}/smartdns_smrt_1.conf"
     
     # 可选：加日志确认（Actions 里能看到）
