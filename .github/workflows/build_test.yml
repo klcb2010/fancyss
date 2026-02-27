@@ -54,22 +54,31 @@ jobs:
       - name: Build FancySS packages
         run: |
           ./build.sh
-      # 10. 生成 release 描述（带日期/时间戳）
-      - name: Generate release body
+        # 10. 获取上游版本并生成 release 描述（带日期）
+      - name: Generate release body and tag
+        id: release_info
         run: |
-          BUILD_DATE=$(date +%Y-%m-%d\ %H:%M:%S)
-          echo "FancySS mod 最新构建\n构建时间: ${BUILD_DATE}\npatched ss_rule_update.sh + ssconfig.sh cron + 自定义任务注入日志 + 删除通知 + smartdns_smrt_1.conf 替换\n\n附件：hnd / hnd_v8 full 包（覆盖最新）" > release_body.txt
+          # 从 build.sh 的 version 文件获取上游版本（假设 VERSION 在 fancyss/ss/version 第一行）
+          UPSTREAM_VERSION=$(cat fancyss/ss/version | sed -n 1p | tr -d '\n\r')
+          TAG_NAME="v${UPSTREAM_VERSION}"
+          RELEASE_NAME="FancySS v${UPSTREAM_VERSION}"
+          BUILD_TIME=$(date +"%Y-%m-%d %H:%M:%S")
+          BODY="FancySS v${UPSTREAM_VERSION}\n构建时间: ${BUILD_TIME}\npatched ss_rule_update.sh + ssconfig.sh cron + 自定义任务注入日志 + 删除通知 + smartdns_smrt_1.conf 替换\n\n附件：hnd / hnd_v8 full 包（覆盖最新）\n\nSupported platforms: hnd / hnd_v8"
 
-      # 11. 创建/更新 Release（固定 tag mod，覆盖）
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "release_name=$RELEASE_NAME" >> $GITHUB_OUTPUT
+          echo "body=$BODY" >> $GITHUB_OUTPUT
+
+      # 11. 创建/更新 Release（用上游版本作为 tag，覆盖同版本）
       - name: Create/Update Release
         uses: softprops/action-gh-release@v2.0.8
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         with:
-          tag_name: mod
-          name: FancySS mod 最新构建
-          body_path: release_body.txt
+          tag_name: ${{ steps.release_info.outputs.tag_name }}
+          name: ${{ steps.release_info.outputs.release_name }}
+          body: ${{ steps.release_info.outputs.body }}
           make_latest: true
           generate_release_notes: false
           files: packages/*.tar.gz
-          overwrite_files: true  # 强制覆盖同 tag 的 release 和附件
+          overwrite_files: true  # 同 tag 覆盖描述和附件
