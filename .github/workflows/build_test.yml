@@ -54,3 +54,22 @@ jobs:
       - name: Build FancySS packages
         run: |
           ./build.sh
+      # 10. 生成 release 描述（带日期/时间戳）
+      - name: Generate release body
+        run: |
+          BUILD_DATE=$(date +%Y-%m-%d\ %H:%M:%S)
+          echo "FancySS mod 最新构建\n构建时间: ${BUILD_DATE}\npatched ss_rule_update.sh + ssconfig.sh cron + 自定义任务注入日志 + 删除通知 + smartdns_smrt_1.conf 替换\n\n附件：hnd / hnd_v8 full 包（覆盖最新）" > release_body.txt
+
+      # 11. 创建/更新 Release（固定 tag mod，覆盖）
+      - name: Create/Update Release
+        uses: softprops/action-gh-release@v2.0.8
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        with:
+          tag_name: mod
+          name: FancySS mod 最新构建
+          body_path: release_body.txt
+          make_latest: true
+          generate_release_notes: false
+          files: packages/*.tar.gz
+          overwrite_files: true  # 强制覆盖同 tag 的 release 和附件
