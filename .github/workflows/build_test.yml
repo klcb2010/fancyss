@@ -54,29 +54,32 @@ jobs:
       - name: Build FancySS packages
         run: |
           ./build.sh
-      # 10. 生成 release 描述（干净多行 + 北京时间）
-      - name: Generate release body
+           # 10. 获取上游版本 + 生成 release 描述（只保留北京时间）
+      - name: Generate release body and tag
+        id: release_info
         run: |
+          # 获取上游版本（从 fancyss/ss/version 第一行）
+          UPSTREAM_VERSION=$(cat fancyss/ss/version | sed -n 1p | tr -d '\n\r' | sed 's/[^0-9.]//g')  # 清理非数字/点字符
+          TAG_NAME="v${UPSTREAM_VERSION}"
           BUILD_TIME=$(TZ='Asia/Shanghai' date +"%Y-%m-%d %H:%M:%S")
-          cat << 'EOT' > release_body.txt
-          FancySS mod 最新构建
 
-          构建时间：${BUILD_TIME}
+          # body 只保留时间一行
+          echo "构建时间 ：${BUILD_TIME}" > release_body.txt
 
-          patched ss_rule_update.sh + ssconfig.sh cron
-          + 自定义任务注入日志 + 替换通知
-          + smartdns_smrt_1.conf 替换
-          EOT 
-      # 11. 创建/更新 Release（用上游版本作为 tag，覆盖同版本）
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "release_name=FancySS v${UPSTREAM_VERSION}" >> $GITHUB_OUTPUT
+          echo "body=$(cat release_body.txt)" >> $GITHUB_OUTPUT
+
+      # 11. 创建/更新 Release（用版本号作为 tag，覆盖同版本）
       - name: Create/Update Release
         uses: softprops/action-gh-release@v2.0.8
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         with:
-          tag_name: mod
-          name: FancySS mod 最新构建
-          body_path: release_body.txt
+          tag_name: ${{ steps.release_info.outputs.tag_name }}
+          name: ${{ steps.release_info.outputs.release_name }}
+          body: ${{ steps.release_info.outputs.body }}
           make_latest: true
           generate_release_notes: false
           files: packages/*.tar.gz
-          overwrite_files: true
+          overwrite_files: true  # 同版本覆盖描述和附件
