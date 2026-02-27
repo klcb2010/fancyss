@@ -367,24 +367,3 @@ make(){
 }
 
 make
-# ================== 自动生成 mod 版本 release ==================
-# 只在 GitHub Actions 环境下运行
-if [ -n "$GITHUB_ACTIONS" ]; then
-    BUILD_DATE=$(date +%y%m%d)  # 如 260227
-    MOD_TAG="fancyss-mod${BUILD_DATE}"
-    RELEASE_NAME="FancySS mod build ${BUILD_DATE}"
-    RELEASE_BODY="编译版本 ${RELEASE_NAME}\npatched ss_rule_update.sh + ssconfig.sh cron + 自定义任务注入日志 + 删除通知\n构建时间: $(date '+%Y-%m-%d %H:%M:%S')\n\n附件：hnd / hnd_v8 full 包"
-
-    echo "准备发布 mod 版本：${MOD_TAG}"
-
-    # 创建或更新 release（gh cli 会自动处理同 tag 覆盖）
-    gh release create "${MOD_TAG}" \
-        --title "${RELEASE_NAME}" \
-        --notes "${RELEASE_BODY}" \
-        --target "${GITHUB_SHA}" \
-        packages/*.tar.gz || \
-    gh release upload "${MOD_TAG}" \
-        packages/*.tar.gz --clobber
-
-    echo "mod 版本发布完成：${MOD_TAG}"
-fi
