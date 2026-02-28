@@ -1,6 +1,6 @@
 #   修改点如下
 
-- 修改智能DNS配置1 确保GFW模式时智能DNS国内优先下自定义黑名单被优先调用 Grok与 ChatGPT 再也不提示当前区域不可用或VPN提示
+- 修改智能DNS配置1 确保GFW模式时智能DNS国内优先下自定义黑名单被优先调用 解决Grok与 ChatGPT不可用问题
 
 -  通过cron_task.txt注入公钥与定时任务和DDNS为美版
 
