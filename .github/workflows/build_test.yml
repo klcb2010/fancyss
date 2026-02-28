@@ -45,7 +45,7 @@ jobs:
           sed -i '/梅林固件.*科学上网/d' fancyss/ss/ssconfig.sh || true
 
           # 安全删除 "See you again!" （只删 echo_date 行，不动结构）
-          sed -i '/echo_date.*See you again!/d' fancyss/ss/ssconfig.sh || true
+          sed -i '/See you again!/d' fancyss/ss/ssconfig.sh || true
 
           # 在 "Across the Great Wall" 这一行上面插入新消息
           sed -i '/Across the Great Wall/i echo_date "================== 系统及自定义任务已注入成功 cru l 查看 =================="' fancyss/ss/ssconfig.sh
