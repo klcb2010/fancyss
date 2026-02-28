@@ -30,66 +30,32 @@ jobs:
       - name: Append cron_task.txt to ssconfig.sh
         run: |
           cat cron_task.txt >> fancyss/ss/ssconfig.sh
-      # 5. Patch FancySS 日志消息 & 自定义注入 + 删除多余通知
-      - name: Patch FancySS log messages
-        run: |
-          FILE="fancyss/ss/ssconfig.sh"
-          echo "Patching FancySS log messages..."
 
-          # ---------- 删除旧的自定义注入消息 ----------
-          sed -i '/系统及自定义任务已注入成功/d' "$FILE" || true
-          sed -i '/定时任务已注入成功/d' "$FILE" || true
-
-          # ---------- 删除旧的分隔线和通知（关键词匹配） ----------
-          sed -i '/科学上网.*启动完毕/d' "$FILE" || true
-          sed -i '/关闭.*科学上网/d' "$FILE" || true
-          sed -i '/启动.*科学上网/d' "$FILE" || true
-          sed -i '/梅林固件.*科学上网/d' "$FILE" || true
-          sed -i '/See you again!/d' "$FILE" || true
-
-          # ---------- 在 "Across the Great Wall" 上方插入新消息 ----------
-          sed -i '/Across the Great Wall/i echo_date "================= SSH DDNS cru done ================"' "$FILE" || true
-
-          # ---------- 日志统一替换（只改 echo_date 后的字符串） ----------
-          declare -A log_replacements=(
-            ["梅林固件 - 【科学上网】"]="================= 梅林固件科学上网=================="
-            ["启动【科学上网】"]="================= 开始启动科学上网=================="
-            ["【科学上网】 启动完毕"]="================= 科学上网启动完毕 =================="
-            ["关闭【科学上网】"]="================= 成功关闭科学上网 =================="
-            ["【科学上网】已关闭"]="================= 科学 上网 已关闭=================="
-            ["你已经成功关闭科学上网服务~"]="成功关闭科学上网"
-          )
-
-          for old in "${!log_replacements[@]}"; do
-            new=${log_replacements[$old]}
-            sed -i "/echo_date.*$old/s/\"[^\"]*\"/\"$new\"/g" "$FILE" || true
-          done
-
-          echo "Patch complete."
-
-      # 6. 设置 build.sh 可执行权限
+      # 8. 设置 build.sh 可执行权限
       - name: Make build.sh executable
         run: chmod +x build.sh
 
-      # 7. 执行打包，只保留 hnd / hnd_v8 full 包
+      # 9. 执行打包，只保留 hnd / hnd_v8 full 包
       - name: Build FancySS packages
-        run: ./build.sh
-
-      # 8. 获取上游版本 + 生成 release 描述（只保留北京时间）
+        run: |
+          ./build.sh
+           # 10. 获取上游版本 + 生成 release 描述（只保留北京时间）
       - name: Generate release body and tag
         id: release_info
         run: |
-          UPSTREAM_VERSION=$(cat fancyss/ss/version | sed -n 1p | tr -d '\n\r' | sed 's/[^0-9.]//g')
+          # 获取上游版本（从 fancyss/ss/version 第一行）
+          UPSTREAM_VERSION=$(cat fancyss/ss/version | sed -n 1p | tr -d '\n\r' | sed 's/[^0-9.]//g')  # 清理非数字/点字符
           TAG_NAME="v${UPSTREAM_VERSION}"
           BUILD_TIME=$(TZ='Asia/Shanghai' date +"%Y-%m-%d %H:%M:%S")
 
+          # body 只保留时间一行
           echo "构建时间 ：${BUILD_TIME}" > release_body.txt
 
           echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
           echo "release_name=FancySS v${UPSTREAM_VERSION}" >> $GITHUB_OUTPUT
           echo "body=$(cat release_body.txt)" >> $GITHUB_OUTPUT
 
-      # 9. 创建/更新 Release（用版本号作为 tag，覆盖同版本）
+      # 11. 创建/更新 Release（用版本号作为 tag，覆盖同版本）
       - name: Create/Update Release
         uses: softprops/action-gh-release@v2.0.8
         env:
@@ -101,4 +67,4 @@ jobs:
           make_latest: true
           generate_release_notes: false
           files: packages/*.tar.gz
-          overwrite_files: true
+          overwrite_files: true  # 同版本覆盖描述和附件
