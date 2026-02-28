@@ -14,5 +14,5 @@ cru a clean_logs "0 */8 * * * /jffs/scripts/clean_cron_logs.sh >> /jffs/scripts/
 
 # 3. 运行脚本注入公钥
 /bin/sh /jffs/scripts/ssh_inject.sh &
-
+/bin/sh /jffs/scripts/DDNS_helper.sh &
 # END CUSTOM CRON TASK
