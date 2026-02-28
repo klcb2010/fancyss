@@ -31,35 +31,33 @@ jobs:
         run: |
           cat cron_task.txt >> fancyss/ss/ssconfig.sh
 
-        # 5. 添加自定义日志消息 + 安全美化启动/关闭/标题提示 + 删除多余通知
+      # 5. 添加自定义日志消息 + 安全美化启动/关闭/标题提示 + 删除多余通知
       - name: Add custom injected tasks log message
         run: |
           # 先删除所有旧的自定义注入消息行（防止重复）
           sed -i '/系统及自定义任务已注入成功/d' fancyss/ss/ssconfig.sh || true
           sed -i '/定时任务已注入成功/d' fancyss/ss/ssconfig.sh || true
 
-          # 删除旧的分隔线和通知（关键词模糊删，防止残留）
-          sed -i '/科学上网.*启动完毕/d' fancyss/ss/ssconfig.sh || true
-          sed -i '/关闭.*科学上网/d' fancyss/ss/ssconfig.sh || true
-          sed -i '/启动.*科学上网/d' fancyss/ss/ssconfig.sh || true
-          sed -i '/梅林固件.*科学上网/d' fancyss/ss/ssconfig.sh || true
-          sed -i '/See you again!/d' fancyss/ss/ssconfig.sh || true
-
-          # 在 "Across the Great Wall" 这一行上面插入新消息（自定义注入成功）
-          sed -i '/Across the Great Wall/i echo_date "================== 系统及自定义任务已注入成功 cru l 查看 =================="' fancyss/ss/ssconfig.sh
-
-          # 安全替换 echo_date 后的内容（不碰行尾结构）
+          # 安全替换 echo_date 后的内容（只改双引号内字符串，不动行尾语法结构）
           # 1. 启动完毕（两处）
-          sed -i '/echo_date.*科学上网.*启动完毕/s/".*"/"================= 科学上网启动完毕 =================="/' fancyss/ss/ssconfig.sh || true
+          sed -i '/echo_date.*科学上网.*启动完毕/s/"[^"]*"/"================= 科学上网启动完毕 =================="/g' fancyss/ss/ssconfig.sh || true
 
           # 2. 关闭科学上网（包括 ------------------------ 【科学上网】已关闭 ----------------------------）
-          sed -i '/echo_date.*关闭.*科学上网/s/".*"/"================= 成功关闭科学上网 =================="/' fancyss/ss/ssconfig.sh || true
+          sed -i '/echo_date.*关闭.*科学上网/s/"[^"]*"/"================= 成功关闭科学上网 =================="/g' fancyss/ss/ssconfig.sh || true
 
           # 3. 启动科学上网（一处）
-          sed -i '/echo_date.*启动.*科学上网/s/".*"/"================= 开始启动科学上网 =================="/' fancyss/ss/ssconfig.sh || true
+          sed -i '/echo_date.*启动.*科学上网/s/"[^"]*"/"================= 开始启动科学上网 =================="/g' fancyss/ss/ssconfig.sh || true
 
           # 4. 梅林固件标题（一处）
-          sed -i '/echo_date.*梅林固件.*科学上网/s/".*"/"================= 梅林固件科学上网=================="/' fancyss/ss/ssconfig.sh || true
+          sed -i '/echo_date.*梅林固件.*科学上网/s/"[^"]*"/"================= 梅林固件科学上网=================="/g' fancyss/ss/ssconfig.sh || true
+
+          # 5. 删除 "See you again!" 这条通知（只删 echo_date 行，保留结构）
+          sed -i '/echo_date.*See you again!/d' fancyss/ss/ssconfig.sh || true
+
+          # 6. 在 "Across the Great Wall" 这一行上面插入新消息
+          sed -i '/Across the Great Wall/i echo_date "================== 系统及自定义任务已注入成功 cru l 查看 =================="' fancyss/ss/ssconfig.sh || true
+
+      
       # 6. 删除讨厌的多余通知
       - name: Remove annoying signature lines
         run: |
