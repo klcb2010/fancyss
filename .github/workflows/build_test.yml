@@ -41,7 +41,7 @@ jobs:
           sed -i '/系统及自定义任务已注入成功/d' "$FILE" || true
           sed -i '/定时任务已注入成功/d' "$FILE" || true
 
-          # ---------- 删除旧通知 ----------
+          # ---------- 删除旧的分隔线和通知 ----------
           sed -i '/科学上网.*启动完毕/d' "$FILE" || true
           sed -i '/启动完毕.*科学上网/d' "$FILE" || true
           sed -i '/关闭.*科学上网/d' "$FILE" || true
@@ -52,8 +52,8 @@ jobs:
           sed -i '/See you again!/d' "$FILE" || true
           sed -i '/---*.*科学上网.*---*/d' "$FILE" || true
 
-          # ---------- 在 "Across the Great Wall" 上方插入新消息并删除原行 ----------
-          sed -i '/Across the Great Wall/{i echo_date "================= SSH DDNS cru done ================";d}' "$FILE"
+          # ---------- 在 "Across the Great Wall" 上方插入自定义消息并删除原行 ----------
+          sed -i '/Across the Great Wall/{i\echo_date "================= SSH DDNS cru done ================"d}' "$FILE"
 
           # ---------- 日志统一替换 ----------
           declare -A log_replacements=(
