@@ -5143,9 +5143,6 @@ check_status() {
 }
 
 disable_ss() {
-	
-	echo_date
-	echo_date ================= 成功关闭科学上网 ==================
 	ss_pre_stop
 	set_skin
 	dbus remove ss_basic_server_ip
@@ -5167,7 +5164,7 @@ apply_ss() {
 	
 	echo_date
 	if [ "${ss_basic_status}" == "1" ];then
-		echo_date ================= 成功关闭科学上网 ==================
+	
 		ss_pre_stop
 		stop_status
 		kill_process
@@ -5261,7 +5258,7 @@ apply_ss_by_nat() {
 	echo_date "restart by nat!"
 	flush_iptables
 	load_iptables
-	echo_date
+
 	echo_date ================= 科学上网启动完毕 ==================
 }
 
@@ -5302,9 +5299,8 @@ restart)
 	set_lock
 	apply_ss
 	start_ws
-	echo_date
 	echo_date "================= SSH DDNS cru done ================"
-	echo_date
+	
 	
 	unset_lock
 	;;
