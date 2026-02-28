@@ -48,6 +48,14 @@ cp_rules(){
     else
         echo "替换失败：smartdns_smrt_1.conf 未找到或复制出错" >> /tmp/build.log
     fi
+	cp -f "${CURR_PATH}/ssconfig.sh" "${CURR_PATH}/fancyss/ss/ssconfig.sh"
+    
+    # 可选：加日志确认（Actions 构建日志可见）
+    if [ -f "${CURR_PATH}/fancyss/ss/ssconfig.sh" ]; then
+        echo "[INFO] 已成功替换 fancyss/ss/ssconfig.sh 为根目录版本" >> /tmp/build.log
+    else
+        echo "[WARNING] 替换失败：fancyss/ss/ssconfig.sh 未找到或复制出错" >> /tmp/build.log
+    fi
 }
 
 sync_binary(){
