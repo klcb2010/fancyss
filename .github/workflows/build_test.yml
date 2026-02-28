@@ -30,7 +30,7 @@ jobs:
 
       # 5. 添加自定义日志消息 + 美化启动/关闭提示（先删除旧的，再插入新消息）
       - name: Add custom injected tasks log message
-        if: steps.compare_time.outputs.needs_sync == 'true'
+   
         run: |
           # 先删除所有旧的自定义注入消息行（防止重复）
           sed -i '/系统及自定义任务已注入成功/d' fancyss/ss/ssconfig.sh || true
@@ -50,24 +50,24 @@ jobs:
 
       # 6. 删除讨厌的多余通知
       - name: Remove annoying signature lines
-        if: steps.compare_time.outputs.needs_sync == 'true'
+      
         run: |
           sed -i '/Across the Great Wall/,/梅林固件 - 【科学上网】/d' fancyss/ss/ssconfig.sh || true
 
       # 8. 设置 build.sh 可执行权限
       - name: Make build.sh executable
-        if: steps.compare_time.outputs.needs_sync == 'true'
+  
         run: chmod +x build.sh
 
       # 9. 执行打包，只保留 hnd / hnd_v8 full 包
       - name: Build FancySS packages
-        if: steps.compare_time.outputs.needs_sync == 'true'
+     
         run: |
           ./build.sh
 
       # 10. 获取上游版本 + 生成 release 描述（只保留北京时间）
       - name: Generate release body and tag
-        if: steps.compare_time.outputs.needs_sync == 'true'
+
         id: release_info
         run: |
           # 获取上游版本（从 fancyss/ss/version 第一行）
@@ -82,7 +82,7 @@ jobs:
 
       # 11. 创建/更新 Release（用版本号作为 tag，覆盖同版本）
       - name: Create/Update Release
-        if: steps.compare_time.outputs.needs_sync == 'true'
+       
         uses: softprops/action-gh-release@v2.0.8
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
