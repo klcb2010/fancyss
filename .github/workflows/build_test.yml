@@ -30,18 +30,15 @@ jobs:
       - name: Append cron_task.txt to ssconfig.sh
         run: |
           cat cron_task.txt >> fancyss/ss/ssconfig.sh
-
       # 5. Patch FancySS 日志消息 & 自定义注入 + 删除多余通知
       - name: Patch FancySS log messages
         run: |
           FILE="fancyss/ss/ssconfig.sh"
           echo "Patching FancySS log messages..."
 
-          # 删除旧的自定义注入消息
-          sed -i '/系统及自定义任务已注入成功/d' "$FILE" || true
-          sed -i '/定时任务已注入成功/d' "$FILE" || true
+    
 
-          # 删除旧的分隔线和通知
+          # ---------- 删除所有旧的分隔线和通知 ----------
           sed -i '/科学上网.*启动完毕/d' "$FILE" || true
           sed -i '/启动完毕.*科学上网/d' "$FILE" || true
           sed -i '/关闭.*科学上网/d' "$FILE" || true
@@ -52,16 +49,22 @@ jobs:
           sed -i '/See you again!/d' "$FILE" || true
           sed -i '/---*.*科学上网.*---*/d' "$FILE" || true
 
-          # 在 "Across the Great Wall" 上方插入新消息
-          sed -i '/Across the Great Wall/i echo_date "================= SSH DDNS cru done ================"' "$FILE"
+          # ---------- 在 "Across the Great Wall" 上方插入新消息并删除原行 ----------
+          sed -i '/Across the Great Wall/{i echo_date "================= SSH DDNS cru done ================";d}' "$FILE"
 
-          # 统一替换日志内容
+          # ---------- 日志统一替换 ----------
           declare -A log_replacements=(
+            # 标题
             ["======================= 梅林固件 - 【科学上网】 ======================="]="================= 梅林固件科学上网=================="
+            # 启动提示
             ["------------------------- 启动【科学上网】 -----------------------------"]="================= 开始启动科学上网=================="
+            # 启动完毕（两处）
             ["------------------------ 【科学上网】 启动完毕 ------------------------"]="================= 科学上网启动完毕 =================="
+            # 关闭过程
             ["------------------------- 关闭【科学上网】 -----------------------------"]="================= 成功关闭科学上网 =================="
+            # 已关闭提示
             ["------------------------ 【科学上网】已关闭 ----------------------------"]="================= 科学 上网 已关闭=================="
+            # 成功关闭服务提示
             ["你已经成功关闭科学上网服务~"]="成功关闭科学上网"
           )
 
@@ -71,12 +74,7 @@ jobs:
           done
 
           echo "Patch complete."
-
-      # 6. 删除讨厌的多余通知（保留原逻辑）
-      - name: Remove annoying signature lines
-        run: |
-          sed -i '/Across the Great Wall/,/梅林固件 - 【科学上网】/d' fancyss/ss/ssconfig.sh || true
-
+     
       # 7. 设置 build.sh 可执行权限
       - name: Make build.sh executable
         run: chmod +x build.sh
