@@ -5162,7 +5162,7 @@ disable_ss() {
 
 apply_ss() {
 	
-	echo_date
+	
 	if [ "${ss_basic_status}" == "1" ];then
 	
 		ss_pre_stop
@@ -5254,7 +5254,7 @@ apply_ss_by_nat() {
 	# 1. 开机的时候会触发，此时其它组件都没有准备，需要开启
 	# 2. 防火墙重启，重新拨号等会触发，此时其它组件都是ok的，只需要重启iptables
 	
-	echo_date
+
 	echo_date "restart by nat!"
 	flush_iptables
 	load_iptables
@@ -5289,8 +5289,7 @@ start)
 stop)
 	set_lock
 	disable_ss
-	echo_date
-	echo_date
+
 	
 	unset_lock
 	;;
