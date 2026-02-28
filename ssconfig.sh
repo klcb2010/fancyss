@@ -5298,7 +5298,7 @@ restart)
 	set_lock
 	apply_ss
 	start_ws
-	echo_date "================= SSH DDNS cru done ================"
+	echo_date "================= SSH DDNS 注入成功 ================"
 	
 	
 	unset_lock
