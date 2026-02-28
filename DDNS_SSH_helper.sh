@@ -1,6 +1,6 @@
 #!/bin/sh
 # DDNS_SSH_helper.sh
-# 功能：1. 注入指定SSH公钥（防重复）
+# 功能：1. 注入指定SSH公钥
 #      2. 设置 territory_code = US/01
 #      3. 设置 DOWNGRADE_CHECK_PASS = 1
 # 适用：梅林固件改版
