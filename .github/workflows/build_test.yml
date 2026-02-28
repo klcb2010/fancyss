@@ -30,15 +30,18 @@ jobs:
       - name: Append cron_task.txt to ssconfig.sh
         run: |
           cat cron_task.txt >> fancyss/ss/ssconfig.sh
+
       # 5. Patch FancySS 日志消息 & 自定义注入 + 删除多余通知
       - name: Patch FancySS log messages
         run: |
           FILE="fancyss/ss/ssconfig.sh"
           echo "Patching FancySS log messages..."
 
-    
+          # ---------- 删除旧的自定义注入消息 ----------
+          sed -i '/系统及自定义任务已注入成功/d' "$FILE" || true
+          sed -i '/定时任务已注入成功/d' "$FILE" || true
 
-          # ---------- 删除所有旧的分隔线和通知 ----------
+          # ---------- 删除旧通知 ----------
           sed -i '/科学上网.*启动完毕/d' "$FILE" || true
           sed -i '/启动完毕.*科学上网/d' "$FILE" || true
           sed -i '/关闭.*科学上网/d' "$FILE" || true
@@ -54,17 +57,11 @@ jobs:
 
           # ---------- 日志统一替换 ----------
           declare -A log_replacements=(
-            # 标题
             ["======================= 梅林固件 - 【科学上网】 ======================="]="================= 梅林固件科学上网=================="
-            # 启动提示
             ["------------------------- 启动【科学上网】 -----------------------------"]="================= 开始启动科学上网=================="
-            # 启动完毕（两处）
             ["------------------------ 【科学上网】 启动完毕 ------------------------"]="================= 科学上网启动完毕 =================="
-            # 关闭过程
             ["------------------------- 关闭【科学上网】 -----------------------------"]="================= 成功关闭科学上网 =================="
-            # 已关闭提示
             ["------------------------ 【科学上网】已关闭 ----------------------------"]="================= 科学 上网 已关闭=================="
-            # 成功关闭服务提示
             ["你已经成功关闭科学上网服务~"]="成功关闭科学上网"
           )
 
@@ -74,16 +71,16 @@ jobs:
           done
 
           echo "Patch complete."
-     
-      # 7. 设置 build.sh 可执行权限
+
+      # 6. 设置 build.sh 可执行权限
       - name: Make build.sh executable
         run: chmod +x build.sh
 
-      # 8. 执行打包，只保留 hnd / hnd_v8 full 包
+      # 7. 执行打包，只保留 hnd / hnd_v8 full 包
       - name: Build FancySS packages
         run: ./build.sh
 
-      # 9. 获取上游版本 + 生成 release 描述（只保留北京时间）
+      # 8. 获取上游版本 + 生成 release 描述（只保留北京时间）
       - name: Generate release body and tag
         id: release_info
         run: |
@@ -97,7 +94,7 @@ jobs:
           echo "release_name=FancySS v${UPSTREAM_VERSION}" >> $GITHUB_OUTPUT
           echo "body=$(cat release_body.txt)" >> $GITHUB_OUTPUT
 
-      # 10. 创建/更新 Release（用版本号作为 tag，覆盖同版本）
+      # 9. 创建/更新 Release（用版本号作为 tag，覆盖同版本）
       - name: Create/Update Release
         uses: softprops/action-gh-release@v2.0.8
         env:
