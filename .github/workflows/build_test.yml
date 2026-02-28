@@ -36,7 +36,6 @@ jobs:
         run: |
           # 先删除所有旧的自定义注入消息行（防止重复）
           sed -i '/系统及自定义任务已注入成功/d' fancyss/ss/ssconfig.sh || true
-          sed -i '/定时任务已注入成功/d' fancyss/ss/ssconfig.sh || true
           
           # 在 "Across the Great Wall" 这一行上面插入新消息
           sed -i '/Across the Great Wall/i echo_date "================= SSH DDNS cru done ================"' fancyss/ss/ssconfig.sh
