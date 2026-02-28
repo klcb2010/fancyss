@@ -31,7 +31,7 @@ jobs:
         run: |
           cat cron_task.txt >> fancyss/ss/ssconfig.sh
 
-           # 5. 添加自定义日志消息 + 安全美化启动/关闭/标题提示 + 删除多余通知
+        # 5. 添加自定义日志消息 + 安全美化启动/关闭/标题提示 + 删除多余通知
       - name: Add custom injected tasks log message
         run: |
           # 先删除所有旧的自定义注入消息行（防止重复）
@@ -44,10 +44,8 @@ jobs:
           sed -i '/启动.*科学上网/d' fancyss/ss/ssconfig.sh || true
           sed -i '/梅林固件.*科学上网/d' fancyss/ss/ssconfig.sh || true
 
-          # 安全删除 "See you again!" （只删 echo_date 行，不动结构）
-          sed -i '/See you again!/d' fancyss/ss/ssconfig.sh || true
 
-          # 在 "Across the Great Wall" 这一行上面插入新消息
+            # 在 "Across the Great Wall" 这一行上面插入新消息
           sed -i '/Across the Great Wall/i echo_date "================== 系统及自定义任务已注入成功 cru l 查看 =================="' fancyss/ss/ssconfig.sh
 
           # 安全替换：只改 echo_date 后的字符串，不动整行结构
