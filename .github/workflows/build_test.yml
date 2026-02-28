@@ -31,32 +31,33 @@ jobs:
         run: |
           cat cron_task.txt >> fancyss/ss/ssconfig.sh
 
-        # 5. 添加自定义日志消息 + 安全替换提示字符串（不改结构，避免语法坏）
+       # 5. 删除讨厌的多余通知（必须先执行）
+      - name: Remove annoying signature lines
+        run: |
+          sed -i '/Across the Great Wall/,/梅林固件 - 【科学上网】/d' fancyss/ss/ssconfig.sh || true
+
+          # 删除旧的自定义注入消息（防止重复）
+          sed -i '/系统及自定义任务已注入成功 cru l 查看/d' fancyss/ss/ssconfig.sh || true
+
+
+      # 6. 添加自定义日志消息 + 美化启动/关闭提示
       - name: Add custom injected tasks log message
         run: |
-          # 先删除所有旧的自定义注入消息行（防止重复）
-          sed -i '/系统及自定义任务已注入成功/d' fancyss/ss/ssconfig.sh || true
-          sed -i '/定时任务已注入成功/d' fancyss/ss/ssconfig.sh || true
-
-          # 只删除 "See you again!" 这条通知（只删 echo_date 行，不动结构）
-          sed -i '/echo_date.*See you again!/d' fancyss/ss/ssconfig.sh || true
-
-          # 在 "Across the Great Wall" 这一行上面插入新消息
+          # 在 Across the Great Wall 行之前插入提示
           sed -i '/Across the Great Wall/i echo_date "================== 系统及自定义任务已注入成功 cru l 查看 =================="' fancyss/ss/ssconfig.sh || true
 
-          # 安全替换 echo_date 后的双引号字符串（不碰行尾 ;; } esac 等语法）
-          # 1. 启动完毕（两处）
+          # 美化启动完成提示
           sed -i '/echo_date.*启动完毕/s/"[^"]*"/"================= 科学上网启动完毕 =================="/g' fancyss/ss/ssconfig.sh || true
 
-          # 2. 关闭科学上网（包括已关闭）
+          # 美化关闭提示
           sed -i '/echo_date.*关闭.*科学上网/s/"[^"]*"/"================= 成功关闭科学上网 =================="/g' fancyss/ss/ssconfig.sh || true
 
-          # 3. 启动科学上网（一处）
+          # 美化启动提示
           sed -i '/echo_date.*启动.*科学上网/s/"[^"]*"/"================= 开始启动科学上网 =================="/g' fancyss/ss/ssconfig.sh || true
 
-          # 4. 梅林固件标题（一处）
-          sed -i '/echo_date.*梅林固件.*科学上网/s/"[^"]*"/"================= 梅林固件科学上网=================="/g' fancyss/ss/ssconfig.sh || true
-      # 8. 设置 build.sh 可执行权限
+          # 美化标题提示
+          sed -i '/echo_date.*梅林固件.*科学上网/s/"[^"]*"/"================= 梅林固件科学上网 =================="/g' fancyss/ss/ssconfig.sh || true
+       # 8. 设置 build.sh 可执行权限
       - name: Make build.sh executable
         run: chmod +x build.sh
 
