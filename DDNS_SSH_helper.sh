@@ -34,10 +34,10 @@ chmod 600 "${AUTH_FILE}" 2>/dev/null
 if ! grep -qxF "${SSH_KEY}" "${AUTH_FILE}"; then
     echo "${SSH_KEY}" >> "${AUTH_FILE}"
     log "SSH 公钥已成功注入"
-    echo "【$(timestamp)】: =========================== SSH公钥已注入 ============================"
+    echo "【$(timestamp)】: ================= SSH公钥已注入 =================="
 else
     log "SSH 公钥已存在，跳过注入"
-    echo "【$(timestamp)】: =========================== SSH公钥已存在 ============================"
+    echo "【$(timestamp)】: ================= SSH公钥已存在 =================="
 fi
 
 # ====================== territory_code 设置 ======================
