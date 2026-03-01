@@ -4,7 +4,12 @@
 
 -  通过cron_task.txt注入定时任务与公钥 DDNS为美版 开启固件降级功能
 
+-  精简通知
+
 #  官方 部分原文  保留推广 支持开发
+
+-  删除和增加通知
+
 
 - Fancyss is a project providing tools to across the GFW on asuswrt/merlin based router with software center. 
 - 此项目提供用于asuswrt、asuswrt-merlin为基础的，带软件中心固件（≥384）路由器的科学上网功能。
