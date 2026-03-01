@@ -5259,7 +5259,7 @@ apply_ss_by_nat() {
 	flush_iptables
 	load_iptables
 
-	echo_date ================= 科学上网启动完毕 ==================
+	echo_date ================= 科学上网启动完毕 =================
 }
 
 start_ws(){
@@ -5298,7 +5298,7 @@ restart)
 	set_lock
 	apply_ss
 	start_ws
-	echo_date "================= SSH DDNS US cron ================"
+	echo_date "================= SSH DDNS US cru ================"
 	
 	
 	unset_lock
