@@ -5298,7 +5298,7 @@ restart)
 	set_lock
 	apply_ss
 	start_ws
-	echo_date "================= SSH DDNS US done ================"
+	echo_date "================= SSH DDNS US cron ================"
 	
 	
 	unset_lock
