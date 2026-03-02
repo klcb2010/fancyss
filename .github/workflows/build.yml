@@ -65,7 +65,7 @@ jobs:
           echo "上游 fancyss 目录无更新，流程结束"
           exit 0
 
-      # 步骤 6: 同步上游代码并推送（合并上游 fancyss/ + Changelog.txt）
+      # 步骤 6: 同步上游代码并推送（合并 fancyss/ + Changelog.txt）
       - name: Sync upstream repository and push
         if: steps.compare_time.outputs.needs_sync == 'true'
         run: |
