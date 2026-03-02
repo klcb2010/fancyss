@@ -1,6 +1,6 @@
 #   修改点如下
 
--  修改 　国内国外方案  　　  　　  　　  确保任意模式下选择智能dns时优先调用自定义黑名单   　 　  解决Grok、 ChatGPT错误
+-  修改 　国内国外方案  　　  　　  　　  确保任意模式下选择智能DNS导致的Grok和ChatGPT错误
 
 -  注入 　DDNS_SSH_helper定时公钥    　DDNS区域更改为US  　 　 　 　 　 　 　    　　开启固件降级功能
 
