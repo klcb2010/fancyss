@@ -1,14 +1,11 @@
 name: FancySS Mod Build test
-
 on:
   schedule:
-    - cron: '0 3 * * *'  # 每天凌晨3点自动运行
-  workflow_dispatch:     # 支持手动触发
-
+    - cron: '0 3 * * *' # 每天凌晨3点自动运行
+  workflow_dispatch: # 支持手动触发
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
-
     steps:
       # 1. 拉取仓库代码
       - name: Checkout source
@@ -35,23 +32,27 @@ jobs:
       - name: Make build.sh executable
         run: chmod +x build.sh
 
-      # 6. 执行打包，只保留 hnd / hnd_v8 full 包
+      # 6. 执行打包，只保留 hnd / hnd_v8 full 包 + 同步 Changelog.txt
       - name: Build FancySS packages
         run: |
           ./build.sh
           
-        # 7. 获取上游版本 + 生成 release 描述（只保留北京时间）
+          # 6.1 额外同步上游 Changelog.txt 到根目录
+          git fetch upstream 3.0
+          git checkout upstream/3.0 -- Changelog.txt || true
+          git add Changelog.txt || true
+          git commit -m "Sync upstream Changelog.txt" || echo "Changelog.txt 无变更"
+
+      # 7. 获取上游版本 + 生成 release 描述（只保留北京时间）
       - name: Generate release body and tag
         id: release_info
         run: |
           # 获取上游版本（从 fancyss/ss/version 第一行）
-          UPSTREAM_VERSION=$(cat fancyss/ss/version | sed -n 1p | tr -d '\n\r' | sed 's/[^0-9.]//g')  # 清理非数字/点字符
+          UPSTREAM_VERSION=$(cat fancyss/ss/version | sed -n 1p | tr -d '\n\r' | sed 's/[^0-9.]//g') # 清理非数字/点字符
           TAG_NAME="v${UPSTREAM_VERSION}"
           BUILD_TIME=$(TZ='Asia/Shanghai' date +"%Y-%m-%d %H:%M:%S")
-
           # body 只保留时间一行
           echo "构建时间 ：${BUILD_TIME}" > release_body.txt
-
           echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
           echo "release_name=FancySS v${UPSTREAM_VERSION}" >> $GITHUB_OUTPUT
           echo "body=$(cat release_body.txt)" >> $GITHUB_OUTPUT
@@ -68,4 +69,4 @@ jobs:
           make_latest: true
           generate_release_notes: false
           files: packages/*.tar.gz
-          overwrite_files: true  # 同版本覆盖描述和附件
+          overwrite_files: true # 同版本覆盖描述和附件
