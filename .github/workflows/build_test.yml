@@ -31,15 +31,16 @@ jobs:
         run: |
           cat cron_task.txt >> fancyss/ss/ssconfig.sh
 
-      # 8. 设置 build.sh 可执行权限
+      # 5. 设置 build.sh 可执行权限
       - name: Make build.sh executable
         run: chmod +x build.sh
 
-      # 9. 执行打包，只保留 hnd / hnd_v8 full 包
+      # 6. 执行打包，只保留 hnd / hnd_v8 full 包
       - name: Build FancySS packages
         run: |
           ./build.sh
-           # 10. 获取上游版本 + 生成 release 描述（只保留北京时间）
+          
+        # 7. 获取上游版本 + 生成 release 描述（只保留北京时间）
       - name: Generate release body and tag
         id: release_info
         run: |
@@ -55,7 +56,7 @@ jobs:
           echo "release_name=FancySS v${UPSTREAM_VERSION}" >> $GITHUB_OUTPUT
           echo "body=$(cat release_body.txt)" >> $GITHUB_OUTPUT
 
-      # 11. 创建/更新 Release（用版本号作为 tag，覆盖同版本）
+      # 8. 创建/更新 Release（用版本号作为 tag，覆盖同版本）
       - name: Create/Update Release
         uses: softprops/action-gh-release@v2.0.8
         env:
