@@ -1,33 +1,34 @@
 name: FancySS Mod Build by klcb2010
+
 on:
   schedule:
-    - cron: '0 19 * * *' # 每天 UTC 19:00（北京时间 03:00）
-  workflow_dispatch:      # 支持手动触发
+    - cron: '0 3 * * *'  # 每天凌晨3点自动运行（UTC，北京时间11点）
+  workflow_dispatch:     # 支持手动触发
 
 jobs:
-  sync-check-and-build:
+  build-and-release:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: write  # 允许 push 和 release
 
     steps:
-      # 步骤 1: 拉取当前仓库代码（包括历史 commit）
+      # 步骤 1: 拉取当前仓库代码
       - name: Checkout current repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: recursive
 
-      # 步骤 2: 配置 git 用户信息（用于后续 commit/push）
+      # 步骤 2: 配置 git 用户信息
       - name: Configure git user
         run: |
           git config user.name "GitHub Actions Bot"
           git config user.email "actions@github.com"
 
-      # 步骤 3: 添加上游仓库并 fetch 最新
+      # 步骤 3: 添加上游仓库并 fetch
       - name: Add upstream and fetch
         run: |
-          git remote add upstream https://github.com/hq450/fancyss.git
+          git remote add upstream https://github.com/hq450/fancyss.git || true
           git fetch upstream --no-tags
 
       # 步骤 4: 对比 fancyss/ 目录最后提交时间（东八区时间）
@@ -37,7 +38,6 @@ jobs:
           UPSTREAM_TIME=$(git log upstream/3.0 --pretty=format:%ct -- fancyss | head -n 1)
           CURRENT_TIME=$(git log HEAD --pretty=format:%ct -- fancyss | head -n 1)
           
-          # 东八区时间 = UTC + 8小时（28800秒）
           UPSTREAM_CST_TIME=$((UPSTREAM_TIME + 28800))
           CURRENT_CST_TIME=$((CURRENT_TIME + 28800))
           
@@ -58,15 +58,13 @@ jobs:
             echo "needs_sync=false" >> $GITHUB_OUTPUT
           fi
 
-      # 步骤 5: 如果上游无更新，直接结束流程（打印消息）
+      # 步骤 5: 如果上游无更新，直接结束流程
       - name: Skip if no update
         if: steps.compare_time.outputs.needs_sync == 'false'
         run: |
           echo "上游 fancyss 目录无更新，流程结束"
           exit 0
 
-      # 以下所有步骤只在上游有更新时执行（加 if 条件）
-      
       # 步骤 6: 同步上游代码并推送（合并上游 fancyss/）
       - name: Sync upstream repository and push
         if: steps.compare_time.outputs.needs_sync == 'true'
@@ -79,12 +77,21 @@ jobs:
           git commit -m "Sync upstream hq450/fancyss@3.0 (fancyss directory updated)" || echo "No changes"
           git push origin HEAD:${{ github.ref_name }} --force-with-lease
 
-      # 步骤 7: 安装 jq（后续可能用）
+      # 步骤 6.1: 额外同步上游 Changelog.txt 到根目录（只在上游有更新时执行）
+      - name: Sync upstream Changelog.txt
+        if: steps.compare_time.outputs.needs_sync == 'true'
+        run: |
+          git fetch upstream 3.0 || true
+          git checkout upstream/3.0 -- Changelog.txt || true
+          git add Changelog.txt || true
+          git commit -m "Sync upstream Changelog.txt" || echo "Changelog.txt 无变更"
+
+      # 步骤 7: 安装 jq
       - name: Install jq
         if: steps.compare_time.outputs.needs_sync == 'true'
         run: sudo apt-get update && sudo apt-get install -y jq
 
-      # 步骤 8: Patch ss_rule_update.sh（改规则地址）
+      # 步骤 8: Patch ss_rule_update.sh
       - name: Patch ss_rule_update.sh
         if: steps.compare_time.outputs.needs_sync == 'true'
         run: |
@@ -96,47 +103,31 @@ jobs:
         run: |
           cat cron_task.txt >> fancyss/ss/ssconfig.sh
 
-      # 步骤 10.1: 注入自定义通知日志
-      - name: Add custom injected tasks log message
-        if: steps.compare_time.outputs.needs_sync == 'true'
-        run: |
-          sed -i '/系统及自定义任务已注入成功/d' fancyss/ss/ssconfig.sh || true
-          sed -i '/定时任务已注入成功/d' fancyss/ss/ssconfig.sh || true
-          sed -i '/Across the Great Wall/i echo_date "================== 系统及自定义任务已注入成功 cru l 查看 =================="' fancyss/ss/ssconfig.sh
-
-      # 步骤 10.2: 删除多余签名行
-      - name: Remove annoying signature lines
-        if: steps.compare_time.outputs.needs_sync == 'true'
-        run: |
-          sed -i '/Across the Great Wall/,/梅林固件 - 【科学上网】/d' fancyss/ss/ssconfig.sh || true
-
-      # 步骤 11: 设置 build.sh 可执行权限
+      # 步骤 10: 设置 build.sh 可执行权限
       - name: Make build.sh executable
         if: steps.compare_time.outputs.needs_sync == 'true'
         run: chmod +x build.sh
 
-      # 步骤 12: 执行打包（只打包 hnd / hnd_v8 full 包）
+      # 步骤 11: 执行打包（只打包 hnd / hnd_v8 full 包）
       - name: Build FancySS packages
         if: steps.compare_time.outputs.needs_sync == 'true'
         run: |
           ./build.sh
 
-      # 步骤 13: 获取上游版本 + 生成 release 描述（只保留北京时间）
+      # 步骤 12: 获取上游版本 + 生成 release 描述（只保留北京时间）
       - name: Generate release body and tag
         if: steps.compare_time.outputs.needs_sync == 'true'
         id: release_info
         run: |
-          # 获取上游版本（从 fancyss/ss/version 第一行）
           UPSTREAM_VERSION=$(cat fancyss/ss/version | sed -n 1p | tr -d '\n\r' | sed 's/[^0-9.]//g')
           TAG_NAME="v${UPSTREAM_VERSION}"
           BUILD_TIME=$(TZ='Asia/Shanghai' date +"%Y-%m-%d %H:%M:%S")
-          # body 只保留一行时间
           echo "构建时间（北京时间）：${BUILD_TIME}" > release_body.txt
           echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
           echo "release_name=FancySS v${UPSTREAM_VERSION}" >> $GITHUB_OUTPUT
           echo "body=$(cat release_body.txt)" >> $GITHUB_OUTPUT
 
-      # 步骤 14: 创建/更新 Release（用版本号作为 tag，覆盖同版本）
+      # 步骤 13: 创建/更新 Release（用版本号作为 tag，覆盖同版本）
       - name: Create/Update Release
         if: steps.compare_time.outputs.needs_sync == 'true'
         uses: softprops/action-gh-release@v2.0.8
@@ -149,4 +140,4 @@ jobs:
           make_latest: true
           generate_release_notes: false
           files: packages/*.tar.gz
-          overwrite_files: true  # 同版本覆盖描述和附件
+          overwrite_files: true
