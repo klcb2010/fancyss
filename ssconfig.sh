@@ -1973,7 +1973,7 @@ start_chinadns_ng(){
 	fi
 	
 	detect_running_status chinadns-ng
-	echo_date "---------------------------------------------------------"
+	
 }
 
 detect_domain() {
