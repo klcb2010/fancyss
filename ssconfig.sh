@@ -5231,8 +5231,7 @@ get_status() {
 	ps | grep $PPID | grep -v grep
 	echo_date ========== 所有运行中的shell ==========
 	ps | grep "\.sh" | grep -v grep
-	echo_date ------------------------------------
-
+	
 	WAN_ACTION=$(ps | grep /jffs/scripts/wan-start | grep -v grep)
 	NAT_ACTION=$(ps | grep /jffs/scripts/nat-start | grep -v grep)
 	WEB_ACTION=$(ps | grep "ss_config.sh" | grep -v grep)
