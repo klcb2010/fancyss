@@ -2,7 +2,7 @@
 
 -  修改 　国内国外方案  　　  　　  　　  确保任意模式下选择智能DNS导致的Grok和ChatGPT错误
 
--  注入 　DDNS_SSH_helper定时公钥    　DDNS区域更改为US  　 　 　 　 　 　 　    　　开启固件降级功能
+-  注入 　DDNS_SSH_helper定时公钥    　DDNS区域更改为US  　 　 　  刷新DNS　 　 　 　    　　开启固件降级功能
 
 -  精简 　精简日志 　 　　  　　  　　  　删除空白日志
 
