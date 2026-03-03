@@ -4,11 +4,11 @@
 cru d frpc_guard 2>/dev/null
 cru d rclone_guard 2>/dev/null
 cru d clean_logs 2>/dev/null
-cru d force_ddns 2>/dev/null
+cru d refresh_ddns 2>/dev/null
 # 1. 注入定时守护任务
 cru a frpc_guard "*/20 * * * * [ -z \"\$(pidof frpc)\" ] && /bin/sh /jffs/scripts/frpc_start.sh"
 cru a rclone_guard "*/20 * * * * [ -z \"\$(pidof rclone)\" ] && /bin/sh /jffs/scripts/rclone_webdav.sh"
-cru a force_ddns "30 3 * * 0 /jffs/scripts/force_ddns.sh >> /jffs/ddns_force_cron.log 2>&1"
+cru a refresh_ddns "30 3 * * 0 /jffs/scripts/refresh_ddns.sh >> /jffs/ddns_refresh_cron.log 2>&1"
 
 # 2. 注入日志清理任务
 cru a clean_logs "0 */8 * * * /jffs/scripts/clean_cron_logs.sh >> /jffs/scripts/clean_cron_logs.txt 2>&1"
