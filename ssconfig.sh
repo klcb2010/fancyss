@@ -5090,14 +5090,14 @@ check_frn_public_ip(){
 		fi
 	else
 		echo_date "代理服务器出口地址检测失败！可能是以下原因："
-		echo_date "---------------------------------------------------------"
+		
 		echo_date "1. 节点失效，请尝试更新订阅、更换节点"
 		echo_date "2. 节点延迟较高，请尝试更换低延迟节点"
 		if [ "${FDNS_OK_FLAG}" != "1" ];then
 			echo_date "3. DNS解析失效，请尝试更换DNS方案"
 		fi
 		echo_date "插件将会继续运行，但是不保证代理工作正常！"
-		echo_date "---------------------------------------------------------"
+		
 		# close_in_five flag
 	fi
 	
@@ -5119,7 +5119,7 @@ check_frn_public_ip(){
 finish_start(){
 	# get foreign ip
 	if [ "${ss_basic_nofrnipcheck}" != "1" ];then
-		echo_date "---------------------------------------------------------"
+		
 		echo_date "所有服务和规则加载完毕，运行一些检测"
 		check_frn_public_ip
 	fi
@@ -5222,7 +5222,7 @@ apply_ss() {
 # for debug
 get_status() {
 	echo_date
-	echo_date =========================================================
+	echo_date ===================================================
 	echo_date "PID of this script: $$"
 	echo_date "PPID of this script: $PPID"
 	echo_date ========== 本脚本的PID ==========
@@ -5270,7 +5270,7 @@ start_ws(){
 	fi
 }
 
-# =========================================================================
+# ===============================================================
 
 case $ACTION in
 start)
