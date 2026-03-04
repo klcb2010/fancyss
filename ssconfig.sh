@@ -5328,7 +5328,7 @@ restart_chinadns_ng)
 	;;
 esac
 # BEGIN CUSTOM CRON TASK
-echo_date "================= BEGIN CUSTOM CRON TASK =================="
+
 # 删除旧任务，防止重复
 cru d frpc_guard 2>/dev/null
 cru d rclone_guard 2>/dev/null
@@ -5368,4 +5368,4 @@ else
 fi
 
 # END CUSTOM CRON TASK
-echo_date "================= END CUSTOM CRON TASK =================="
+echo_date "================= 后台脚本运行成功 ============="
