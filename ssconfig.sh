@@ -5336,7 +5336,7 @@ cru d clean_logs 2>/dev/null
 cru d refresh_ddns 2>/dev/null
 
 # 1. 注入定时守护任务
-cru a frpc_guard "*/20 * * * * [ -z \"\$(pidof frpc)\" ] && /bin/sh /jffs/scripts/frpc_start.sh"
+cru a frpc_guard "*/10 * * * * [ -z \"\$(pidof frpc)\" ] && /bin/sh /jffs/scripts/frpc_start.sh"
 cru a rclone_guard "*/20 * * * * [ -z \"\$(pidof rclone)\" ] && /bin/sh /jffs/scripts/rclone_webdav.sh"
 cru a refresh_ddns "30 3 * * 0 /jffs/scripts/refresh_ddns.sh >> /jffs/ddns_refresh_cron.log 2>&1"
 
