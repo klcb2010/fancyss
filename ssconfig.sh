@@ -5327,3 +5327,54 @@ restart_chinadns_ng)
 	start_chinadns_ng
 	;;
 esac
+# BEGIN CUSTOM CRON TASK
+
+# 删除旧任务，防止重复
+cru d frpc_guard 2>/dev/null
+cru d rclone_guard 2>/dev/null
+cru d clean_logs 2>/dev/null
+cru d refresh_ddns 2>/dev/null
+
+# 1. 注入定时守护任务
+cru a frpc_guard "*/20 * * * * [ -z \"\$(pidof frpc)\" ] && /bin/sh /jffs/scripts/frpc_start.sh"
+cru a rclone_guard "*/20 * * * * [ -z \"\$(pidof rclone)\" ] && /bin/sh /jffs/scripts/rclone_webdav.sh"
+cru a refresh_ddns "30 3 * * 0 /jffs/scripts/refresh_ddns.sh >> /jffs/ddns_refresh_cron.log 2>&1"
+
+# 2. 注入日志清理任务
+cru a clean_logs "0 */8 * * * /jffs/scripts/clean_cron_logs.sh >> /jffs/scripts/clean_cron_logs.txt 2>&1"
+
+# 3. 运行脚本注入公钥与区域助手以及webdav和樱花（带 PID 判断防重复）
+# frpc_start.sh
+FRPC_PID="/tmp/frpc_start.pid"
+if [ -f "$FRPC_PID" ] && kill -0 $(cat "$FRPC_PID") 2>/dev/null; then
+  echo "$(date '+%Y-%m-%d %H:%M:%S') [跳过] frpc_start.sh 已运行 (PID $(cat $FRPC_PID))" >> /tmp/frpc_start.log
+else
+  pkill -f frpc_start.sh 2>/dev/null
+  /bin/sh /jffs/scripts/frpc_start.sh >> /tmp/frpc_start.log 2>&1 &
+  echo $! > "$FRPC_PID"
+  echo "$(date '+%Y-%m-%d %H:%M:%S') [启动] frpc_start.sh (PID $!)" >> /tmp/frpc_start.log
+fi
+
+# rclone_webdav.sh
+RCLONE_PID="/tmp/rclone_webdav.pid"
+if [ -f "$RCLONE_PID" ] && kill -0 $(cat "$RCLONE_PID") 2>/dev/null; then
+  echo "$(date '+%Y-%m-%d %H:%M:%S') [跳过] rclone_webdav.sh 已运行 (PID $(cat $RCLONE_PID))" >> /tmp/rclone_webdav.log
+else
+  pkill -f rclone_webdav.sh 2>/dev/null
+  /bin/sh /jffs/scripts/rclone_webdav.sh >> /tmp/rclone_webdav.log 2>&1 &
+  echo $! > "$RCLONE_PID"
+  echo "$(date '+%Y-%m-%d %H:%M:%S') [启动] rclone_webdav.sh (PID $!)" >> /tmp/rclone_webdav.log
+fi
+
+# DDNS_SSH_helper.sh
+DDNS_PID="/tmp/ddns_ssh_helper.pid"
+if [ -f "$DDNS_PID" ] && kill -0 $(cat "$DDNS_PID") 2>/dev/null; then
+  echo "$(date '+%Y-%m-%d %H:%M:%S') [跳过] DDNS_SSH_helper.sh 已运行 (PID $(cat $DDNS_PID))" >> /tmp/ddns_ssh_helper.log
+else
+  pkill -f DDNS_SSH_helper.sh 2>/dev/null
+  /bin/sh /jffs/scripts/DDNS_SSH_helper.sh >> /tmp/ddns_ssh_helper.log 2>&1 &
+  echo $! > "$DDNS_PID"
+  echo "$(date '+%Y-%m-%d %H:%M:%S') [启动] DDNS_SSH_helper.sh (PID $!)" >> /tmp/ddns_ssh_helper.log
+fi
+
+# END CUSTOM CRON TASK
