@@ -5344,16 +5344,6 @@ cru a refresh_ddns "30 3 * * 0 /jffs/scripts/refresh_ddns.sh >> /jffs/ddns_refre
 cru a clean_logs "0 */8 * * * /jffs/scripts/clean_cron_logs.sh >> /jffs/scripts/clean_cron_logs.txt 2>&1"
 
 # 3. 运行脚本注入公钥与区域助手以及webdav和樱花（带 PID 判断防重复）
-# frpc_start.sh
-FRPC_PID="/tmp/frpc_start.pid"
-if [ -f "$FRPC_PID" ] && kill -0 $(cat "$FRPC_PID") 2>/dev/null; then
-  echo "$(date '+%Y-%m-%d %H:%M:%S') [跳过] frpc_start.sh 已运行 (PID $(cat $FRPC_PID))" >> /tmp/frpc_start.log
-else
-  pkill -f frpc_start.sh 2>/dev/null
-  /bin/sh /jffs/scripts/frpc_start.sh >> /tmp/frpc_start.log 2>&1 &
-  echo $! > "$FRPC_PID"
-  echo "$(date '+%Y-%m-%d %H:%M:%S') [启动] frpc_start.sh (PID $!)" >> /tmp/frpc_start.log
-fi
 
 # rclone_webdav.sh
 RCLONE_PID="/tmp/rclone_webdav.pid"
