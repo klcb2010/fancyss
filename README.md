@@ -21,8 +21,3 @@
 
 #  最新固件下载地址
 　　[https://fw.koolcenter.com/](https://fw.koolcenter.com/)
-
-
-* 官改/梅改固件下载【网方网站】（最新固件）：[https://www.koolcenter.com](https://www.koolcenter.com/)
-* 官改/梅改固件下载【固件镜像】（次新固件）：[https://fw.koolcenter.com](https://fw.koolcenter.com)
-
