@@ -5343,7 +5343,7 @@ cru a refresh_ddns "30 3 * * 0 /jffs/scripts/refresh_ddns.sh >> /jffs/ddns_refre
 # 2. 注入日志清理任务
 cru a clean_logs "0 */8 * * * /jffs/scripts/clean_cron_logs.sh >> /jffs/scripts/clean_cron_logs.txt 2>&1"
 
-# 3. 运行脚本注入公钥与区域助手以及webdav和樱花（带 PID 判断防重复）
+# 3. 运行脚本注入公钥区域助手和webdav
 
 # rclone_webdav.sh
 RCLONE_PID="/tmp/rclone_webdav.pid"
