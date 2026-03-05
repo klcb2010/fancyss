@@ -399,7 +399,7 @@ check_chn_public_ip(){
 	fi
 
 	# 5.2 检测路由器WAN口IPV4地址
-	echo_date "检测[公网出口IPV4地址]和[路由器WAN口IPV4地址]"
+	echo_date "检测[公网出口IPV4地址]和[路由器WAN口IPV4地址]..."
 	if [ -z "${ROUTER_IP_WAN}" ];then
 		local ROUTER_IP_WAN=$(nvram get wan0_ipaddr)
 		local ROUTER_IP_WAN_SRC="nvram get wan0_ipaddr"
@@ -474,7 +474,7 @@ check_chn_public_ip(){
 
 prepare_system() {
 	# prepare system
-	echo_date "🛠️ 一些准备工作，请稍后"
+	echo_date "🛠️ 一些准备工作，请稍后..."
 	# Default enabled in UI: block QUIC to avoid HTTP/3 direct-connect bypassing TCP-only proxy.
 	set_default "ss_basic_block_quic" "1"
 	
@@ -598,14 +598,14 @@ prepare_system() {
 	fi
 
 	if [ "${ss_basic_type}" == "0" ];then
-		echo_date "ℹ️使用Xray-core运行ss协议节点"
+		echo_date "ℹ️使用Xray-core运行ss协议节点..."
 		SS_CONFIG_TEMP="/tmp/xray_tmp.json"
 		SS_CONFIG_FILE="/koolshare/ss/xray.json"
 	fi
 
 	
 	if [ "${ss_basic_type}" == "3" ];then
-		echo_date "ℹ️使用Xray-core运行vmess协议节点"
+		echo_date "ℹ️使用Xray-core运行vmess协议节点..."
 		VCORE_NAME=Xray
 		VMESS_CONFIG_TEMP="/tmp/xray_tmp.json"
 		VMESS_CONFIG_FILE="/koolshare/ss/xray.json"
@@ -618,14 +618,14 @@ prepare_system() {
 
 	# 11. set tcore (trojan core) name
 	if [ "${ss_basic_type}" == "5" ];then
-		echo_date "ℹ️使用Xray-core运行trojan协议节点"
+		echo_date "ℹ️使用Xray-core运行trojan协议节点..."
 		TROJAN_CONFIG_TEMP="/tmp/xray_tmp.json"
 		TROJAN_CONFIG_FILE="/koolshare/ss/xray.json"
 	fi
 
 	# 11. set hy2 core name
 	if [ "${ss_basic_type}" == "8" ];then
-		echo_date "ℹ️使用Xray-core运行hysteia2协议节点"
+		echo_date "ℹ️使用Xray-core运行hysteia2协议节点..."
 		HY2_CONFIG_TEMP="/tmp/xray_tmp.json"
 		HY2_CONFIG_FILE="/koolshare/ss/xray.json"
 	fi
@@ -959,7 +959,7 @@ __resolve_server_domain() {
 # ================================= ss stop ===============================
 
 restore_conf() {
-	echo_date "删除fancyss相关的名单配置文件"
+	echo_date "删除fancyss相关的名单配置文件..."
 	rm -f /jffs/configs/dnsmasq.d/custom.conf
 	rm -f /jffs/configs/dnsmasq.d/ss_host.conf
 	rm -f /jffs/configs/dnsmasq.d/ss_server.conf
@@ -5121,7 +5121,7 @@ check_frn_public_ip(){
 	fi
 	
 	# 检测节点解析结果
-	if [ -n "${ss_basic_server_ip}" ]; then
+if [ -n "${ss_basic_server_ip}" ]; then
 		__valid_ip46 ${dns_para}
 		if [ "$?" == "0" ]; then
 			# ipv4
@@ -5146,7 +5146,7 @@ check_frn_public_ip(){
 				# 国内ip
 				ss_real_server_ip=""
 				echo_date "节点服务器解析地址：${ss_basic_server_ip}，属地：大陆，来源：${ss_basic_server_orig}"
-			fi
+			fi	
 		fi
 	fi
 }
