@@ -351,7 +351,7 @@ check_internet(){
 	check_internet6_pre
 	
 	if [ "${ss_basic_nonetcheck}" == "1" ];then
-		# 用户了连通性检测
+		# 用户关闭了连通性检测
 		return 1
 	fi
 	
@@ -989,7 +989,7 @@ restore_conf() {
 kill_process() {
 	local v2ray_process=$(pidof v2ray)
 	if [ -n "$v2ray_process" ]; then
-		echo_date "V2Ray进程"
+		echo_date "关闭V2Ray进程..."
 		# 有时候killall杀不了v2ray进程，所以用不同方式杀两次
 		killall v2ray >/dev/null 2>&1
 		kill -9 "$v2ray_process" >/dev/null 2>&1
@@ -997,7 +997,7 @@ kill_process() {
 
 	local xray_process=$(pidof xray)
 	if [ -n "$xray_process" ]; then
-		echo_date "xray进程"
+		echo_date "关闭xray进程..."
 		if [ -d "/koolshare/perp/xray" ];then
 			perpctl d xray >/dev/null 2>&1
 			rm -rf /koolshare/perp/xray >/dev/null 2>&1
@@ -1008,25 +1008,25 @@ kill_process() {
 
 	local rssredir=$(pidof rss-redir)
 	if [ -n "$rssredir" ]; then
-		echo_date "ssr-redir进程"
+		echo_date "关闭ssr-redir进程..."
 		killall rss-redir >/dev/null 2>&1
 	fi
 
 	local ssrlocal=$(ps | grep -w rss-local | grep -v "grep" | grep -w "23456" | awk '{print $1}')
 	if [ -n "$ssrlocal" ]; then
-		echo_date "ssr-local进程:23456端口"
+		echo_date "关闭ssr-local进程:23456端口..."
 		kill $ssrlocal >/dev/null 2>&1
 	fi
 
 	local sstunnel=$(pidof ss-tunnel)
 	if [ -n "$sstunnel" ]; then
-		echo_date "进程"
+		echo_date "关闭进程..."
 		killall ss-tunnel >/dev/null 2>&1
 	fi
 
 	local CHNG_PID=$(pidof chinadns-ng)
 	if [ -n "${CHNG_PID}" ];then
-		echo_date "chinadns-ng进程"
+		echo_date "关闭chinadns-ng进程..."
 		if [ -d "/koolshare/perp/chinadns-ng" ];then
 			perpctl d chinadns-ng >/dev/null 2>&1
 			rm -rf /koolshare/perp/chinadns-ng >/dev/null 2>&1
@@ -1037,32 +1037,32 @@ kill_process() {
 
 	local smartdns_process=$(pidof smartdns)
 	if [ -n "$smartdns_process" ]; then
-		echo_date "smartdns进程"
+		echo_date "关闭smartdns进程..."
 		killall smartdns >/dev/null 2>&1
 	fi
 
 	# only close haveged form fancyss, not haveged from system
 	local haveged_pid=$(ps |grep "/koolshare/bin/haveged"|grep -v grep|awk '{print $1}')
 	if [ -n "${haveged_pid}" ]; then
-		echo_date "haveged进程"
+		echo_date "关闭haveged进程..."
 		killall -9 ${haveged_pid} >/dev/null 2>&1
 	fi
 
 	local SOCAT_PID=$(ps | grep -E "socat" | grep -E "2055|2056" | awk '{print $1}')
 	if [ -n "${SOCAT_PID}" ];then
-		echo_date "socat进程"
+		echo_date "关闭socat进程..."
 		kill -9 ${SOCAT_PID}
 	fi
 
 	local IPT2SOCKS_PID=$(ps | grep "ipt2socks" | grep -v grep | awk '{print $1}')
 	if [ -n "${IPT2SOCKS_PID}" ];then
-		echo_date "ipt2socks进程"
+		echo_date "关闭ipt2socks进程..."
 		killall ipt2socks
 	fi	
 
 	local NAIVE_PID=$(ps | grep "naive" | grep -v grep | awk '{print $1}')
 	if [ -n "${NAIVE_PID}" ];then
-		echo_date "naive进程"
+		echo_date "关闭naive进程..."
 		killall naive
 	fi
 
@@ -1496,7 +1496,7 @@ start_chinadns_ng(){
 					dbus set "ss_basic_chng_china_udp_${dns_seq}_opt=$dns_default"
 				fi
 			fi
-		elif [ "$?" == "1" ]; then
+		else
 			# 不是ip，帮忙纠正
 			echo_date "⚠️ 检测到中国DNS-${dns_seq}的udp DNS：${dns_para}不是正确的ip，切换为${dns_default}！"
 			eval "ss_basic_chng_china_udp_${dns_seq}_opt=\$dns_default"
@@ -5121,7 +5121,7 @@ check_frn_public_ip(){
 	fi
 	
 	# 检测节点解析结果
-if [ -n "${ss_basic_server_ip}" ]; then
+	if [ -n "${ss_basic_server_ip}" ]; then
 		__valid_ip46 ${dns_para}
 		if [ "$?" == "0" ]; then
 			# ipv4
@@ -5135,7 +5135,7 @@ if [ -n "${ss_basic_server_ip}" ]; then
 				ss_real_server_ip=""
 				echo_date "节点服务器解析地址：${ss_basic_server_ip}，属地：大陆，来源：${ss_basic_server_orig}"
 			fi
-		else
+		elif [ "$?" == "1" ]; then
 			# ipv6
 			ipset test chnroute6 ${ss_basic_server_ip} >/dev/null 2>&1
 			if [ "$?" != "0" ]; then
@@ -5146,7 +5146,7 @@ if [ -n "${ss_basic_server_ip}" ]; then
 				# 国内ip
 				ss_real_server_ip=""
 				echo_date "节点服务器解析地址：${ss_basic_server_ip}，属地：大陆，来源：${ss_basic_server_orig}"
-			fi	
+			fi
 		fi
 	fi
 }
