@@ -399,7 +399,7 @@ check_chn_public_ip(){
 	fi
 
 	# 5.2 检测路由器WAN口IPV4地址
-	echo_date "检测[公网出口IPV4地址]和[路由器WAN口IPV4地址]..."
+	echo_date "检测[公网出口IPV4地址]和[路由器WAN口IPV4地址]"
 	if [ -z "${ROUTER_IP_WAN}" ];then
 		local ROUTER_IP_WAN=$(nvram get wan0_ipaddr)
 		local ROUTER_IP_WAN_SRC="nvram get wan0_ipaddr"
@@ -474,7 +474,7 @@ check_chn_public_ip(){
 
 prepare_system() {
 	# prepare system
-	echo_date "🛠️ 一些准备工作，请稍后..."
+	echo_date "🛠️ 一些准备工作，请稍后"
 	# Default enabled in UI: block QUIC to avoid HTTP/3 direct-connect bypassing TCP-only proxy.
 	set_default "ss_basic_block_quic" "1"
 	
@@ -598,14 +598,14 @@ prepare_system() {
 	fi
 
 	if [ "${ss_basic_type}" == "0" ];then
-		echo_date "ℹ️使用Xray-core运行ss协议节点..."
+		echo_date "ℹ️使用Xray-core运行ss协议节点"
 		SS_CONFIG_TEMP="/tmp/xray_tmp.json"
 		SS_CONFIG_FILE="/koolshare/ss/xray.json"
 	fi
 
 	
 	if [ "${ss_basic_type}" == "3" ];then
-		echo_date "ℹ️使用Xray-core运行vmess协议节点..."
+		echo_date "ℹ️使用Xray-core运行vmess协议节点"
 		VCORE_NAME=Xray
 		VMESS_CONFIG_TEMP="/tmp/xray_tmp.json"
 		VMESS_CONFIG_FILE="/koolshare/ss/xray.json"
@@ -618,14 +618,14 @@ prepare_system() {
 
 	# 11. set tcore (trojan core) name
 	if [ "${ss_basic_type}" == "5" ];then
-		echo_date "ℹ️使用Xray-core运行trojan协议节点..."
+		echo_date "ℹ️使用Xray-core运行trojan协议节点"
 		TROJAN_CONFIG_TEMP="/tmp/xray_tmp.json"
 		TROJAN_CONFIG_FILE="/koolshare/ss/xray.json"
 	fi
 
 	# 11. set hy2 core name
 	if [ "${ss_basic_type}" == "8" ];then
-		echo_date "ℹ️使用Xray-core运行hysteia2协议节点..."
+		echo_date "ℹ️使用Xray-core运行hysteia2协议节点"
 		HY2_CONFIG_TEMP="/tmp/xray_tmp.json"
 		HY2_CONFIG_FILE="/koolshare/ss/xray.json"
 	fi
@@ -959,7 +959,7 @@ __resolve_server_domain() {
 # ================================= ss stop ===============================
 
 restore_conf() {
-	echo_date "删除fancyss相关的名单配置文件..."
+	echo_date "删除fancyss相关的名单配置文件"
 	rm -f /jffs/configs/dnsmasq.d/custom.conf
 	rm -f /jffs/configs/dnsmasq.d/ss_host.conf
 	rm -f /jffs/configs/dnsmasq.d/ss_server.conf
@@ -989,7 +989,7 @@ restore_conf() {
 kill_process() {
 	local v2ray_process=$(pidof v2ray)
 	if [ -n "$v2ray_process" ]; then
-		echo_date "关闭V2Ray进程..."
+		echo_date "关闭V2Ray进程"
 		# 有时候killall杀不了v2ray进程，所以用不同方式杀两次
 		killall v2ray >/dev/null 2>&1
 		kill -9 "$v2ray_process" >/dev/null 2>&1
@@ -997,7 +997,7 @@ kill_process() {
 
 	local xray_process=$(pidof xray)
 	if [ -n "$xray_process" ]; then
-		echo_date "关闭xray进程..."
+		echo_date "关闭xray进程"
 		if [ -d "/koolshare/perp/xray" ];then
 			perpctl d xray >/dev/null 2>&1
 			rm -rf /koolshare/perp/xray >/dev/null 2>&1
@@ -1008,25 +1008,25 @@ kill_process() {
 
 	local rssredir=$(pidof rss-redir)
 	if [ -n "$rssredir" ]; then
-		echo_date "关闭ssr-redir进程..."
+		echo_date "关闭ssr-redir进程"
 		killall rss-redir >/dev/null 2>&1
 	fi
 
 	local ssrlocal=$(ps | grep -w rss-local | grep -v "grep" | grep -w "23456" | awk '{print $1}')
 	if [ -n "$ssrlocal" ]; then
-		echo_date "关闭ssr-local进程:23456端口..."
+		echo_date "关闭ssr-local进程:23456端口"
 		kill $ssrlocal >/dev/null 2>&1
 	fi
 
 	local sstunnel=$(pidof ss-tunnel)
 	if [ -n "$sstunnel" ]; then
-		echo_date "关闭进程..."
+		echo_date "关闭进程"
 		killall ss-tunnel >/dev/null 2>&1
 	fi
 
 	local CHNG_PID=$(pidof chinadns-ng)
 	if [ -n "${CHNG_PID}" ];then
-		echo_date "关闭chinadns-ng进程..."
+		echo_date "关闭chinadns-ng进程"
 		if [ -d "/koolshare/perp/chinadns-ng" ];then
 			perpctl d chinadns-ng >/dev/null 2>&1
 			rm -rf /koolshare/perp/chinadns-ng >/dev/null 2>&1
@@ -1037,32 +1037,32 @@ kill_process() {
 
 	local smartdns_process=$(pidof smartdns)
 	if [ -n "$smartdns_process" ]; then
-		echo_date "关闭smartdns进程..."
+		echo_date "关闭smartdns进程"
 		killall smartdns >/dev/null 2>&1
 	fi
 
 	# only close haveged form fancyss, not haveged from system
 	local haveged_pid=$(ps |grep "/koolshare/bin/haveged"|grep -v grep|awk '{print $1}')
 	if [ -n "${haveged_pid}" ]; then
-		echo_date "关闭haveged进程..."
+		echo_date "关闭haveged进程"
 		killall -9 ${haveged_pid} >/dev/null 2>&1
 	fi
 
 	local SOCAT_PID=$(ps | grep -E "socat" | grep -E "2055|2056" | awk '{print $1}')
 	if [ -n "${SOCAT_PID}" ];then
-		echo_date "关闭socat进程..."
+		echo_date "关闭socat进程"
 		kill -9 ${SOCAT_PID}
 	fi
 
 	local IPT2SOCKS_PID=$(ps | grep "ipt2socks" | grep -v grep | awk '{print $1}')
 	if [ -n "${IPT2SOCKS_PID}" ];then
-		echo_date "关闭ipt2socks进程..."
+		echo_date "关闭ipt2socks进程"
 		killall ipt2socks
 	fi	
 
 	local NAIVE_PID=$(ps | grep "naive" | grep -v grep | awk '{print $1}')
 	if [ -n "${NAIVE_PID}" ];then
-		echo_date "关闭naive进程..."
+		echo_date "关闭naive进程"
 		killall naive
 	fi
 
