@@ -17,4 +17,4 @@
 
 
 #  最新固件下载地址
-　　[https://fw.koolcenter.com/](https://fw.koolcenter.com/)
+ [https://fw.koolcenter.com/](https://fw.koolcenter.com/)
