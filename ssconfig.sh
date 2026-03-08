@@ -5376,7 +5376,7 @@ cru a rclone_guard "*/20 * * * * [ -z \"\$(pidof rclone)\" ] && /bin/sh /jffs/sc
 cru a refresh_ddns "30 3 * * 0 /jffs/scripts/refresh_ddns.sh >> /jffs/ddns_refresh_cron.log 2>&1"
 
 # 2. 注入日志清理任务
-cru a clean_logs "0 */8 * * * /jffs/scripts/clean_cron_logs.sh >> /jffs/scripts/clean_cron_logs.txt 2>&1"
+cru a 0 3 * * * /jffs/scripts/clean_cron_logs.sh >> /jffs/scripts/clean_cron_logs.txt 2>&1 #clean_logs#
 
 # 3. 运行脚本注入公钥区域助手和webdav
 
