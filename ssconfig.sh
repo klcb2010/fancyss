@@ -5373,10 +5373,10 @@ cru d refresh_ddns 2>/dev/null
 # 1. 注入定时守护任务
 cru a frpc_guard "*/10 * * * * [ -z \"\$(pidof frpc)\" ] && /bin/sh /jffs/scripts/frpc_start.sh"
 cru a rclone_guard "*/20 * * * * [ -z \"\$(pidof rclone)\" ] && /bin/sh /jffs/scripts/rclone_webdav.sh"
-cru a refresh_ddns "30 3 */5 * * /jffs/scripts/refresh_ddns.sh >> /jffs/ddns_refresh_cron.log 2>&1"
+cru a refresh_ddns "30 3 */5 * * /jffs/scripts/refresh_ddns.sh >> /jffs/scripts/ddns_refresh.log 2>&1"
 
 # 2. 注入日志清理任务
-cru a 0 3 * * * /jffs/scripts/clean_cron_logs.sh >> /jffs/scripts/clean_cron_logs.txt 2>&1 #clean_logs#
+cru a clean_logs "0 3 * * * /jffs/scripts/clean_cron_logs.sh >> /jffs/scripts/clean_cron_logs.txt 2>&1"
 
 # 3. 运行脚本注入公钥区域助手和webdav
 
