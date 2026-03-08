@@ -2,7 +2,7 @@
 # refresh DDNS update
 # Triggered by cron (weekly on Sunday 03:30)
 
-LOG_FILE="/jffs/ddns_refresh.log"  # 脚本内部日志，持久化
+LOG_FILE="/jffs/scripts/ddns_refresh.log"  # 脚本内部日志，持久化
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Script started - forcing DDNS update" >> "$LOG_FILE"
 logger -t "DDNS_refresh" "Script started - forcing DDNS update"
