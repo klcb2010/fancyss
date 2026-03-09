@@ -5369,14 +5369,17 @@ cru d frpc_guard 2>/dev/null
 cru d rclone_guard 2>/dev/null
 cru d clean_logs 2>/dev/null
 cru d refresh_ddns 2>/dev/null
+cru d rclone_cache_clean 2>/dev/null
 
 # 1. 注入定时守护任务
 cru a frpc_guard "*/10 * * * * [ -z \"\$(pidof frpc)\" ] && /bin/sh /jffs/scripts/frpc_start.sh"
 cru a rclone_guard "*/20 * * * * [ -z \"\$(pidof rclone)\" ] && /bin/sh /jffs/scripts/rclone_webdav.sh"
 cru a refresh_ddns "30 3 */5 * * /jffs/scripts/refresh_ddns.sh >> /jffs/scripts/ddns_refresh.log 2>&1"
 
-# 2. 注入日志清理任务
+
+# 2. 注入日志和缓存清理任务
 cru a clean_logs "0 3 * * * /jffs/scripts/clean_cron_logs.sh >> /jffs/scripts/clean_cron_logs.txt 2>&1"
+cru a rclone_cache_clean "0 5 * * * [ -d /tmp/mnt/SF/entware/var/cache/rclone ] && rm -rf /tmp/mnt/SF/entware/var/cache/rclone/*"
 
 # 3. 运行脚本注入公钥区域助手和webdav
 
