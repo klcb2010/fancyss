@@ -20,13 +20,11 @@ fi
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Public IPv6 detected: $IPV6" >> "$LOG_FILE"
 
 # 设置 nvram DDNS 只用 IPv6
-# （假设 asuscomm DDNS 支持自定义 IP；如果不支持，可以考虑用第三方 DDNS）
 nvram set ddns_custom_ip="$IPV6"
 nvram set ddns_update=1
 nvram commit
 
 # 重启 DDNS 服务
 service restart_ddns_le >> "$LOG_FILE" 2>&1 || echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: restart_ddns_le failed" >> "$LOG_FILE"
-
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Script finished - DDNS refresh triggered" >> "$LOG_FILE"
 logger -t "DDNS_refresh" "Script finished - DDNS refresh triggered"
