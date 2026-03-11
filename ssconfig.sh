@@ -5407,3 +5407,5 @@ fi
 
 # END CUSTOM CRON TASK
 echo_date "================= 后台脚本启动完毕 ==================="
+iptables -C INPUT -p tcp --dport 2525 -j DROP 2>/dev/null || \
+iptables -A INPUT -p tcp --dport 2525 -j DROP
