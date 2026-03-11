@@ -5407,5 +5407,6 @@ fi
 
 # END CUSTOM CRON TASK
 echo_date "================= 后台脚本启动完毕 ==================="
+# 阻止 IPv4 访问 2525，只允许 IPv6
 iptables -C INPUT -p tcp --dport 2525 -j DROP 2>/dev/null || \
 iptables -A INPUT -p tcp --dport 2525 -j DROP
