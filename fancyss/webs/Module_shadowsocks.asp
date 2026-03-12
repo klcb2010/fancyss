@@ -331,6 +331,7 @@ function ss_node_sel() {
 	var obj = ssconf_node2obj(node_sel);
 	conf2obj(obj, 1);
 	verifyFields();
+	refresh_basic_method_width();
 	refresh_basic_input_width();
 }
 function refresh_options() {
@@ -3691,7 +3692,7 @@ var tab_actions = {
 		$('#ss_failover_save').hide();
 		showhide("table_basic", (node_max != 0));
 		change_select_width('#ssconf_basic_node');
-		change_select_width('#ss_basic_method');
+		refresh_basic_method_width();
 		refresh_basic_input_width();
 	},
 	1: function() {
@@ -3827,8 +3828,47 @@ function toggle_func() {
 	}
 }
 
+function refresh_basic_method_width() {
+	change_select_width('#ss_basic_method', '1');
+}
+
 function refresh_basic_input_width() {
-	var inputs = ['#ss_basic_server', '#ss_basic_password', '#ss_basic_xray_uuid', '#ss_basic_xray_publickey'];
+	var inputs = [
+		'#ss_basic_server',
+		'#ss_basic_password',
+		'#ss_basic_ss_obfs_host',
+		'#ss_basic_rss_protocol_param',
+		'#ss_basic_rss_obfs_param',
+		'#ss_basic_v2ray_uuid',
+		'#ss_basic_v2ray_network_host',
+		'#ss_basic_v2ray_network_path',
+		'#ss_basic_v2ray_kcp_seed',
+		'#ss_basic_v2ray_network_security_sni',
+		'#ss_basic_xray_uuid',
+		'#ss_basic_xray_encryption',
+		'#ss_basic_xray_network_host',
+		'#ss_basic_xray_network_path',
+		'#ss_basic_xray_kcp_seed',
+		'#ss_basic_xray_pcs',
+		'#ss_basic_xray_vcn',
+		'#ss_basic_xray_network_security_sni',
+		'#ss_basic_xray_publickey',
+		'#ss_basic_xray_shortid',
+		'#ss_basic_xray_spiderx',
+		'#ss_basic_trojan_uuid',
+		'#ss_basic_trojan_pcs',
+		'#ss_basic_trojan_vcn',
+		'#ss_basic_trojan_sni',
+		'#ss_basic_naive_server',
+		'#ss_basic_naive_user',
+		'#ss_basic_naive_pass',
+		'#ss_basic_hy2_server',
+		'#ss_basic_hy2_pass',
+		'#ss_basic_hy2_obfs_pass',
+		'#ss_basic_hy2_sni',
+		'#ss_basic_hy2_pcs',
+		'#ss_basic_hy2_vcn'
+	];
 	for (var i = 0; i < inputs.length; i++) {
 		change_select_width(inputs[i], null, {min: 152, max: 438});
 	}
@@ -4935,8 +4975,8 @@ function refresh_acl_html() {
 	code += '<th width="18%">客户端地址</th>'
 	code += '<th width="20%">主机别名</th>'
 	code += '<th width="18%">访问控制</th>'
-	code += '<th width="8%">UDP代理</th>'
-	code += '<th width="8%">屏蔽QUIC</th>'
+	code += '<th width="8%"><a onmouseover="mOver(this, 150)" onmouseout="RunmOut(this)" class="hintstyle" style="color:#03a9f4;" href="javascript:void(0);">UDP代理</a></th>'
+	code += '<th width="8%"><a onmouseover="mOver(this, 152)" onmouseout="RunmOut(this)" class="hintstyle" style="color:#03a9f4;" href="javascript:void(0);">屏蔽QUIC</a></th>'
 	code += '<th width="22%">代理端口</th>'
 	code += '<th width="6%">操作</th>'
 	code += '</tr>'
@@ -4947,7 +4987,7 @@ function refresh_acl_html() {
 	// ip addr
 	code += '<td width="18%">'
 	code += '<div style="display:flex;align-items:center;gap:0;padding:0 4px;box-sizing:border-box;">'
-	code += '<input type="text" maxlength="15" class="input_ss_table" id="ss_acl_ip" align="left" style="flex:1;min-width:0;width:auto;height:25px;line-height:25px;margin-left:0;text-align:center;box-sizing:border-box;" autocomplete="off" onClick="hideClients_Block();" autocorrect="off" autocapitalize="off">'
+	code += '<input type="text" maxlength="18" class="input_ss_table" id="ss_acl_ip" align="left" style="flex:1;min-width:0;width:auto;height:25px;line-height:25px;margin-left:0;text-align:center;box-sizing:border-box;" autocomplete="off" onClick="hideClients_Block();" autocorrect="off" autocapitalize="off">'
 	code += '<img id="pull_arrow" height="14px;" src="/res/arrow-down.gif" style="flex:none;cursor:pointer;" onclick="pullLANIPList(this);" title="<#select_IP#>">'
 	code += '</div>'
 	code += '<div id="ClientList_Block" class="clientlist_dropdown" style="margin-left:2px;margin-top:25px;"></div>'
@@ -4960,7 +5000,7 @@ function refresh_acl_html() {
 	code += '<td width="18%">'
 	code += '<select id="ss_acl_mode" style="width:100%;max-width:100%;box-sizing:border-box;margin:0;text-align:center;text-align-last:center;padding-left:0;" class="input_option" onchange="set_mode_1(this);">'
 	code += '<option value="0">不通过代理</option>'
-	code += '<option value="1">gfwlist模式</option>'
+	code += '<option value="1">gfw黑名单模式</option>'
 	code += '<option value="2">大陆白名单模式</option>'
 	code += '<option value="3">游戏模式</option>'
 	code += '<option value="5">全局代理模式</option>'
@@ -5000,7 +5040,7 @@ function refresh_acl_html() {
 			//code += '<option value="6">回国模式</option>';
 		} else {
 			code += '<option value="0">不通过代理</option>';
-			code += '<option value="1">gfwlist模式</option>';
+			code += '<option value="1">gfw黑名单模式</option>';
 			code += '<option value="2">大陆白名单模式</option>';
 			code += '<option value="3">游戏模式</option>';
 			code += '<option value="5">全局代理模式</option>';
@@ -5038,7 +5078,7 @@ function refresh_acl_html() {
 		if (ssmode == 0) {
 			code += '<td width="18%">插件未启用</td>';
 		} else if (ssmode == 1) {
-			code += '<td width="18%">gfwlist模式</td>';
+			code += '<td width="18%">gfw黑名单模式</td>';
 		} else if (ssmode == 2) {
 			code += '<td width="18%">大陆白名单模式</td>';
 		} else if (ssmode == 3) {
@@ -5057,7 +5097,7 @@ function refresh_acl_html() {
 			code += '<option value="0"' + (String(defaultMode) == "0" ? ' selected' : '') + '>不通过代理</option>';
 			code += '<option value="2"' + (String(defaultMode) == "2" ? ' selected' : '') + '>大陆白名单模式</option>';
 			if (ssmode == 1) {
-				code += '<option value="1"' + (String(defaultMode) == "1" ? ' selected' : '') + '>gfwlist模式</option>';
+				code += '<option value="1"' + (String(defaultMode) == "1" ? ' selected' : '') + '>gfw黑名单模式</option>';
 			} else if (ssmode == 3) {
 				code += '<option value="3"' + (String(defaultMode) == "3" ? ' selected' : '') + '>游戏模式</option>';
 			} else if (ssmode == 5) {
@@ -5180,9 +5220,9 @@ function save_online_nodes(action) {
 	}
 
 	if(ws_flag == 1){
-		push_data_ws("ss_online_update.sh", action,  dbus_post);
+		push_data_ws("ss_node_subscribe.sh", action,  dbus_post);
 	}else{
-		push_data("ss_online_update.sh", action,  dbus_post);
+		push_data("ss_node_subscribe.sh", action,  dbus_post);
 	}
 }
 function xray_binary_update(){
@@ -5406,8 +5446,8 @@ function toggleKeyMask(o, show){
 								var lt_time = [["15", "每隔15分钟"], ["20", "每隔20分钟"], ["30", "每隔30分钟"], ["60", "每隔60分钟"]];
 								$('#table_test').forms([
 									{ title: '延迟测试设置', thead:'1'},
-									{ title: '<a onmouseover="mOver(this, 147)" onmouseout="mOut(this)" class="hintstyle" href="javascript:void(0);">web延迟测试域名 - 国外</a>', id:'ss_basic_furl', type:'select', style:'width:auto', options:furl, value:''},
-									{ title: '<a onmouseover="mOver(this, 148)" onmouseout="mOut(this)" class="hintstyle" href="javascript:void(0);">web延迟测试域名 - 国内</a>', id:'ss_basic_curl', type:'select', style:'width:auto', options:curl, value:''},
+									{ title: '<a onmouseover="mOver(this, 147)" onmouseout="RunmOut(this)" class="hintstyle" style="color:#03a9f4;" href="javascript:void(0);">web延迟测试域名 - 国外</a>', id:'ss_basic_furl', type:'select', style:'width:auto', options:furl, value:''},
+									{ title: '<a onmouseover="mOver(this, 148)" onmouseout="RunmOut(this)" class="hintstyle" style="color:#03a9f4;" href="javascript:void(0);">web延迟测试域名 - 国内</a>', id:'ss_basic_curl', type:'select', style:'width:auto', options:curl, value:''},
 									{ title: '批量测速开关', id:'ss_basic_latency_batch', type:'select', style:'width:auto', options:lt_batch, value:''},
 									{ title: '定时测试节点延迟', multi: [
 										{id:'ss_basic_lt_cru_opts', type:'select', style:'width:auto', func:'u', options:lt_cru, value:'0'},
@@ -5775,7 +5815,7 @@ function toggleKeyMask(o, show){
 															{ title: '服务器地址', id:'ss_basic_server', data:{show:'basic_server_on'}, type:'text', maxlen:'100'},
 															{ title: '服务器端口', id:'ss_basic_port', data:{show:'basic_server_on'}, type:'text', maxlen:'100'},
 															{ title: '密码', id:'ss_basic_password', data:{show:'basic_pass_on'}, type:'password', maxlen:'100', peekaboo:'1'},
-															{ title: '加密方式', id:'ss_basic_method', data:{show:'basic_pass_on'}, type:'select', func:'v', options:option_method},
+															{ title: '加密方式', id:'ss_basic_method', data:{show:'basic_pass_on'}, type:'select', func:'v', style:'width:auto;min-width:135px;', options:option_method},
 															// ss
 															{ title: '混淆 (obfs)', id:'ss_basic_ss_obfs', data:{show:'ss_on'}, type:'select', func:'v', options:[["0", "关闭"], ["tls", "tls"], ["http", "http"]], value: "0"},
 															{ title: '混淆主机名 (obfs_host)', id:'ss_basic_ss_obfs_host', data:{show:'ss_obfs_host_on'}, type:'text', maxlen:'100', ph:'bing.com'},
