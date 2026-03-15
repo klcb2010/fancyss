@@ -23,10 +23,10 @@ jobs:
         run: |
           sed -i '9s|.*|URL_MAIN="https://raw.githubusercontent.com/qxzg/Actions/3.0/fancyss_rules"|' fancyss/scripts/ss_rule_update.sh
 
-    # 4. 把 cron_task.txt 追加到 ssconfig.sh
-    #  - name: Append cron_task.txt to ssconfig.sh
-    #      run: |
-    #    cat cron_task.txt >> fancyss/ss/ssconfig.sh
+      # 4. 把 cron_task.txt 追加到 ssconfig.sh
+      - name: Append cron_task.txt to ssconfig.sh
+        run: |
+         cat cron_task.txt >> fancyss/ss/ssconfig.sh
 
       # 5. 设置 build.sh 可执行权限
       - name: Make build.sh executable
