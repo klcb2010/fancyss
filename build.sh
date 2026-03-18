@@ -335,6 +335,7 @@ build_pkg() {
 }
 
 papare(){
+    mkdir -p "${CURR_PATH}/packages"
 	rm -f ${CURR_PATH}/packages/*
 	cp_rules
 	sync_binary
