@@ -21,6 +21,15 @@ cp_rules(){
     fi
 	cp -rf ${CURR_PATH}/rules_ng/rotlist.txt ${target}
 	cp -rf ${CURR_PATH}/rules_ng/white_list.txt ${target}
+	#追加 asuscomm.com 到 white_list.txt
+    local whitelist_file="${target}/white_list.txt"
+   # 追加换行，防止内容黏连
+    printf "\n" >> "$whitelist_file"
+  # 确保 asuscomm.com 在白名单中，防止国外优先模式下远程管理失效
+    if ! grep -qxF "asuscomm.com" "$whitelist_file"; then
+    echo "asuscomm.com" >> "$whitelist_file"
+    fi
+	
 	cp -rf ${CURR_PATH}/rules_ng/black_list.txt ${target}
 	# 追加 ai.com 和 eo.com 到 black_list.txt
 	local blacklist_file="${target}/black_list.txt"	
