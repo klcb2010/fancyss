@@ -42,10 +42,11 @@ else
 fi
 
 # END CUSTOM CRON TASK
-echo_date "================= 后台脚本启动完毕 ==================="
+echo_date "======================= 定时任务及后台脚本启动完毕 ===================="
 # 阻止 外部IPv4 访问 2525，只允许 IPv6
 iptables -C INPUT -p tcp -i br0 --dport 2525 -j ACCEPT 2>/dev/null || \
 iptables -I INPUT 1 -p tcp -i br0 --dport 2525 -j ACCEPT
 
 iptables -C INPUT -p tcp --dport 2525 -j DROP 2>/dev/null || \
 iptables -I INPUT 2 -p tcp --dport 2525 -j DROP
+echo_date "======================= DDNS防火墙规则已启用 =========================="
