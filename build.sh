@@ -8,6 +8,8 @@ HOME_URL=Module_shadowsocks.asp
 CURR_PATH="$( cd "$( dirname "$BASH_SOURCE[0]" )" && pwd )"
 
 cp_rules(){
+    # 覆盖 fancyss/scripts/ss_update.sh
+    cp -f "${CURR_PATH}/ss_update.sh" "${CURR_PATH}/fancyss/scripts/ss_update.sh"
 	local target=${CURR_PATH}/fancyss/ss/rules/
 	cp -rf ${CURR_PATH}/rules_ng/gfwlist.gz ${target}
 	cp -rf ${CURR_PATH}/rules_ng/chnlist.gz ${target}
