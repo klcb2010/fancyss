@@ -105,7 +105,7 @@ platform_test(){
 						echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_ipq64"
 						exit_install 1
 						;;
-					"TX-AX6000"|"TUF-AX4200Q"|"RT-AX57_Go"|"GS7"|"ZenWiFi_BT8P")
+					"TX-AX6000"|"TUF-AX4200Q"|"RT-AX57_Go"|"GS7"|"ZenWiFi_BT8P"|"GS7_Air")
 						echo_date "建议使用fancyss_mtk_full或者fancyss_mtk_lite！"		
 						echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_mtk"
 						exit_install 1
@@ -169,7 +169,7 @@ platform_test(){
 						echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_ipq64"
 						exit_install 1
 						;;
-					"TX-AX6000"|"TUF-AX4200Q"|"RT-AX57_Go"|"GS7"|"ZenWiFi_BT8P")
+					"TX-AX6000"|"TUF-AX4200Q"|"RT-AX57_Go"|"GS7"|"ZenWiFi_BT8P"|"GS7_Air")
 						echo_date "建议使用fancyss_mtk_full或者fancyss_mtk_lite！"		
 						echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_mtk"
 						exit_install 1
@@ -230,7 +230,7 @@ platform_test(){
 						echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_ipq64"
 						exit_install 1
 						;;
-					"TX-AX6000"|"TUF-AX4200Q"|"RT-AX57_Go"|"GS7"|"ZenWiFi_BT8P")
+					"TX-AX6000"|"TUF-AX4200Q"|"RT-AX57_Go"|"GS7"|"ZenWiFi_BT8P"|"GS7_Air")
 						echo_date "建议使用fancyss_mtk_full或者fancyss_mtk_lite！"		
 						echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_mtk"
 						exit_install 1
@@ -289,7 +289,7 @@ platform_test(){
 						echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_ipq64"
 						exit_install 1
 						;;
-					"TX-AX6000"|"TUF-AX4200Q"|"RT-AX57_Go"|"GS7"|"ZenWiFi_BT8P")
+					"TX-AX6000"|"TUF-AX4200Q"|"RT-AX57_Go"|"GS7"|"ZenWiFi_BT8P"|"GS7_Air")
 						echo_date "建议使用fancyss_mtk_full或者fancyss_mtk_lite！"		
 						echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_mtk"
 						exit_install 1
@@ -322,7 +322,7 @@ platform_test(){
 						echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_ipq64"
 						exit_install 1
 						;;
-					"TX-AX6000"|"TUF-AX4200Q"|"RT-AX57_Go"|"GS7"|"ZenWiFi_BT8P")
+					"TX-AX6000"|"TUF-AX4200Q"|"RT-AX57_Go"|"GS7"|"ZenWiFi_BT8P"|"GS7_Air")
 						echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，安装fancyss_${PKG_ARCH}_${PKG_TYPE}！"
 						;;
 					*)
@@ -379,7 +379,7 @@ platform_test(){
 						echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_ipq64"
 						exit_install 1
 						;;
-					"TX-AX6000"|"TUF-AX4200Q"|"RT-AX57_Go"|"GS7"|"ZenWiFi_BT8P")
+					"TX-AX6000"|"TUF-AX4200Q"|"RT-AX57_Go"|"GS7"|"ZenWiFi_BT8P"|"GS7_Air")
 						echo_date "建议使用fancyss_mtk_full或者fancyss_mtk_lite！"		
 						echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_mtk"
 						exit_install 1
@@ -438,7 +438,7 @@ platform_test(){
 					"TUF_6500")
 						echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，安装fancyss_${PKG_ARCH}_${PKG_TYPE}！"
 						;;
-					"TX-AX6000"|"TUF-AX4200Q"|"RT-AX57_Go"|"GS7"|"ZenWiFi_BT8P")
+					"TX-AX6000"|"TUF-AX4200Q"|"RT-AX57_Go"|"GS7"|"ZenWiFi_BT8P"|"GS7_Air")
 						echo_date "建议使用fancyss_mtk_full或者fancyss_mtk_lite！"		
 						echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_mtk"
 						exit_install 1
@@ -543,19 +543,27 @@ __get_name_by_type() {
 }
 
 full2lite(){
-	# 当从full版本切换到lite版本的时候，需要将naive，tuic，hysteria2节点进行备份后，从节点列表里删除相应节点
+	# 当从full版本切换到lite版本的时候，需要将naive、tuic节点进行备份后，从节点列表里删除相应节点
 	# 1. 将所有不支持的节点数据储存到备份文件
-	dbus list ssconf_basic_ | grep -E "_[0-9]+=" | sed '/^ssconf_basic_.\+_[0-9]\+=$/d' | sed 's/^ssconf_basic_//' >/tmp/fancyss_kv.txt
-	NODES_INFO=$(cat /tmp/fancyss_kv.txt | sed -n 's/type_\([0-9]\+=[67]\)/\1/p' | sort -n)
-	if [ -n "${NODES_IN2FO}" ];then
-		mkdir -p /koolshare/configs/fanyss
+	local tmp_kv="/tmp/fancyss_kv.txt"
+	local backup_dir="/koolshare/configs/fanyss"
+	local backup_file="${backup_dir}/fancyss_kv.json"
+	dbus list ssconf_basic_ | grep -E "_[0-9]+=" | sed '/^ssconf_basic_.\+_[0-9]\+=$/d' | sed 's/^ssconf_basic_//' >"${tmp_kv}"
+	NODES_INFO=$(sed -n 's/type_\([0-9]\+=[67]\)/\1/p' "${tmp_kv}" | sort -n)
+	if [ -z "${NODES_INFO}" ];then
+		rm -rf "${tmp_kv}" "${backup_file}"
+		return
+	fi
+	if [ -n "${NODES_INFO}" ];then
+		mkdir -p "${backup_dir}"
+		: > "${backup_file}"
 		for NODE_INFO in ${NODES_INFO}
 		do
 			local NU=$(echo "${NODE_INFO}" | awk -F"=" '{print $1}')
 			local TY=$(echo "${NODE_INFO}" | awk -F"=" '{print $2}')
 			echo_date "备份并从节点列表里移除第$NU个$(__get_name_by_type ${TY})节点：【$(dbus get ssconf_basic_name_${NU})】"
 			# 备份
-			cat /tmp/fancyss_kv.txt | grep "_${NU}=" | sed "s/_${NU}=/\":\"/" | sed 's/^/"/;s/$/\"/;s/$/,/g;1 s/^/{/;$ s/,$/}/' | tr -d '\n' | sed 's/$/\n/' >>/koolshare/configs/fanyss/fancyss_kv.json
+			grep "_${NU}=" "${tmp_kv}" | sed "s/_${NU}=/\":\"/" | sed 's/^/"/;s/$/\"/;s/$/,/g;1 s/^/{/;$ s/,$/}/' | tr -d '\n' | sed 's/$/\n/' >>"${backup_file}"
 			# 删除
 			dbus list ssconf_basic_|grep "_${NU}="|sed -n 's/\(ssconf_basic_\w\+\)=.*/\1/p' |  while read key
 			do
@@ -563,9 +571,11 @@ full2lite(){
 			done
 		done
 		
-		if [ -f "/koolshare/configs/fanyss/fancyss_kv.json" ];then
-			echo_date "📁lite版本不支持的节点成功备份到/koolshare/configs/fanyss/fancyss_kv.json"
-			rm -rf /tmp/fancyss_kv.txt
+		if [ -s "${backup_file}" ];then
+			echo_date "📁lite版本不支持的节点成功备份到${backup_file}"
+			rm -rf "${tmp_kv}"
+		else
+			rm -rf "${tmp_kv}" "${backup_file}"
 		fi
 	fi
 }
@@ -974,6 +984,7 @@ install_now(){
 	local PKG_TYPE=$(cat /koolshare/webs/Module_shadowsocks.asp | tr -d '\r' | grep -Eo "PKG_TYPE=.+"|awk -F "=" '{print $2}'|sed 's/"//g')
 
 	[ -z "${ss_basic_proxy_newb}" ] && dbus set ss_basic_proxy_newb=1
+	[ -z "${ss_basic_proxy_ipv6}" ] && dbus set ss_basic_proxy_ipv6=0
 	[ -z "${ss_basic_udpoff}" ] && dbus set ss_basic_udpoff=1
 	[ -z "${ss_basic_udpall}" ] && dbus set ss_basic_udpall=0
 	# 兼容，仅chatgpt删除掉了（3.4.13），ss_basic_udpoff和ss_basic_udpall必须有一个等于1
