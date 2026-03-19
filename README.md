@@ -1,6 +1,6 @@
 #   修改点如下
 
--  修改 　国内国外方案  　 确保GFW和大陆白名单下选择智能DNS中的国内或国外方案导致的Grok和ChatGPT无区域错误
+-  修改 　黑名单优先 解决Grok和ChatGPT区域错误  华硕DDNS默认在白名单 确保IPV6解析
 
 -  注入 　DDNS_SSH_helper定时公钥    DDNS区域更改为US  　刷新DNS　 开启固件降级功能  　 确保开机能用公钥
 
