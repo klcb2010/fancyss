@@ -50,23 +50,11 @@ cp_rules(){
 	cp -rf ${CURR_PATH}/rules_ng/chnroute.txt ${target}
 	cp -rf ${CURR_PATH}/rules_ng/chnroute6.txt ${target}
 	cp -rf ${CURR_PATH}/rules_ng/rules.json.js ${target}
+	
 	# 替换智能DNS配置文件1为根目录的 smartdns_smrt_1.conf
-   # cp -f "${CURR_PATH}/smartdns_smrt_1.conf" "${target}/smartdns_smrt_1.conf"
-    #cp -f "${CURR_PATH}/smartdns_smrt_2.conf" "${target}/smartdns_smrt_2.conf"
-    # 可选：加日志确认（Actions 里能看到）
-   # if [ -f "${target}/smartdns_smrt_1.conf" ]; then
-   #    echo "已成功替换 smartdns_smrt_1.conf" >> /tmp/build.log
-   # else
-        echo "替换失败：smartdns_smrt_1.conf 未找到或复制出错" >> /tmp/build.log
-   # fi
-   # cp -f "${CURR_PATH}/ssconfig.sh" "${CURR_PATH}/fancyss/ss/ssconfig.sh"
-    
-    # 可选：加日志确认（Actions 构建日志可见）
-    # if [ -f "${CURR_PATH}/fancyss/ss/ssconfig.sh" ]; then
-   # echo "[INFO] 已成功替换 fancyss/ss/ssconfig.sh 为根目录版本" >> /tmp/build.log
-   # else
-   # echo "[WARNING] 替换失败：fancyss/ss/ssconfig.sh 未找到或复制出错" >> /tmp/build.log
-   # fi
+    cp -f "${CURR_PATH}/smartdns_smrt_1.conf" "${target}/smartdns_smrt_1.conf"
+    cp -f "${CURR_PATH}/smartdns_smrt_2.conf" "${target}/smartdns_smrt_2.conf"
+
 }
 
 sync_binary(){
