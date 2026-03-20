@@ -8,6 +8,13 @@
 
 - 如无需要定时任务 在task列表删除相应代码
 
+- # 清 DNS 缓存（smartdns）
+killall -9 smartdns
+
+# 清连接跟踪
+echo 1 > /proc/sys/net/ipv4/netfilter/ip_conntrack_flush 2>/dev/null
+echo 1 > /proc/sys/net/netfilter/nf_conntrack_flush 2>/dev/null
+
 # 保留上游推广 支持开发
 
 
