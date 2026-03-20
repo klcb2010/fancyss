@@ -52,9 +52,9 @@ cp_rules(){
 	cp -rf ${CURR_PATH}/rules_ng/rules.json.js ${target}
 	
 	# 替换智能DNS配置文件
-    cp -f "${CURR_PATH}/smartdns_smrt_1.conf" "${target}/smartdns_smrt_1.conf"
-    cp -f "${CURR_PATH}/smartdns_smrt_2.conf" "${target}/smartdns_smrt_2.conf"
-	cp -f "${CURR_PATH}/smartdns_smrt_3.conf" "${target}/smartdns_smrt_3.conf"
+    # cp -f "${CURR_PATH}/smartdns_smrt_1.conf" "${target}/smartdns_smrt_1.conf"
+    # cp -f "${CURR_PATH}/smartdns_smrt_2.conf" "${target}/smartdns_smrt_2.conf"
+	# cp -f "${CURR_PATH}/smartdns_smrt_3.conf" "${target}/smartdns_smrt_3.conf"
 
 }
 
