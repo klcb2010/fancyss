@@ -8,7 +8,7 @@
 
 - 如无需要定时任务 在task列表删除相应代码
 
-- # 清 DNS 缓存（smartdns）
+- # 清 DNS 缓存
 killall -9 smartdns
 
 # 清连接跟踪
