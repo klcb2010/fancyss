@@ -48,53 +48,26 @@ echo_date "======================= 定时任务及后台脚本启动完毕 =====
 # -----------------------------
 # 8. fancyss IPv6-only DDNS 自动化（动态解析 IPv6）
 # -----------------------------
+# fancyss IPv6-only DDNS 自动化 (精简版)
+# -----------------------------
 IPSET_NAME="ipv6only_list6"
 TMP_FILE="/tmp/ipv6only_list.txt"
 LOG_TAG="fancyss-custom"
 
-# 1. 创建 /tmp/ipv6only_list.txt
-if [ ! -f "$TMP_FILE" ]; then
-    cp /jffs/.koolshare/fancyss/ipv6only_list.txt "$TMP_FILE"
-    logger -t "$LOG_TAG" "自动创建 $TMP_FILE"
-fi
+# 1. 拷贝文件
+[ ! -f "$TMP_FILE" ] && cp /jffs/.koolshare/fancyss/ipv6only_list.txt "$TMP_FILE"
 
-# 2. 创建 ipset 集合
-if ipset list "$IPSET_NAME" >/dev/null 2>&1; then
-    ipset flush "$IPSET_NAME"
-else
-    ipset create "$IPSET_NAME" hash:ip family inet6
-fi
+# 2. 创建或刷新集合
+ipset list "$IPSET_NAME" >/dev/null 2>&1 && ipset flush "$IPSET_NAME" || ipset create "$IPSET_NAME" hash:ip family inet6
 
-# 3. 解析域名并加入 ipset
+# 3. 遍历域名解析 IPv6 并加入集合
 while read -r domain; do
     [ -z "$domain" ] && continue
-    [ "${domain#\#}" != "$domain" ] && continue
-
-    resolved=false
-    # 使用 nslookup 获取 IPv6
-    for ip6 in $(nslookup -query=AAAA "$domain" 2>/dev/null | awk '/^Address: / {print $2}' | sort -u); do
-        if [ -n "$ip6" ]; then
-            ipset add "$IPSET_NAME" "$ip6" -exist
-            resolved=true
-        fi
+    for ip6 in $(nslookup -type=AAAA "$domain" 2>/dev/null | awk '/^Address: / {print $2}'); do
+        [ -n "$ip6" ] && ipset add "$IPSET_NAME" "$ip6" -exist
     done
-
-    if [ "$resolved" = true ]; then
-        logger -t "$LOG_TAG" "解析并加入 $domain -> IPv6 成功"
-    else
-        logger -t "$LOG_TAG" "警告: $domain 无可用 IPv6 地址，跳过"
-    fi
 done < "$TMP_FILE"
 
-logger -t "$LOG_TAG" "更新 $IPSET_NAME 集合完成"
-
-# 4. 注入 ip6tables NAT 规则
-if ipset list "$IPSET_NAME" >/dev/null 2>&1; then
-    ip6tables -t nat -C PREROUTING -m set --match-set "$IPSET_NAME" dst -j ACCEPT 2>/dev/null || \
-    ip6tables -t nat -I PREROUTING 1 -m set --match-set "$IPSET_NAME" dst -j ACCEPT
-    logger -t "$LOG_TAG" "ip6tables NAT 规则已生效 (集合: $IPSET_NAME)"
-else
-    logger -t "$LOG_TAG" "警告: $IPSET_NAME 集合不存在，nat规则未生效"
-fi
-
-echo_date "======================= 华硕DDNS防火墙规则已启用 ======================"
+# 4. 注入 ip6tables NAT PREROUTING 规则
+ip6tables -t nat -C PREROUTING -m set --match-set "$IPSET_NAME" dst -j ACCEPT 2>/dev/null || \
+ip6tables -t nat -I PREROUTING 1 -m set --match-set "$IPSET_NAME" dst -j ACCEPT
