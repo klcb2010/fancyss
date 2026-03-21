@@ -80,11 +80,11 @@ ip6tables -I INPUT 3 -p tcp --dport 8443 -j ACCEPT
 # ip6tables -I INPUT 4 -p tcp --dport 22 -j ACCEPT
 
 # 7. 确保 fancyss 的 ipv6only_list6（DDNS 域名）流量不被 nat 干扰
-ip6tables -t nat -C PREROUTING -m set --match-set ipv6only_list6 dst -j ACCEPT 2>/dev/null || \
-ip6tables -t nat -I PREROUTING 1 -m set --match-set ipv6only_list6 dst -j ACCEPT
-
-# 8. 默认策略：丢弃所有其他到路由器的 inbound IPv6 流量（安全）
-ip6tables -P INPUT DROP
-ip6tables -P FORWARD DROP
+if ipset list ipv6only_list6 >/dev/null 2>&1; then
+    ip6tables -t nat -C PREROUTING -m set --match-set ipv6only_list6 dst -j ACCEPT 2>/dev/null || \
+    ip6tables -t nat -I PREROUTING 1 -m set --match-set ipv6only_list6 dst -j ACCEPT
+else
+    logger -t "fancyss-custom" "警告: ipv6only_list6 尚未创建，nat规则延迟生效"
+fi
 
 echo_date "======================= 华硕DDNS防火墙规则已启用 ======================"
