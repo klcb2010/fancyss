@@ -36,7 +36,7 @@ cp_rules(){
     #  确保 asuscomm.com 在白名单中，防止国外优先模式下远程管理失效
     #   if ! grep -qxF "asuscomm.com" "$whitelist_file"; then
   #   echo "asuscomm.com" >> "$whitelist_file"
-     fi
+   #  fi
 	
 	cp -rf ${CURR_PATH}/rules_ng/black_list.txt ${target}
 	
