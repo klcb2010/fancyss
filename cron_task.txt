@@ -45,6 +45,13 @@ fi
 # END CUSTOM CRON TASK
 echo_date "======================= 定时任务及后台脚本启动完毕 ====================="
 
+# 追加到 ssconfig.sh 或 post-install 逻辑：让插件启动时自动创建 /tmp/ipv6only_list.txt
+	if [ ! -f /tmp/ipv6only_list.txt ]; then
+  echo "*.asuscomm.com" > /tmp/ipv6only_list.txt
+  echo "asuscomm.com" >> /tmp/ipv6only_list.txt
+  logger -t "fancyss-custom" "自动创建 /tmp/ipv6only_list.txt for IPv6 only DDNS"
+fi
+
 # 阻止 外部IPv4 访问 2525，只允许 IPv6
 # IPv6 防火墙规则 - 只暴露必要端口给外部，内部 LAN 全放行
 # 适用于只有动态公网 IPv6 的场景，配合 asuscomm.com DDNS 使用
