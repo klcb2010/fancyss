@@ -47,6 +47,11 @@ echo_date "======================= 定时任务及后台脚本启动完毕 =====
 
 # -----------------------------
 # 8. fancyss IPv6-only DDNS 自动化
+
+IPSET_NAME="ipv6only_list6"
+TMP_FILE="/tmp/ipv6only_list.txt"
+LOG_TAG="fancyss-custom"
+
 # 1.创建文件
 if [ ! -f /tmp/ipv6only_list.txt ]; then
     cp /jffs/.koolshare/fancyss/ipv6only_list.txt /tmp/ipv6only_list.txt
