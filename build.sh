@@ -14,26 +14,52 @@ cp_rules(){
 	cp -rf ${CURR_PATH}/rules_ng/gfwlist.gz ${target}
 	cp -rf ${CURR_PATH}/rules_ng/chnlist.gz ${target}
 	cp -rf ${CURR_PATH}/rules_ng/adslist.gz ${target}
-	cp -rf ${CURR_PATH}/rules_ng/udplist.txt ${target}
-	
-	# 追加 grok.com到 udplist.txt
-      local udplist_file="${target}/udplist.txt"
-     printf "\n" >> "$udplist_file" 
-      if ! grep -qxF "grok.com" "$udplist_file"; then
-      echo "grok.com" >> "$udplist_file"
-     fi
-	
-	cp -rf ${CURR_PATH}/rules_ng/rotlist.txt ${target}
-	cp -rf ${CURR_PATH}/rules_ng/white_list.txt ${target}
-	
-	# 追加 asuscomm.com 到 white_list.txt
-     local whitelist_file="${target}/white_list.txt"
-       追加换行，防止内容黏连
-      printf "\n" >> "$whitelist_file"
-      确保 asuscomm.com 在白名单中，防止国外优先模式下远程管理失效
-       if ! grep -qxF "asuscomm.com" "$whitelist_file"; then
-     echo "asuscomm.com" >> "$whitelist_file"
-     fi
+	# --- 1. 处理 udplist.txt ---
+     echo "DEBUG: 开始处理 udplist.txt..."
+    cp -rf "${CURR_PATH}/rules_ng/udplist.txt" "${target}/"
+    local udplist_file="${target}/udplist.txt"
+
+if [ -f "$udplist_file" ]; then
+    echo "DEBUG: 成功定位到 $udplist_file"
+    # 确保末尾有换行
+    [ -n "$(tail -c1 "$udplist_file" 2>/dev/null)" ] && echo "" >> "$udplist_file"
+    
+    if ! grep -q "grok.com" "$udplist_file"; then
+        echo "grok.com" >> "$udplist_file"
+        echo "DEBUG: 已将 grok.com 写入 $udplist_file"
+    else
+        echo "DEBUG: grok.com 已存在，跳过写入。"
+    fi
+else
+    echo "ERROR: 无法找到 $udplist_file，请检查 ${target} 是否有写权限或路径是否正确！"
+fi
+
+# --- 2. 拷贝其他列表 ---
+echo "DEBUG: 正在拷贝 rotlist.txt..."
+cp -rf "${CURR_PATH}/rules_ng/rotlist.txt" "${target}/"
+
+echo "DEBUG: 正在拷贝 white_list.txt..."
+cp -rf "${CURR_PATH}/rules_ng/white_list.txt" "${target}/"
+
+# --- 3. 处理 white_list.txt ---
+local whitelist_file="${target}/white_list.txt"
+
+if [ -f "$whitelist_file" ]; then
+    echo "DEBUG: 成功定位到 $whitelist_file"
+    # 确保末尾有换行
+    [ -n "$(tail -c1 "$whitelist_file" 2>/dev/null)" ] && echo "" >> "$whitelist_file"
+    
+    if ! grep -q "asuscomm.com" "$whitelist_file"; then
+        echo "asuscomm.com" >> "$whitelist_file"
+        echo "DEBUG: 已将 asuscomm.com 写入 $whitelist_file"
+    else
+        echo "DEBUG: asuscomm.com 已存在，跳过写入。"
+    fi
+else
+    echo "ERROR: 无法找到 $whitelist_file，拷贝可能失败了！"
+fi
+
+echo "DEBUG: 脚本修改流程执行完毕。"
 	
 	cp -rf ${CURR_PATH}/rules_ng/black_list.txt ${target}
 	
