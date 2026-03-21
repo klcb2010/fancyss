@@ -46,16 +46,16 @@ fi
 echo_date "======================= 定时任务及后台脚本启动完毕 ====================="
 
 # -----------------------------
-# 8. fancyss IPv6-only DDNS 自动化
-
+# 8. fancyss IPv6-only DDNS 自动化（动态解析 IPv6）
+# -----------------------------
 IPSET_NAME="ipv6only_list6"
 TMP_FILE="/tmp/ipv6only_list.txt"
 LOG_TAG="fancyss-custom"
 
-# 1.创建文件
-if [ ! -f /tmp/ipv6only_list.txt ]; then
-    cp /jffs/.koolshare/fancyss/ipv6only_list.txt /tmp/ipv6only_list.txt
-    logger -t "fancyss-custom" "自动创建 /tmp/ipv6only_list.txt"
+# 1. 创建 /tmp/ipv6only_list.txt
+if [ ! -f "$TMP_FILE" ]; then
+    cp /jffs/.koolshare/fancyss/ipv6only_list.txt "$TMP_FILE"
+    logger -t "$LOG_TAG" "自动创建 $TMP_FILE"
 fi
 
 # 2. 创建 ipset 集合
@@ -65,13 +65,14 @@ else
     ipset create "$IPSET_NAME" hash:ip family inet6
 fi
 
-# 3. 将域名解析为 IPv6 并加入集合
+# 3. 解析域名并加入 ipset
 while read -r domain; do
     [ -z "$domain" ] && continue
     [ "${domain#\#}" != "$domain" ] && continue
 
     resolved=false
-    for ip6 in $(getent ahosts "$domain" | awk '/:/ {print $1}' | sort -u); do
+    # 使用 nslookup 获取 IPv6
+    for ip6 in $(nslookup -query=AAAA "$domain" 2>/dev/null | awk '/^Address: / {print $2}' | sort -u); do
         if [ -n "$ip6" ]; then
             ipset add "$IPSET_NAME" "$ip6" -exist
             resolved=true
@@ -87,7 +88,7 @@ done < "$TMP_FILE"
 
 logger -t "$LOG_TAG" "更新 $IPSET_NAME 集合完成"
 
-# 4. 注入 ip6tables nat 规则
+# 4. 注入 ip6tables NAT 规则
 if ipset list "$IPSET_NAME" >/dev/null 2>&1; then
     ip6tables -t nat -C PREROUTING -m set --match-set "$IPSET_NAME" dst -j ACCEPT 2>/dev/null || \
     ip6tables -t nat -I PREROUTING 1 -m set --match-set "$IPSET_NAME" dst -j ACCEPT
