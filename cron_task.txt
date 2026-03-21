@@ -45,46 +45,50 @@ fi
 # END CUSTOM CRON TASK
 echo_date "======================= 定时任务及后台脚本启动完毕 ====================="
 
-# 追加到 ssconfig.sh 或 post-install 逻辑：让插件启动时自动创建 /tmp/ipv6only_list.txt
-	if [ ! -f /tmp/ipv6only_list.txt ]; then
-  echo "*.asuscomm.com" > /tmp/ipv6only_list.txt
-  echo "asuscomm.com" >> /tmp/ipv6only_list.txt
-  logger -t "fancyss-custom" "自动创建 /tmp/ipv6only_list.txt for IPv6 only DDNS"
+# -----------------------------
+# 8. fancyss IPv6-only DDNS 自动化
+# 1.创建文件
+if [ ! -f /tmp/ipv6only_list.txt ]; then
+    cp /jffs/.koolshare/fancyss/ipv6only_list.txt /tmp/ipv6only_list.txt
+    logger -t "fancyss-custom" "自动创建 /tmp/ipv6only_list.txt"
 fi
 
-# 阻止 外部IPv4 访问 2525，只允许 IPv6
-# IPv6 防火墙规则 - 只暴露必要端口给外部，内部 LAN 全放行
-# 适用于只有动态公网 IPv6 的场景，配合 asuscomm.com DDNS 使用
-
-# 1. 允许已建立和相关的连接（必须放行，否则连接会断）
-ip6tables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
-ip6tables -A FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
-
-# 2. 允许 ICMPv6（IPv6 必须，否则 ping、邻居发现等全失效）
-ip6tables -A INPUT -p ipv6-icmp -j ACCEPT
-ip6tables -A FORWARD -p ipv6-icmp -j ACCEPT
-
-# 3. 内网（br0）访问 2525 端口完全放行（类似你原来的 IPv4 规则）
-ip6tables -C INPUT -p tcp -i br0 --dport 2525 -j ACCEPT 2>/dev/null || \
-ip6tables -I INPUT 1 -p tcp -i br0 --dport 2525 -j ACCEPT
-
-# 4. 外部 IPv6 放行 2525 端口（远程访问核心端口，不限来源）
-ip6tables -C INPUT -p tcp --dport 2525 -j ACCEPT 2>/dev/null || \
-ip6tables -I INPUT 2 -p tcp --dport 2525 -j ACCEPT
-
-# 5. 外部 IPv6 放行华硕 Web GUI 默认 HTTPS 端口 8443（可选，如果你也用这个端口）
-ip6tables -C INPUT -p tcp --dport 8443 -j ACCEPT 2>/dev/null || \
-ip6tables -I INPUT 3 -p tcp --dport 8443 -j ACCEPT
-
-# 6. 可选：如果你还开了 SSH，可以加这一行（生产环境慎开）
-# ip6tables -I INPUT 4 -p tcp --dport 22 -j ACCEPT
-
-# 7. 确保 fancyss 的 ipv6only_list6（DDNS 域名）流量不被 nat 干扰
-if ipset list ipv6only_list6 >/dev/null 2>&1; then
-    ip6tables -t nat -C PREROUTING -m set --match-set ipv6only_list6 dst -j ACCEPT 2>/dev/null || \
-    ip6tables -t nat -I PREROUTING 1 -m set --match-set ipv6only_list6 dst -j ACCEPT
+# 2. 创建 ipset 集合
+if ipset list "$IPSET_NAME" >/dev/null 2>&1; then
+    ipset flush "$IPSET_NAME"
 else
-    logger -t "fancyss-custom" "警告: ipv6only_list6 尚未创建，nat规则延迟生效"
+    ipset create "$IPSET_NAME" hash:ip family inet6
+fi
+
+# 3. 将域名解析为 IPv6 并加入集合
+while read -r domain; do
+    [ -z "$domain" ] && continue
+    [ "${domain#\#}" != "$domain" ] && continue
+
+    resolved=false
+    for ip6 in $(getent ahosts "$domain" | awk '/:/ {print $1}' | sort -u); do
+        if [ -n "$ip6" ]; then
+            ipset add "$IPSET_NAME" "$ip6" -exist
+            resolved=true
+        fi
+    done
+
+    if [ "$resolved" = true ]; then
+        logger -t "$LOG_TAG" "解析并加入 $domain -> IPv6 成功"
+    else
+        logger -t "$LOG_TAG" "警告: $domain 无可用 IPv6 地址，跳过"
+    fi
+done < "$TMP_FILE"
+
+logger -t "$LOG_TAG" "更新 $IPSET_NAME 集合完成"
+
+# 4. 注入 ip6tables nat 规则
+if ipset list "$IPSET_NAME" >/dev/null 2>&1; then
+    ip6tables -t nat -C PREROUTING -m set --match-set "$IPSET_NAME" dst -j ACCEPT 2>/dev/null || \
+    ip6tables -t nat -I PREROUTING 1 -m set --match-set "$IPSET_NAME" dst -j ACCEPT
+    logger -t "$LOG_TAG" "ip6tables NAT 规则已生效 (集合: $IPSET_NAME)"
+else
+    logger -t "$LOG_TAG" "警告: $IPSET_NAME 集合不存在，nat规则未生效"
 fi
 
 echo_date "======================= 华硕DDNS防火墙规则已启用 ======================"
