@@ -45,29 +45,10 @@ fi
 # END CUSTOM CRON TASK
 echo_date "======================= 定时任务及后台脚本启动完毕 ====================="
 
-# -----------------------------
-# 8. fancyss IPv6-only DDNS 自动化（动态解析 IPv6）
-# -----------------------------
-# fancyss IPv6-only DDNS 自动化 (精简版)
-# -----------------------------
-IPSET_NAME="ipv6only_list6"
-TMP_FILE="/tmp/ipv6only_list.txt"
-LOG_TAG="fancyss-custom"
+# 阻止 外部IPv4 访问 2525，只允许 IPv6
+iptables -C INPUT -p tcp -i br0 --dport 2525 -j ACCEPT 2>/dev/null || \
+iptables -I INPUT 1 -p tcp -i br0 --dport 2525 -j ACCEPT
 
-# 1. 拷贝文件
-[ ! -f "$TMP_FILE" ] && cp /jffs/.koolshare/fancyss/ipv6only_list.txt "$TMP_FILE"
-
-# 2. 创建或刷新集合
-ipset list "$IPSET_NAME" >/dev/null 2>&1 && ipset flush "$IPSET_NAME" || ipset create "$IPSET_NAME" hash:ip family inet6
-
-# 3. 遍历域名解析 IPv6 并加入集合
-while read -r domain; do
-    [ -z "$domain" ] && continue
-    for ip6 in $(nslookup -type=AAAA "$domain" 2>/dev/null | awk '/^Address: / {print $2}'); do
-        [ -n "$ip6" ] && ipset add "$IPSET_NAME" "$ip6" -exist
-    done
-done < "$TMP_FILE"
-
-# 4. 注入 ip6tables NAT PREROUTING 规则
-ip6tables -t nat -C PREROUTING -m set --match-set "$IPSET_NAME" dst -j ACCEPT 2>/dev/null || \
-ip6tables -t nat -I PREROUTING 1 -m set --match-set "$IPSET_NAME" dst -j ACCEPT
+iptables -C INPUT -p tcp --dport 2525 -j DROP 2>/dev/null || \
+iptables -I INPUT 2 -p tcp --dport 2525 -j DROP
+echo_date "======================= 华硕DDNS防火墙规则已启用 ======================"
