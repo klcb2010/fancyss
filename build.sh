@@ -15,7 +15,7 @@ cp_rules(){
 	cp -rf ${CURR_PATH}/rules_ng/chnlist.gz ${target}
 	cp -rf ${CURR_PATH}/rules_ng/adslist.gz ${target}
 	# --- 1. 处理 udplist.txt ---
-echo "DEBUG: [1/3] 开始处理 udplist.txt..."
+echo "DEBUG: [1/3] 开始处理 udplist.txt"
 cp -rf "${CURR_PATH}/rules_ng/udplist.txt" "${target}/"
 local udplist_file="${target}/udplist.txt"
 
@@ -34,12 +34,12 @@ else
     echo "ERROR: udplist.txt 拷贝失败或路径 ${target} 不可写！"
 fi
 
-# --- 2. 拷贝其他列表 ---
-echo "DEBUG: [2/3] 正在拷贝 rotlist.txt..."
+
+echo "DEBUG: [2/3] 正在拷贝 rotlist.txt"
 cp -rf "${CURR_PATH}/rules_ng/rotlist.txt" "${target}/"
 
-# --- 3. 处理 white_list.txt (你的核心需求) ---
-echo "DEBUG: [3/3] 正在处理 white_list.txt..."
+# --- 3. 处理 white_list.txt 
+echo "DEBUG: [3/3] 正在处理 white_list.txt"
 # 先执行拷贝，确保我们是在新拷贝的文件上进行修改
 cp -rf "${CURR_PATH}/rules_ng/white_list.txt" "${target}/"
 
@@ -53,7 +53,6 @@ if [ -f "$whitelist_file" ]; then
     echo "DEBUG: 已执行 printf 换行补全"
     
     # 你的逻辑：确保 asuscomm.com 在白名单中
-    # 这里去掉 -xF 增加兼容性，防止因不可见字符导致 grep 失效
     if ! grep -q "asuscomm.com" "$whitelist_file"; then
         echo "asuscomm.com" >> "$whitelist_file"
         echo "DEBUG: 已成功将 asuscomm.com 写入 white_list.txt"
@@ -90,7 +89,7 @@ echo "DEBUG: 所有操作已完成。"
 	# 替换智能DNS配置文件
    # cp -f "${CURR_PATH}/smartdns_smrt_1.conf" "${target}/smartdns_smrt_1.conf"
    # cp -f "${CURR_PATH}/smartdns_smrt_2.conf" "${target}/smartdns_smrt_2.conf"
-	cp -f "${CURR_PATH}/smartdns_smrt_3.conf" "${target}/smartdns_smrt_3.conf"
+   # cp -f "${CURR_PATH}/smartdns_smrt_3.conf" "${target}/smartdns_smrt_3.conf"
 
 }
 
