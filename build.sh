@@ -15,34 +15,39 @@ cp_rules(){
 	cp -rf ${CURR_PATH}/rules_ng/chnlist.gz ${target}
 	cp -rf ${CURR_PATH}/rules_ng/adslist.gz ${target}
 	cp -rf ${CURR_PATH}/rules_ng/udplist.txt ${target}
+	
 	# 追加 grok.com到 udplist.txt
-    local udplist_file="${target}/udplist.txt"
+    #  local udplist_file="${target}/udplist.txt"
     # printf "\n" >> "$udplist_file" 
-    if ! grep -qxF "grok.com" "$udplist_file"; then
-        echo "grok.com" >> "$udplist_file"
-    fi
+    #  if ! grep -qxF "grok.com" "$udplist_file"; then
+    #  echo "grok.com" >> "$udplist_file"
+    # fi
+	
 	cp -rf ${CURR_PATH}/rules_ng/rotlist.txt ${target}
 	cp -rf ${CURR_PATH}/rules_ng/white_list.txt ${target}
+	
 	#追加 asuscomm.com 到 white_list.txt
-    local whitelist_file="${target}/white_list.txt"
-   # 追加换行，防止内容黏连
-    printf "\n" >> "$whitelist_file"
-  # 确保 asuscomm.com 在白名单中，防止国外优先模式下远程管理失效
-    if ! grep -qxF "asuscomm.com" "$whitelist_file"; then
-    echo "asuscomm.com" >> "$whitelist_file"
-    fi
+    # local whitelist_file="${target}/white_list.txt"
+    # 追加换行，防止内容黏连
+    #  printf "\n" >> "$whitelist_file"
+    # 确保 asuscomm.com 在白名单中，防止国外优先模式下远程管理失效
+    #   if ! grep -qxF "asuscomm.com" "$whitelist_file"; then
+    # echo "asuscomm.com" >> "$whitelist_file"
+    # fi
 	
 	cp -rf ${CURR_PATH}/rules_ng/black_list.txt ${target}
+	
 	# 追加 ai.com 和 eo.com 到 black_list.txt
-	local blacklist_file="${target}/black_list.txt"	
-	printf "\n" >> "$blacklist_file"
-	if ! grep -qxF "chatgpt.com" "$blacklist_file"; then
-        echo "chatgpt.com" >> "$blacklist_file"
-    fi
+	# local blacklist_file="${target}/black_list.txt"	
+	# printf "\n" >> "$blacklist_file"
+	# if ! grep -qxF "chatgpt.com" "$blacklist_file"; then
+    #    echo "chatgpt.com" >> "$blacklist_file"
+    #   fi
     
-    if ! grep -qxF "grok.com" "$blacklist_file"; then
-        echo "grok.com" >> "$blacklist_file"
-    fi
+    #  if ! grep -qxF "grok.com" "$blacklist_file"; then
+    #        echo "grok.com" >> "$blacklist_file"
+    #  fi
+	
 	cp -rf ${CURR_PATH}/rules_ng/block_list.txt ${target}
 	cp -rf ${CURR_PATH}/rules_ng/apple_china.txt ${target}
 	cp -rf ${CURR_PATH}/rules_ng/google_china.txt ${target}
@@ -52,9 +57,9 @@ cp_rules(){
 	cp -rf ${CURR_PATH}/rules_ng/rules.json.js ${target}
 	
 	# 替换智能DNS配置文件
-    # cp -f "${CURR_PATH}/smartdns_smrt_1.conf" "${target}/smartdns_smrt_1.conf"
-    # cp -f "${CURR_PATH}/smartdns_smrt_2.conf" "${target}/smartdns_smrt_2.conf"
-	# cp -f "${CURR_PATH}/smartdns_smrt_3.conf" "${target}/smartdns_smrt_3.conf"
+    cp -f "${CURR_PATH}/smartdns_smrt_1.conf" "${target}/smartdns_smrt_1.conf"
+    cp -f "${CURR_PATH}/smartdns_smrt_2.conf" "${target}/smartdns_smrt_2.conf"
+	cp -f "${CURR_PATH}/smartdns_smrt_3.conf" "${target}/smartdns_smrt_3.conf"
 
 }
 
