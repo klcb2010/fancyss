@@ -38,32 +38,32 @@ fi
 echo "DEBUG: [2/3] 正在拷贝 rotlist.txt"
 cp -rf "${CURR_PATH}/rules_ng/rotlist.txt" "${target}/"
 
-# --- 3. 处理 white_list.txt 
-#echo "DEBUG: [3/3] 正在处理 white_list.txt"
+ --- 3. 处理 white_list.txt 
+echo "DEBUG: [3/3] 正在处理 white_list.txt"
 # 先执行拷贝，确保是在新拷贝的文件上进行修改
-#cp -rf "${CURR_PATH}/rules_ng/white_list.txt" "${target}/"
+ cp -rf "${CURR_PATH}/rules_ng/white_list.txt" "${target}/"
 
-#local whitelist_file="${target}/white_list.txt"
+local whitelist_file="${target}/white_list.txt"
 
-#if [ -f "$whitelist_file" ]; then
-#    echo "DEBUG: 成功定位到 $whitelist_file"
+if [ -f "$whitelist_file" ]; then
+    echo "DEBUG: 成功定位到 $whitelist_file"
     
-    # 你的逻辑：追加换行，防止内容黏连
-  #  printf "\n" >> "$whitelist_file"
- #   echo "DEBUG: 已执行 printf 换行补全"
+    # 追加换行，防止内容黏连
+    printf "\n" >> "$whitelist_file"
+    echo "DEBUG: 已执行 printf 换行补全"
     
-    # 你的逻辑：确保 asuscomm.com 在白名单中
-  #  if ! grep -q "asuscomm.com" "$whitelist_file"; then
-  #      echo "asuscomm.com" >> "$whitelist_file"
-      #  echo "DEBUG: 已成功将 asuscomm.com 写入 white_list.txt"
-   # else
-    #    echo "DEBUG: asuscomm.com 已在白名单中，跳过。"
- #   fi
-#else
-  #  echo "ERROR: white_list.txt 拷贝失败，请检查 ${target} 目录权限！"
-#fi
+    # 确保 asuscomm.com 在白名单中
+    if ! grep -q "asuscomm.com" "$whitelist_file"; then
+        echo "asuscomm.com" >> "$whitelist_file"
+        echo "DEBUG: 已成功将 asuscomm.com 写入 white_list.txt"
+    else
+        echo "DEBUG: asuscomm.com 已在白名单中，跳过。"
+    fi
+else
+    echo "ERROR: white_list.txt 拷贝失败，请检查 ${target} 目录权限！"
+fi
 
-#echo "DEBUG: 所有操作已完成。"
+echo "DEBUG: 所有操作已完成。"
 	
 	cp -rf ${CURR_PATH}/rules_ng/black_list.txt ${target}
 	
