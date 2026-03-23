@@ -1,6 +1,6 @@
 #   修改点如下
 
--  修改 　智能判断中黑名单纳入GFW 白名单纳入chnlist 华硕DDNS纳入白名单
+-  修改 　智能判断中黑名单纳入GFW　 白名单纳入chnlist 　华硕DDNS纳入白名单
 
 -  注入 　DDNS_SSH_helper定时公钥    DDNS区域更改为US  　刷新DNS　 开启固件降级功能  　 确保开机能用公钥
 
