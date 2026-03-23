@@ -43,7 +43,7 @@ choose_package() {
             echo_date "未知架构 ${cpu}，默认使用 fancyss_hnd_v8_full.tar.gz"
             ;;
     esac
-
+    echo_date "选中的包: $pkg (架构: $cpu)"
     echo "$pkg"
 }
 
