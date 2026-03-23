@@ -86,10 +86,13 @@ cp -rf "${CURR_PATH}/rules_ng/rotlist.txt" "${target}/"
 	cp -rf ${CURR_PATH}/rules_ng/chnroute6.txt ${target}
 	cp -rf ${CURR_PATH}/rules_ng/rules.json.js ${target}
 	
-	# 替换智能DNS配置文件
+	# 替换智能判断文件
    # cp -f "${CURR_PATH}/smartdns_smrt_1.conf" "${target}/smartdns_smrt_1.conf"
    # cp -f "${CURR_PATH}/smartdns_smrt_2.conf" "${target}/smartdns_smrt_2.conf"
     cp -f "${CURR_PATH}/smartdns_smrt_3.conf" "${target}/smartdns_smrt_3.conf"
+
+    #替换黑名单
+    cp -f "${CURR_PATH}/black_list.txt" "${target}/black_list.txt"
 
 	# 替换白名单
 	cp -f "${CURR_PATH}/white_list.txt" "${target}/white_list.txt"
