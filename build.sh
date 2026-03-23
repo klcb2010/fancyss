@@ -49,8 +49,8 @@ cp -rf "${CURR_PATH}/rules_ng/rotlist.txt" "${target}/"
 #    echo "DEBUG: 成功定位到 $whitelist_file"
     
     # 你的逻辑：追加换行，防止内容黏连
-    printf "\n" >> "$whitelist_file"
-    echo "DEBUG: 已执行 printf 换行补全"
+  #  printf "\n" >> "$whitelist_file"
+ #   echo "DEBUG: 已执行 printf 换行补全"
     
     # 你的逻辑：确保 asuscomm.com 在白名单中
   #  if ! grep -q "asuscomm.com" "$whitelist_file"; then
