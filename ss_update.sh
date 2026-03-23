@@ -40,10 +40,14 @@ choose_package() {
             pkg="fancyss_mtk_full.tar.gz"
             ;;
         *)
-            echo_date "未知架构 ${cpu}，默认使用 fancyss_hnd_v8_full.tar.gz"
+            echo_date "未知架构 ${cpu}，默认使用 fancyss_hnd_v8_full.tar.gz" >&2
             ;;
     esac
-    echo_date "选中的包: $pkg (架构: $cpu)"
+
+    # 调试信息输出到 stderr，避免污染返回值
+    echo_date "选中的包: $pkg (架构: $cpu)" >&2
+
+    # 只返回纯包名（不带任何额外输出）
     echo "$pkg"
 }
 
@@ -61,7 +65,7 @@ update_ss() {
     main_url="https://github.com/klcb2010/fancyss"
     version_url="${main_url}/releases/latest"
 
-    # curl 兼容（优先用 fancyss 自带 curl，如果没有用系统）
+    # curl 兼容（优先 fancyss 自带 curl，如果没有用系统）
     if [ -x "/koolshare/bin/curl-fancyss" ]; then
         curl_bin="/koolshare/bin/curl-fancyss"
     else
@@ -77,12 +81,12 @@ update_ss() {
 
     echo_date "获取在线最新版本"
     latest_tag=$(run /tmp/curl-update -4sk -L -I $socks_proxy "${version_url}" \
-        | grep -i '^location:' | awk -F '/' '{print $NF}' | tr -d '\r')
+        | grep -i '^location:' | awk -F '/' '{print $NF}' | tr -d '\r\n\t ')
 
     # fallback wget 或直接解析
     if [ -z "$latest_tag" ]; then
         latest_tag=$(wget -qO- --tries=2 "${version_url}" 2>/dev/null \
-            | grep -o 'releases/tag/[^"]*' | head -n1 | cut -d'/' -f3 | tr -d '\r')
+            | grep -o 'releases/tag/[^"]*' | head -n1 | cut -d'/' -f3 | tr -d '\r\n\t ')
     fi
 
     if [ -z "$latest_tag" ]; then
@@ -90,8 +94,10 @@ update_ss() {
         exit 1
     fi
 
-    # 去掉 v 前缀用于比较
+    # 彻底清理 latest_tag 中的所有空白/换行/回车
+    latest_tag=$(echo "$latest_tag" | tr -d '\r\n\t ')
     latest_clean=$(echo "$latest_tag" | sed 's/^v//')
+
     echo_date "在线版本 : ${latest_clean}"
 
     # 对比版本
@@ -107,6 +113,9 @@ update_ss() {
 
     package_file=$(choose_package)
     download_url="${main_url}/releases/download/${latest_tag}/${package_file}"
+
+    # 调试：显示实际拼接的 URL（上线后可注释）
+    echo_date "拼接的下载 URL: ${download_url}"
 
     echo_date "下载包: ${package_file}"
 
