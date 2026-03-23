@@ -8,11 +8,14 @@ cru d refresh_ddns 2>/dev/null
 cru d rclone_cache_clean 2>/dev/null
 cru d ss_update_daily 2>/dev/null 
 
-# 1. 注入定时守护任务和自动更新任务
+# 1.0 注入定时守护任务
 cru a frpc_guard "*/10 * * * * [ -z \"\$(pidof frpc)\" ] && /bin/sh /jffs/scripts/frpc_start.sh"
 cru a rclone_guard "*/20 * * * * [ -z \"\$(pidof rclone)\" ] && /bin/sh /jffs/scripts/rclone_webdav.sh"
 cru a refresh_ddns "30 3 */5 * * /jffs/scripts/refresh_ddns.sh >> /jffs/scripts/ddns_refresh.log 2>&1"
-cru a ss_update_daily "30 4 * * * sh /jffs/.koolshare/scripts/ss_update.sh update >> /jffs/.koolshare/logs/ss_update.log 2>&1"
+
+# 1.1 创建日志和自动更新
+mkdir -p /jffs/scripts
+cru a ss_update_daily "30 4 * * * sh /jffs/.koolshare/scripts/ss_update.sh update >> /jffs/scripts/ss_update.log 2>&1"
 
 # 2. 注入日志和缓存清理任务
 cru a clean_logs "0 3 * * * /jffs/scripts/clean_cron_logs.sh >> /jffs/scripts/clean_cron_logs.txt 2>&1"
