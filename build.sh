@@ -48,9 +48,9 @@ local whitelist_file="${target}/white_list.txt"
 if [ -f "$whitelist_file" ]; then
     echo "DEBUG: 成功定位到 $whitelist_file"
     
-    # 追加换行，防止内容黏连
-    printf "\n" >> "$whitelist_file"
-    echo "DEBUG: 已执行 printf 换行补全"
+    # 确保文件末尾有换行，防止追加内容贴在原文件最后一行
+    [ -n "$(tail -c1 "$udplist_file" 2>/dev/null)" ] && echo "" >> "$whitelist_file"
+    echo "DEBUG: 已执行补全"
     
     # 确保 asuscomm.com 在白名单中
     if ! grep -q "asuscomm.com" "$whitelist_file"; then
