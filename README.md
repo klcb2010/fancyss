@@ -12,6 +12,9 @@
 
 - 自定义黑白名单  打包即用
 
+# 相关脚本在 [Asuswrt-Merlin-Custom-Scripts](https://github.com/klcb2010/Asuswrt-Merlin-Custom-Scripts)
+
+
 # 保留上游推广 支持开发
 
 
