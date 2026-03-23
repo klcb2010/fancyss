@@ -38,32 +38,32 @@ fi
 echo "DEBUG: [2/3] 正在拷贝 rotlist.txt"
 cp -rf "${CURR_PATH}/rules_ng/rotlist.txt" "${target}/"
 
- --- 3. 处理 white_list.txt 
-echo "DEBUG: [3/3] 正在处理 white_list.txt"
+# --- 3. 处理 white_list.txt 
+#echo "DEBUG: [3/3] 正在处理 white_list.txt"
 # 先执行拷贝，确保是在新拷贝的文件上进行修改
  cp -rf "${CURR_PATH}/rules_ng/white_list.txt" "${target}/"
 
-local whitelist_file="${target}/white_list.txt"
+#local whitelist_file="${target}/white_list.txt"
 
-if [ -f "$whitelist_file" ]; then
-    echo "DEBUG: 成功定位到 $whitelist_file"
+#if [ -f "$whitelist_file" ]; then
+  #  echo "DEBUG: 成功定位到 $whitelist_file"
     
     # 确保文件末尾有换行，防止追加内容贴在原文件最后一行
-    [ -n "$(tail -c1 "$udplist_file" 2>/dev/null)" ] && echo "" >> "$whitelist_file"
-    echo "DEBUG: 已执行补全"
+ #   [ -n "$(tail -c1 "$udplist_file" 2>/dev/null)" ] && echo "" >> "$whitelist_file"
+  #  echo "DEBUG: 已执行补全"
     
     # 确保 asuscomm.com 在白名单中
-    if ! grep -q "asuscomm.com" "$whitelist_file"; then
-        echo "asuscomm.com" >> "$whitelist_file"
-        echo "DEBUG: 已成功将 asuscomm.com 写入 white_list.txt"
-    else
-        echo "DEBUG: asuscomm.com 已在白名单中，跳过。"
-    fi
-else
-    echo "ERROR: white_list.txt 拷贝失败，请检查 ${target} 目录权限！"
-fi
+  #  if ! grep -q "asuscomm.com" "$whitelist_file"; then
+     #   echo "asuscomm.com" >> "$whitelist_file"
+     #   echo "DEBUG: 已成功将 asuscomm.com 写入 white_list.txt"
+   # else
+     #   echo "DEBUG: asuscomm.com 已在白名单中，跳过。"
+   # fi
+#else
+    #echo "ERROR: white_list.txt 拷贝失败，请检查 ${target} 目录权限！"
+#fi
 
-echo "DEBUG: 所有操作已完成。"
+#echo "DEBUG: 所有操作已完成。"
 	
 	cp -rf ${CURR_PATH}/rules_ng/black_list.txt ${target}
 	
@@ -90,6 +90,9 @@ echo "DEBUG: 所有操作已完成。"
    # cp -f "${CURR_PATH}/smartdns_smrt_1.conf" "${target}/smartdns_smrt_1.conf"
    # cp -f "${CURR_PATH}/smartdns_smrt_2.conf" "${target}/smartdns_smrt_2.conf"
     cp -f "${CURR_PATH}/smartdns_smrt_3.conf" "${target}/smartdns_smrt_3.conf"
+
+	# 替换白名单
+	cp -f "${CURR_PATH}/white_list.txt" "${target}/white_list.txt"
 
 }
 
