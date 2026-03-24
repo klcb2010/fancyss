@@ -59,3 +59,21 @@ ip6tables -C INPUT -p tcp --dport 8181 -j ACCEPT 2>/dev/null || \
 ip6tables -I INPUT -p tcp --dport 8181 -j ACCEPT
 
 echo_date "======================= 华硕DDNS防火墙规则已启用 ======================"
+# ======================= OpenAI/Cloudflare IP 强制分流规则 =======================
+# 确保 ipset gfwlist 存在（防止插件还没创建完集合就报错）
+ipset -N gfwlist hash:net 2>/dev/null
+
+# 注入 Cloudflare 全球 IPv4 段到 gfwlist，强制走代理
+# 采用循环方式，避免单条命令过长导致脚本解析失败
+CF_NETS="173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/12 172.64.0.0/13 131.0.72.0/22"
+
+for net in $CF_NETS; do
+    # 使用 -A 增加，且 2>/dev/null 忽略已存在的报错
+    ipset add gfwlist $net 2>/dev/null
+done
+
+# 修正 IPv6 潜在的 DNS 劫持（防止 Windows 偷跑 AAAA 记录）
+# 强制将发往外部 53 端口的 IPv6 DNS 请求拦截到路由器本地
+ip6tables -t nat -I PREROUTING -p udp --dport 53 -j DNAT --to $(nvram get ipv6_lan_addr) 2>/dev/null
+
+echo_date "======================= OpenAI 强制分流与 IPv6 拦截已就绪 ======================"
