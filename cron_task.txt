@@ -1,98 +1,78 @@
 # BEGIN CUSTOM CRON TASK
+# ======================= 清理旧任务，防止重复 =======================
+for task in frpc_guard rclone_guard clean_logs refresh_ddns rclone_cache_clean ss_update_daily; do
+    cru d $task 2>/dev/null
+done
 
-# 删除旧任务，防止重复
-cru d frpc_guard 2>/dev/null
-cru d rclone_guard 2>/dev/null
-cru d clean_logs 2>/dev/null
-cru d refresh_ddns 2>/dev/null
-cru d rclone_cache_clean 2>/dev/null
-cru d ss_update_daily 2>/dev/null 
-
-# 1.0 注入定时守护任务
+# ======================= 1.0 注入定时守护任务 =======================
 cru a frpc_guard "*/10 * * * * [ -z \"\$(pidof frpc)\" ] && /bin/sh /jffs/scripts/frpc_start.sh"
 cru a rclone_guard "*/20 * * * * [ -z \"\$(pidof rclone)\" ] && /bin/sh /jffs/scripts/rclone_webdav.sh"
 cru a refresh_ddns "30 3 */5 * * /jffs/scripts/refresh_ddns.sh >> /jffs/scripts/ddns_refresh.log 2>&1"
-
-# 1.1 创建日志和自动更新
-mkdir -p /jffs/scripts
 cru a ss_update_daily "30 4 * * * sh /jffs/.koolshare/scripts/ss_update.sh update >> /jffs/scripts/ss_update.log 2>&1"
 
-# 2. 注入日志和缓存清理任务
+# ======================= 2.0 注入清理任务 =======================
+mkdir -p /jffs/scripts
 cru a clean_logs "0 3 * * * /jffs/scripts/clean_logs.sh >> /jffs/scripts/clean_logs.txt 2>&1"
 cru a rclone_cache_clean "0 5 * * * [ -d /tmp/mnt/SF/entware/var/cache/rclone ] && rm -rf /tmp/mnt/SF/entware/var/cache/rclone/*"
 
-# 3. 运行脚本注入公钥区域助手和webdav
-
-# rclone_webdav.sh
+# ======================= 3.0 运行后台服务守护 (PID 锁逻辑) =======================
+# rclone_webdav 守护
 RCLONE_PID="/tmp/rclone_webdav.pid"
 if [ -f "$RCLONE_PID" ] && kill -0 $(cat "$RCLONE_PID") 2>/dev/null; then
-  echo "$(date '+%Y-%m-%d %H:%M:%S') [跳过] rclone_webdav.sh 已运行 (PID $(cat $RCLONE_PID))" >> /tmp/rclone_webdav.log
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [跳过] rclone_webdav.sh 正在运行" >> /tmp/rclone_webdav.log
 else
-  pkill -f rclone_webdav.sh 2>/dev/null
-  /bin/sh /jffs/scripts/rclone_webdav.sh >> /tmp/rclone_webdav.log 2>&1 &
-  echo $! > "$RCLONE_PID"
-  echo "$(date '+%Y-%m-%d %H:%M:%S') [启动] rclone_webdav.sh (PID $!)" >> /tmp/rclone_webdav.log
+    pkill -f rclone_webdav.sh 2>/dev/null
+    /bin/sh /jffs/scripts/rclone_webdav.sh >> /tmp/rclone_webdav.log 2>&1 &
+    echo $! > "$RCLONE_PID"
 fi
 
-# DDNS_SSH_helper.sh
+# DDNS_SSH_helper 守护
 DDNS_PID="/tmp/ddns_ssh_helper.pid"
 if [ -f "$DDNS_PID" ] && kill -0 $(cat "$DDNS_PID") 2>/dev/null; then
-  echo "$(date '+%Y-%m-%d %H:%M:%S') [跳过] DDNS_SSH_helper.sh 已运行 (PID $(cat $DDNS_PID))" >> /tmp/ddns_ssh_helper.log
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [跳过] DDNS_SSH_helper.sh 正在运行" >> /tmp/ddns_ssh_helper.log
 else
-  pkill -f DDNS_SSH_helper.sh 2>/dev/null
-  /bin/sh /jffs/scripts/DDNS_SSH_helper.sh >> /tmp/ddns_ssh_helper.log 2>&1 &
-  echo $! > "$DDNS_PID"
-  echo "$(date '+%Y-%m-%d %H:%M:%S') [启动] DDNS_SSH_helper.sh (PID $!)" >> /tmp/ddns_ssh_helper.log
+    pkill -f DDNS_SSH_helper.sh 2>/dev/null
+    /bin/sh /jffs/scripts/DDNS_SSH_helper.sh >> /tmp/ddns_ssh_helper.log 2>&1 &
+    echo $! > "$DDNS_PID"
 fi
 
-# END CUSTOM CRON TASK
-echo_date "======================= 定时任务及后台脚本启动完毕 ====================="
-
-# 配置DDNSh和AI规则
-# ======================= WebDAV 端口放行与限流 (2525/8181) =======================
+# ======================= 4.0 防火墙安全与分流逻辑 =======================
 echo_date "======================= 正在部署 WebDAV 安全规则"
-
-# ======================= WebDAV 2525 精准重置 =======================
-echo_date "======================= 正在重置DDNS端口规则，清理冗余======================= "
-
-# 1. 暴力清理所有涉及 2525 的规则，防止规则堆叠
-# 使用循环删除，直到没有任何关于 2525 的规则为止
+# 2525 端口暴力重置与精准注入
 while iptables -D INPUT -p tcp --dport 2525 -j ACCEPT 2>/dev/null; do :; done
 while iptables -D INPUT -p tcp --dport 2525 -m state --state NEW -m recent --set 2>/dev/null; do :; done
 while iptables -D INPUT -p tcp --dport 2525 -m state --state NEW -m recent --update --seconds 60 --hitcount 10 -j DROP 2>/dev/null; do :; done
 
-# 2. 重新按“金字塔”顺序注入到顶部
-# 第3层：放行（只有经过前两层考验的包才能到这里）
 iptables -I INPUT 1 -p tcp --dport 2525 -j ACCEPT
-# 第2层：拦截（超过频率的直接丢弃）
 iptables -I INPUT 1 -p tcp --dport 2525 -m state --state NEW -m recent --update --seconds 60 --hitcount 10 -j DROP
-# 第1层：登记（所有新连接都要先登记）
 iptables -I INPUT 1 -p tcp --dport 2525 -m state --state NEW -m recent --set
 
-# WEBDAV保持幂等注入即可
+# 8181 IPv6 放行
 ip6tables -C INPUT -p tcp --dport 8181 -j ACCEPT 2>/dev/null || ip6tables -I INPUT -p tcp --dport 8181 -j ACCEPT
 
-echo_date "======================= DDNS端口限流与放行规则已重新校准======================= "
-
-# ======================= AI 助手 IP 强制分流 (ChatGPT/Grok) =======================
-echo_date "======================= 正在注入 OpenAI 和 Grok 的强制代理 IP 规则======================= "
+# AI 分流注入
+echo_date "======================= 正在注入 AI 助手代理规则"
 CF_NETS="173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/12 172.64.0.0/13 131.0.72.0/22"
 X_NETS="104.244.42.0/24 192.133.76.0/22 199.16.156.0/22 199.59.148.0/22 204.92.112.0/22 69.195.160.0/19"
 
 ipset -N gfwlist hash:net 2>/dev/null
 for net in $CF_NETS $X_NETS; do
-    ipset add gfwlist $net 2>/dev/null
+    ipset -! add gfwlist $net 2>/dev/null
 done
 
-# ======================= 强制 IPv6 DNS 归位与补丁 =======================
-#  尝试获取 IPv6 地址，如果为空则跳过，防止命令报错
+# IPv6 DNS 劫持逻辑
 IPV6_LAN=$(nvram get ipv6_lan_addr)
-if [ -n "$IPV6_LAN" ]; then
-    echo_date "======================= 检测到 IPv6 地址，执行 DNS 劫持======================= "
-    ip6tables -t nat -D PREROUTING -p udp --dport 53 -j DNAT --to $IPV6_LAN 2>/dev/null
-    ip6tables -t nat -I PREROUTING -p udp --dport 53 -j DNAT --to $IPV6_LAN
-else
-    echo_date "======================= IPv6 地址为空，跳过 NAT 拦截，建议配合 dnsmasq 屏蔽 AAAA 记录======================= "
+if [ -z "$IPV6_LAN" ]; then
+    # 如果 nvram 为空，尝试实时抓取一次 br0 地址
+    IPV6_LAN=$(ip -6 addr show br0 | grep "global" | awk '{print $2}' | cut -d/ -f1 | head -n1)
 fi
 
-echo_date "======================= 所有防火墙规则与分流设置部署完成======================= "
+if [ -n "$IPV6_LAN" ]; then
+    echo_date "======================= 检测到 IPv6: $IPV6_LAN，执行劫持"
+    ip6tables -t nat -D PREROUTING -p udp --dport 53 -j DNAT --to "$IPV6_LAN" 2>/dev/null
+    ip6tables -t nat -I PREROUTING -p udp --dport 53 -j DNAT --to "$IPV6_LAN"
+else
+    echo_date "======================= IPv6 地址为空，请确保 dnsmasq 屏蔽了 AAAA"
+fi
+
+echo_date "======================= FancySS Mod 增强配置部署完成 ====================="
