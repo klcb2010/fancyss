@@ -1,4 +1,4 @@
-# DDNS
+# DDNS设定相关
 - 让DDNS有优先析IPv6
 - 路由器 系统记录  IPv6 复制地址 
 - fancyss中DNS设定中自定义解析
