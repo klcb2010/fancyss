@@ -1,5 +1,5 @@
 # DDNS
-- 让DDNS有效解析IPv6 在 路由器 系统记录中 IPv6查询地址 然后在fancyss中DNS设定中自定义解析 填写 address=/你的DDNS名称.asuscomm.com/查到的IPv6地址 保存后 重启dnsmasq即可
+- 让DDNS有优先析IPv6 在 路由器 系统记录中 IPv6查询地址 然后在fancyss中DNS设定中自定义解析 填写 address=/你的DDNS名称.asuscomm.com/查到的IPv6地址 保存后 重启dnsmasq即可
 
 #   本仓库修改点如下
 
