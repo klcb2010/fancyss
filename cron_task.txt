@@ -48,45 +48,42 @@ fi
 # END CUSTOM CRON TASK
 echo_date "======================= 定时任务及后台脚本启动完毕 ====================="
 
-# 配置DDNS规则
+# 配置DDNSh和AI规则
+# ======================= WebDAV 端口放行与限流 (2525/8181) =======================
+echo_date "正在部署 WebDAV 安全规则 (2525/8181)"
 
-# ======================= WebDAV 端口放行 (2525/8181) =======================
-# IPv4 2525 (HTTP/HTTPS)
-iptables -C INPUT -p tcp --dport 2525 -j ACCEPT 2>/dev/null || iptables -I INPUT -p tcp --dport 2525 -j ACCEPT
+# 清理旧规则防止重复注入 (梅林环境下建议先删后插)
+iptables -D INPUT -p tcp --dport 2525 -j ACCEPT 2>/dev/null
+iptables -D INPUT -p tcp --dport 2525 -m state --state NEW -m recent --set 2>/dev/null
+iptables -D INPUT -p tcp --dport 2525 -m state --state NEW -m recent --update --seconds 60 --hitcount 10 -j DROP 2>/dev/null
 
-# IPv6 8181 (Rclone WebDAV SSL)
+# 正确的插入顺序：限流规则在前，放行在后
+iptables -I INPUT 1 -p tcp --dport 2525 -j ACCEPT
+iptables -I INPUT 1 -p tcp --dport 2525 -m state --state NEW -m recent --update --seconds 60 --hitcount 10 -j DROP
+iptables -I INPUT 1 -p tcp --dport 2525 -m state --state NEW -m recent --set
+
+# IPv6 8181 放行
 ip6tables -C INPUT -p tcp --dport 8181 -j ACCEPT 2>/dev/null || ip6tables -I INPUT -p tcp --dport 8181 -j ACCEPT
 
-# 额外保护：防止端口被暴力破解 每分钟最多连接 10 次)
-iptables -A INPUT -p tcp --dport 2525 -m state --state NEW -m recent --set
-iptables -A INPUT -p tcp --dport 2525 -m state --state NEW -m recent --update --seconds 60 --hitcount 10 -j DROP
-
-echo_date "======================= WebDAV 防火墙规则已完成部署 ======================"
-
-echo_date "======================= 华硕DDNS防火墙规则已启用 ======================"
-# ======================= OpenAI/Cloudflare IP 强制分流规则 =======================
-# 确保 ipset gfwlist 存在（防止插件还没创建完集合就报错）
-ipset -N gfwlist hash:net 2>/dev/null
-
-# ======================= AI 助手全量强制分流 (ChatGPT & Grok) =======================
-echo_date "正在注入 OpenAI 和 Grok 的强制代理 IP 规则..."
-
-# 确保 ipset gfwlist 集合存在
-ipset -N gfwlist hash:net 2>/dev/null
-
-# 1. Cloudflare 全球核心段 (承载 ChatGPT, OpenAI, Grok 官网)
+# ======================= AI 助手 IP 强制分流 (ChatGPT/Grok) =======================
+echo_date "正在注入 OpenAI 和 Grok 的强制代理 IP 规则"
 CF_NETS="173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/12 172.64.0.0/13 131.0.72.0/22"
-
-# 2. X/Twitter 核心段 (Grok 登录及资源加载必须)
 X_NETS="104.244.42.0/24 192.133.76.0/22 199.16.156.0/22 199.59.148.0/22 204.92.112.0/22 69.195.160.0/19"
 
-# 执行统一注入
+ipset -N gfwlist hash:net 2>/dev/null
 for net in $CF_NETS $X_NETS; do
     ipset add gfwlist $net 2>/dev/null
 done
 
-# 3. 强制 IPv6 DNS 归位 (防止 Grok 通过 IPv6 泄露地理位置)
-# 这一行会将所有试图通过 IPv6 53端口发出的请求拦截回 GT-AX6000
-ip6tables -t nat -I PREROUTING -p udp --dport 53 -j DNAT --to $(nvram get ipv6_lan_addr) 2>/dev/null
+# ======================= 强制 IPv6 DNS 归位与补丁 =======================
+# 尝试获取 IPv6 地址，如果为空则跳过，防止命令报错
+IPV6_LAN=$(nvram get ipv6_lan_addr)
+if [ -n "$IPV6_LAN" ]; then
+    echo_date "检测到 IPv6 地址，执行 DNS 劫持"
+    ip6tables -t nat -D PREROUTING -p udp --dport 53 -j DNAT --to $IPV6_LAN 2>/dev/null
+    ip6tables -t nat -I PREROUTING -p udp --dport 53 -j DNAT --to $IPV6_LAN
+else
+    echo_date "IPv6 地址为空，跳过 NAT 拦截，建议配合 dnsmasq 屏蔽 AAAA 记录。"
+fi
 
-echo_date "======================= AI 助手 (OpenAI/Grok) 统一规则已生效 ======================"
+echo_date "======================= 所有防火墙规则与分流设置部署完成======================= "
