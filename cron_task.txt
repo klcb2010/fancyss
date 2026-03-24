@@ -50,20 +50,29 @@ echo_date "======================= 定时任务及后台脚本启动完毕 =====
 
 # 配置DDNSh和AI规则
 # ======================= WebDAV 端口放行与限流 (2525/8181) =======================
-echo_date "正在部署 WebDAV 安全规则 (2525/8181)"
+echo_date "正在部署 WebDAV 安全规则"
 
-# 清理旧规则防止重复注入 (梅林环境下建议先删后插)
-iptables -D INPUT -p tcp --dport 2525 -j ACCEPT 2>/dev/null
-iptables -D INPUT -p tcp --dport 2525 -m state --state NEW -m recent --set 2>/dev/null
-iptables -D INPUT -p tcp --dport 2525 -m state --state NEW -m recent --update --seconds 60 --hitcount 10 -j DROP 2>/dev/null
+# ======================= WebDAV 2525 精准重置 =======================
+echo_date "正在重置 2525 端口规则，清理冗余."
 
-# 正确的插入顺序：限流规则在前，放行在后
+# 1. 暴力清理所有涉及 2525 的规则，防止规则堆叠
+# 使用循环删除，直到没有任何关于 2525 的规则为止
+while iptables -D INPUT -p tcp --dport 2525 -j ACCEPT 2>/dev/null; do :; done
+while iptables -D INPUT -p tcp --dport 2525 -m state --state NEW -m recent --set 2>/dev/null; do :; done
+while iptables -D INPUT -p tcp --dport 2525 -m state --state NEW -m recent --update --seconds 60 --hitcount 10 -j DROP 2>/dev/null; do :; done
+
+# 2. 重新按“金字塔”顺序注入到顶部
+# 第3层：放行（只有经过前两层考验的包才能到这里）
 iptables -I INPUT 1 -p tcp --dport 2525 -j ACCEPT
+# 第2层：拦截（超过频率的直接丢弃）
 iptables -I INPUT 1 -p tcp --dport 2525 -m state --state NEW -m recent --update --seconds 60 --hitcount 10 -j DROP
+# 第1层：登记（所有新连接都要先登记）
 iptables -I INPUT 1 -p tcp --dport 2525 -m state --state NEW -m recent --set
 
-# IPv6 8181 放行
+# WEBDAV保持幂等注入即可
 ip6tables -C INPUT -p tcp --dport 8181 -j ACCEPT 2>/dev/null || ip6tables -I INPUT -p tcp --dport 8181 -j ACCEPT
+
+echo_date "======================= DDNS端口限流与放行规则已重新校准======================= "
 
 # ======================= AI 助手 IP 强制分流 (ChatGPT/Grok) =======================
 echo_date "正在注入 OpenAI 和 Grok 的强制代理 IP 规则"
@@ -76,14 +85,14 @@ for net in $CF_NETS $X_NETS; do
 done
 
 # ======================= 强制 IPv6 DNS 归位与补丁 =======================
-# 尝试获取 IPv6 地址，如果为空则跳过，防止命令报错
+#  尝试获取 IPv6 地址，如果为空则跳过，防止命令报错
 IPV6_LAN=$(nvram get ipv6_lan_addr)
 if [ -n "$IPV6_LAN" ]; then
-    echo_date "检测到 IPv6 地址，执行 DNS 劫持"
+    echo_date "======================= 检测到 IPv6 地址，执行 DNS 劫持======================= "
     ip6tables -t nat -D PREROUTING -p udp --dport 53 -j DNAT --to $IPV6_LAN 2>/dev/null
     ip6tables -t nat -I PREROUTING -p udp --dport 53 -j DNAT --to $IPV6_LAN
 else
-    echo_date "IPv6 地址为空，跳过 NAT 拦截，建议配合 dnsmasq 屏蔽 AAAA 记录。"
+    echo_date "======================= IPv6 地址为空，跳过 NAT 拦截，建议配合 dnsmasq 屏蔽 AAAA 记录======================= "
 fi
 
 echo_date "======================= 所有防火墙规则与分流设置部署完成======================= "
