@@ -5,7 +5,6 @@ ngrok.wang
 cm.steampowered.com
 steamserver.net
 steamcontent.com
-asuscomm.com
 binmt.cc
 rrcdnbf.com
 rrcdnbf2.com
