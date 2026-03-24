@@ -9,11 +9,16 @@ alias echo_date='echo 【$(TZ=UTC-8 date -R +%Y年%m月%d日\ %X)】:'
 MODEL=
 FW_TYPE_NAME=
 DIR=$(cd $(dirname $0); pwd)
+[ -f "${DIR}/scripts/ss_node_common.sh" ] && source "${DIR}/scripts/ss_node_common.sh"
 module=${DIR##*/}
 LINUX_VER=$(uname -r|awk -F"." '{print $1$2}')
 
 run_bg(){
 	env -i PATH=${PATH} "$@" >/dev/null 2>&1 &
+}
+
+report_install_migration_progress() {
+	echo_date "$1"
 }
 
 get_model(){
@@ -43,6 +48,68 @@ get_fw_type() {
 	fi
 }
 
+get_pkg_field_from_file() {
+	local file_path="$1"
+	local field="$2"
+	[ -f "${file_path}" ] || return 1
+	tr -d '\r' < "${file_path}" | grep -Eo "PKG_${field}=.+" | awk -F "=" '{print $2}' | sed 's/"//g' | sed -n '1p'
+}
+
+sync_pkg_meta_runtime() {
+	local pkg_file="$1"
+	local pkg_name=""
+	local pkg_arch=""
+	local pkg_type=""
+	local pkg_exta=""
+
+	pkg_name="$(get_pkg_field_from_file "${pkg_file}" "NAME")"
+	pkg_arch="$(get_pkg_field_from_file "${pkg_file}" "ARCH")"
+	pkg_type="$(get_pkg_field_from_file "${pkg_file}" "TYPE")"
+	pkg_exta="$(get_pkg_field_from_file "${pkg_file}" "EXTA")"
+
+	[ -n "${pkg_name}" ] && dbus set ss_basic_pkg_name="${pkg_name}"
+	[ -n "${pkg_arch}" ] && dbus set ss_basic_pkg_arch="${pkg_arch}"
+	[ -n "${pkg_type}" ] && dbus set ss_basic_pkg_type="${pkg_type}"
+	dbus set ss_basic_pkg_exta="${pkg_exta}"
+
+	if [ -n "${pkg_arch}" ];then
+		echo "${pkg_arch}" > /koolshare/.valid
+	fi
+
+	if [ -f "/koolshare/webs/Module_shadowsocks.asp" ];then
+		[ -n "${pkg_name}" ] && sed -i "s/^var PKG_NAME=.*/var PKG_NAME=\"${pkg_name}\"/" /koolshare/webs/Module_shadowsocks.asp
+		[ -n "${pkg_arch}" ] && sed -i "s/^var PKG_ARCH=.*/var PKG_ARCH=\"${pkg_arch}\"/" /koolshare/webs/Module_shadowsocks.asp
+		[ -n "${pkg_type}" ] && sed -i "s/^var PKG_TYPE=.*/var PKG_TYPE=\"${pkg_type}\"/" /koolshare/webs/Module_shadowsocks.asp
+		sed -i "s/^var PKG_EXTA=.*/var PKG_EXTA=\"${pkg_exta}\"/" /koolshare/webs/Module_shadowsocks.asp
+	fi
+}
+
+version_to_num() {
+	local version="$1"
+	echo "${version}" | awk -F'[^0-9]+' '{printf("%d%03d%03d\n", $1+0, $2+0, $3+0)}'
+}
+
+version_lt() {
+	local left="$1"
+	local right="$2"
+	[ -n "${left}" ] || return 0
+	[ "$(version_to_num "${left}")" -lt "$(version_to_num "${right}")" ]
+}
+
+cleanup_legacy_smartdns_user_configs() {
+	local old_ver="$1"
+	[ -n "${old_ver}" ] || return 0
+	if ! version_lt "${old_ver}" "3.5.6"; then
+		return 0
+	fi
+	if [ -n "$(find /koolshare/ss/rules -maxdepth 1 -type f -name 'smartdns_smrt_*_user.conf' 2>/dev/null)" ];then
+		echo_date "检测到旧版 fancyss（${old_ver}）的自定义 smartdns 配置。"
+		echo_date "3.5.6 起 smartdns 改为由 fancyss 按前端设置动态生成配置。"
+		echo_date "旧版 smartdns 自定义模板将被移除，升级后请在 smartdns 的 chn / gfw DNS 选择界面重新调整上游。"
+		find /koolshare/ss/rules -maxdepth 1 -type f -name 'smartdns_smrt_*_user.conf' -delete 2>/dev/null
+	fi
+}
+
 platform_test(){
 	# 带koolshare文件夹，有httpdb和skipdb的固件位支持固件
 	if [ -d "/koolshare" -a -x "/koolshare/bin/httpdb" -a -x "/usr/bin/skipd" ];then
@@ -55,9 +122,9 @@ platform_test(){
 	PKG_ARCH=$(cat ${DIR}/.valid)
 	ROT_ARCH=$(uname -m)
 	KEL_VERS=$(uname -r)
-	PKG_NAME=$(cat /tmp/shadowsocks/webs/Module_shadowsocks.asp | tr -d '\r' | grep -Eo "PKG_NAME=.+" | awk -F"=" '{print $2}' | sed 's/"//g')
-	PKG_ARCH=$(cat /tmp/shadowsocks/webs/Module_shadowsocks.asp | tr -d '\r' | grep -Eo "PKG_ARCH=.+" | awk -F"=" '{print $2}' | sed 's/"//g')
-	PKG_TYPE=$(cat /tmp/shadowsocks/webs/Module_shadowsocks.asp | tr -d '\r' | grep -Eo "PKG_TYPE=.+" | awk -F"=" '{print $2}' | sed 's/"//g')
+	PKG_NAME=$(get_pkg_field_from_file /tmp/shadowsocks/webs/Module_shadowsocks.asp "NAME")
+	PKG_ARCH=$(get_pkg_field_from_file /tmp/shadowsocks/webs/Module_shadowsocks.asp "ARCH")
+	PKG_TYPE=$(get_pkg_field_from_file /tmp/shadowsocks/webs/Module_shadowsocks.asp "TYPE")
 
 	# fancyss_arm
 	if [ "${PKG_ARCH}" == "arm" ]; then
@@ -514,16 +581,26 @@ set_skin(){
 exit_install(){
 	local state=$1
 	local PKG_ARCH=$(cat ${DIR}/.valid)
+	cleanup_install_tmp
 	case $state in
 		1)
 			echo_date "fancyss项目地址：https://github.com/hq450/fancyss"
 			echo_date "退出安装！"
-			rm -rf /tmp/${module}* >/dev/null 2>&1
 			exit 1
 			;;
 		0|*)
-			rm -rf /tmp/${module}* >/dev/null 2>&1
 			exit 0
+			;;
+	esac
+}
+
+cleanup_install_tmp(){
+	# 仅清理当前安装脚本所在的 /tmp 解压目录，避免误删 /tmp 下其它文件。
+	case "${DIR}" in
+		/tmp/*)
+			if [ "${DIR}" != "/tmp" -a "${DIR}" != "/tmp/" ];then
+				rm -rf "${DIR}" >/dev/null 2>&1
+			fi
 			;;
 	esac
 }
@@ -542,12 +619,112 @@ __get_name_by_type() {
 	esac
 }
 
+append_backup_nodes_schema2(){
+	local backup_file="$1"
+	local order_csv next_id max_id reserved_max imported_order="" node_json node_id stored_json
+
+	[ -f "${backup_file}" ] || return 1
+	order_csv=$(dbus get fss_node_order)
+	next_id=$(dbus get fss_node_next_id)
+	[ -n "${next_id}" ] || next_id=1
+	max_id=$(printf '%s' "${order_csv}" | tr ',' '\n' | sed '/^$/d' | sort -n | tail -n1)
+	[ -n "${max_id}" ] || max_id=0
+	reserved_max=$(jq -r '._id // empty' "${backup_file}" 2>/dev/null | sed '/^$/d' | sort -n | tail -n1)
+	if [ -n "${reserved_max}" ] && [ "${reserved_max}" -gt "${max_id}" ] 2>/dev/null;then
+		max_id="${reserved_max}"
+	fi
+	if [ "${next_id}" -le "${max_id}" ] 2>/dev/null;then
+		next_id=$((max_id + 1))
+	fi
+
+	while IFS= read -r node_json
+	do
+		[ -z "${node_json}" ] && continue
+		node_json=$(printf '%s' "${node_json}" | jq -c . 2>/dev/null)
+		[ -z "${node_json}" ] && continue
+		node_id=$(printf '%s' "${node_json}" | jq -r '._id // empty')
+		if [ -z "${node_id}" ];then
+			node_id="${next_id}"
+			next_id=$((next_id + 1))
+		fi
+		stored_json=$(printf '%s' "${node_json}" | jq -c --arg id "${node_id}" '
+			with_entries(select(.value != "" and .value != null))
+			| del(._schema, ._rev, ._source, ._updated_at, ._migrated_from, .server_ip, .latency, .ping)
+			| if ((.type // "") == "4" and ((.xray_prot // "") == "")) then .xray_prot = "vless" else . end
+			| . + {
+				"_schema": 2,
+				"_id": $id,
+				"_rev": 1,
+				"_source": "lite-restore",
+				"_updated_at": (now | floor)
+			}
+		')
+		dbus set fss_node_${node_id}="$(fss_b64_encode "${stored_json}")"
+		imported_order="${imported_order}${imported_order:+,}${node_id}"
+		if [ "${node_id}" -gt "${max_id}" ] 2>/dev/null;then
+			max_id="${node_id}"
+		fi
+	done < "${backup_file}"
+
+	[ -z "${imported_order}" ] && return 1
+	if [ -n "${order_csv}" ];then
+		dbus set fss_node_order="${order_csv},${imported_order}"
+	else
+		dbus set fss_node_order="${imported_order}"
+	fi
+	dbus set fss_data_schema=2
+	dbus set fss_node_next_id="$((max_id + 1))"
+	[ -n "$(dbus get fss_node_current)" ] || dbus set fss_node_current="$(printf '%s' "${imported_order}" | cut -d ',' -f 1)"
+	return 0
+}
+
 full2lite(){
 	# 当从full版本切换到lite版本的时候，需要将naive、tuic节点进行备份后，从节点列表里删除相应节点
 	# 1. 将所有不支持的节点数据储存到备份文件
 	local tmp_kv="/tmp/fancyss_kv.txt"
 	local backup_dir="/koolshare/configs/fanyss"
 	local backup_file="${backup_dir}/fancyss_kv.json"
+	if [ "$(fss_detect_storage_schema 2>/dev/null)" = "2" ];then
+		local remove_flag=0
+		local keep_order=""
+		local max_keep=0
+		mkdir -p "${backup_dir}"
+		: > "${backup_file}"
+		for NU in $(fss_list_node_ids)
+		do
+			local TY=$(fss_get_node_field_plain "${NU}" type)
+			case "${TY}" in
+			6|7)
+				echo_date "备份并从节点列表里移除第$NU个$(__get_name_by_type ${TY})节点：【$(fss_get_node_field_plain "${NU}" name)】"
+				fss_v2_get_node_json_by_id "${NU}" | jq -c '
+					with_entries(select(.value != "" and .value != null))
+					| del(._schema, ._rev, ._source, ._updated_at, ._migrated_from, .server_ip, .latency, .ping)
+				' >> "${backup_file}"
+				dbus remove fss_node_${NU}
+				remove_flag=1
+				;;
+			*)
+				keep_order="${keep_order}${keep_order:+,}${NU}"
+				if [ "${NU}" -gt "${max_keep}" ] 2>/dev/null;then
+					max_keep="${NU}"
+				fi
+				;;
+			esac
+		done
+		if [ "${remove_flag}" != "1" ];then
+			rm -rf "${backup_file}"
+			return
+		fi
+		[ -n "${keep_order}" ] && dbus set fss_node_order="${keep_order}" || dbus remove fss_node_order
+		dbus set fss_data_schema=2
+		dbus set fss_node_next_id="$((max_keep + 1))"
+		if [ -s "${backup_file}" ];then
+			echo_date "📁lite版本不支持的节点成功备份到${backup_file}"
+		else
+			rm -rf "${backup_file}"
+		fi
+		return
+	fi
 	dbus list ssconf_basic_ | grep -E "_[0-9]+=" | sed '/^ssconf_basic_.\+_[0-9]\+=$/d' | sed 's/^ssconf_basic_//' >"${tmp_kv}"
 	NODES_INFO=$(sed -n 's/type_\([0-9]\+=[67]\)/\1/p' "${tmp_kv}" | sort -n)
 	if [ -z "${NODES_INFO}" ];then
@@ -586,6 +763,13 @@ lite2full(){
 	fi
 	
 	echo_date "检测到上次安装fancyss lite备份的不支持节点，准备恢复！"
+	if [ "$(fss_detect_storage_schema 2>/dev/null)" = "2" ];then
+		append_backup_nodes_schema2 "/koolshare/configs/fanyss/fancyss_kv.json"
+		echo_date "节点恢复成功！"
+		sync
+		rm -rf /koolshare/configs/fanyss/fancyss_kv.json
+		return
+	fi
 	local file_name=fancyss_nodes_restore
 	cat > /tmp/${file_name}.sh <<-EOF
 		#!/bin/sh
@@ -611,6 +795,30 @@ lite2full(){
 check_empty_node(){
 	# 从full版本切换为lite版本后，部分不支持节点将会被删除，比如naive，tuic，hysteria2节点
 	# 如果安装lite版本的时候，full版本使用的是以上节点，则这些节点可能是空的，此时应该切换为下一个不为空的节点，或者关闭插件（没有可用节点的情况）
+	if [ "$(fss_detect_storage_schema 2>/dev/null)" = "2" ];then
+		local NODES_SEQ=$(fss_list_node_ids)
+		if [ -z "${NODES_SEQ}" ];then
+			dbus set ss_basic_enable="0"
+			ss_basic_enable="0"
+			return 0
+		fi
+
+		local CURR_NODE=$(fss_get_current_node_id)
+		if [ -z "${CURR_NODE}" ];then
+			dbus set ss_basic_enable="0"
+			ss_basic_enable="0"
+			return 0
+		fi
+
+		local NODE_FIRST=$(printf '%s\n' "${NODES_SEQ}" | sed -n '1p')
+		local CURR_TYPE=$(fss_get_node_field_plain "${CURR_NODE}" type)
+		if [ -z "${CURR_TYPE}" ];then
+			echo_date "检测到当前节点为空，调整默认节点为节点列表内的第一个节点!"
+			dbus set fss_node_current=${NODE_FIRST}
+			return 0
+		fi
+		return 0
+	fi
 	local NODES_SEQ=$(dbus list ssconf_basic_name_ | sed -n 's/^.*_\([0-9]\+\)=.*/\1/p' | sort -n)
 	if [ -z "${NODES_SEQ}" ];then
 		# 没有任何节点，可能是新安装插件，可能是full安装lite被删光了
@@ -671,10 +879,13 @@ check_device(){
 install_now(){
 	# default value
 	local PLVER=$(cat ${DIR}/ss/version)
+	local OLD_VER="$(dbus get ss_basic_version_local)"
+	[ -z "${OLD_VER}" -a -f "/koolshare/ss/version" ] && OLD_VER="$(cat /koolshare/ss/version 2>/dev/null)"
 
 	#local PKG_ARCH_OLD=$(cat /koolshare/webs/Module_shadowsocks.asp 2>/dev/null | grep -Eo "PKG_ARCH=.+" | awk -F"=" '{print $2}' |sed 's/"//g')
 	#local PKG_TYPE_OLD=$(cat /koolshare/webs/Module_shadowsocks.asp 2>/dev/null | grep -Eo "PKG_TYPE=.+" | awk -F"=" '{print $2}' |sed 's/"//g')
 	local TITLE_OLD=$(dbus get softcenter_module_shadowsocks_title)
+	local PKG_TYPE_OLD=""
 
 	# print message
 	local TITLE_NEW="科学上网 ${PKG_TYPE}"
@@ -697,9 +908,10 @@ install_now(){
 
 	# check old version type
 	if [ -f "/koolshare/webs/Module_shadowsocks.asp" ];then
-		local IS_LITE=$(cat /koolshare/webs/Module_shadowsocks.asp | grep "lite")
+		PKG_TYPE_OLD="$(get_pkg_field_from_file /koolshare/webs/Module_shadowsocks.asp "TYPE")"
+		[ -z "${PKG_TYPE_OLD}" ] && PKG_TYPE_OLD="$(dbus get ss_basic_pkg_type)"
 		# 已经安装，此次为升级
-		if [ -n "${IS_LITE}" ];then
+		if [ "${PKG_TYPE_OLD}" = "lite" ];then
 			OLD_TYPE="lite"
 		else
 			OLD_TYPE="full"
@@ -724,6 +936,7 @@ install_now(){
 
 	# check empty node
 	check_empty_node
+	cleanup_legacy_smartdns_user_configs "${OLD_VER}"
 
 	# remove some file first
 	echo_date "清理旧文件"
@@ -932,6 +1145,7 @@ install_now(){
 	
 	echo_date "复制相关的网页文件！"
 	cp -rf /tmp/shadowsocks/webs/* /koolshare/webs/
+	sync_pkg_meta_runtime /tmp/shadowsocks/webs/Module_shadowsocks.asp
 	local _LAYJS_MD5=$(md5sum /koolshare/res/layer/layer.js | awk '{print $1}')
 	if [ -f "/koolshare/res/layer/layer.js" -a "${_LAYJS_MD5}" == "9d72838d6f33e45f058cc1fa00b7a5c7" ];then
 		mv -f /tmp/shadowsocks/res/layer.js /koolshare/res/layer/
@@ -999,13 +1213,16 @@ install_now(){
 	[ -z "${ss_basic_nocdnscheck}" ] && dbus set ss_basic_nocdnscheck=1
 	[ -z "${ss_basic_nofdnscheck}" ] && dbus set ss_basic_nofdnscheck=1
 	[ -z "${ss_basic_noruncheck}" ] && dbus set ss_basic_noruncheck=1
-	
+	[ -z "${ss_basic_qrcode}" ] && dbus set ss_basic_qrcode=1
+
 	[ -z "${ss_basic_chng_xact}" ] && dbus set ss_basic_chng_xact=0
 	[ -z "${ss_basic_chng_xgt}" ] && dbus set ss_basic_chng_xgt=1
 	[ -z "${ss_basic_chng_xmc}" ] && dbus set ss_basic_chng_xmc=0
 	
 	# others
-	[ -z "$(dbus get ss_acl_default_mode)" ] && dbus set ss_acl_default_mode=2
+	fss_cleanup_acl_default_port_keys >/dev/null 2>&1
+	[ -z "$(dbus get ss_acl_default_mode)" ] && dbus set ss_acl_default_mode=follow
+	[ -z "$(dbus get ss_acl_default_mode_format)" ] && dbus set ss_acl_default_mode_format=2
 	[ -z "$(dbus get ss_acl_default_udp)" ] && dbus set ss_acl_default_udp=0
 	[ -z "$(dbus get ss_acl_default_quic)" ] && dbus set ss_acl_default_quic=1
 	[ -z "$(dbus get ss_acl_default_ports)" ] && dbus set ss_acl_default_ports="22,80,443,8080,8443"
@@ -1059,6 +1276,23 @@ install_now(){
 		dbus set ss_basic_score=0
 		ss_basic_score=0
 	fi
+
+	# 节点存储自动迁移：升级到支持 schema 2 的版本后，直接切换到新结构。
+	export PATH=/koolshare/bin:${PATH}
+	fss_auto_migrate_if_needed 1 report_install_migration_progress
+	case "$?" in
+	0)
+		if [ "$(dbus get fss_data_schema)" = "2" ];then
+			echo_date "节点数据已经升级到 schema 2 存储。"
+		fi
+		;;
+	2)
+		:
+		;;
+	*)
+		echo_date "节点数据升级到 schema 2 失败，保留旧版节点结构。"
+		;;
+	esac
 
 	# dbus value
 	echo_date "设置插件安装参数..."
