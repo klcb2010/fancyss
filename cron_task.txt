@@ -60,7 +60,7 @@ for net in $CF_NETS $X_NETS; do
     ipset -! add gfwlist $net 2>/dev/null
 done
 
-# IPv6 DNS 劫持逻辑
+# IPv6 DNS 劫持逻辑 (修正版：避开油管 QUIC 干扰)
 IPV6_LAN=$(nvram get ipv6_lan_addr)
 if [ -z "$IPV6_LAN" ]; then
     # 如果 nvram 为空，尝试实时抓取一次 br0 地址
@@ -68,9 +68,13 @@ if [ -z "$IPV6_LAN" ]; then
 fi
 
 if [ -n "$IPV6_LAN" ]; then
-    echo_date "======================= 检测到 IPv6: $IPV6_LAN，执行劫持"
-    ip6tables -t nat -D PREROUTING -p udp --dport 53 -j DNAT --to "$IPV6_LAN" 2>/dev/null
-    ip6tables -t nat -I PREROUTING -p udp --dport 53 -j DNAT --to "$IPV6_LAN"
+    echo_date "======================= 检测到 IPv6: $IPV6_LAN，执行【精准】劫持"
+    
+    # 【核心修正点 1】：使用 while 循环彻底清理旧规则，防止规则堆叠导致油管卡死
+    while ip6tables -t nat -D PREROUTING -p udp --dport 53 -j DNAT --to "$IPV6_LAN" 2>/dev/null; do :; done
+    
+    # 【核心修正点 2】：增加 -m udp 显式模块匹配，确保只劫持 DNS (53)，不干扰油管视频流 (443)
+    ip6tables -t nat -I PREROUTING -p udp -m udp --dport 53 -j DNAT --to "$IPV6_LAN"
 else
     echo_date "======================= IPv6 地址为空，请确保 dnsmasq 屏蔽了 AAAA"
 fi
