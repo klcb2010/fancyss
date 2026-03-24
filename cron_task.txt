@@ -18,7 +18,7 @@ mkdir -p /jffs/scripts
 cru a ss_update_daily "30 4 * * * sh /jffs/.koolshare/scripts/ss_update.sh update >> /jffs/scripts/ss_update.log 2>&1"
 
 # 2. 注入日志和缓存清理任务
-cru a clean_logs "0 3 * * * /jffs/scripts/clean_cron_logs.sh >> /jffs/scripts/clean_cron_logs.txt 2>&1"
+cru a clean_logs "0 3 * * * /jffs/scripts/clean_logs.sh >> /jffs/scripts/clean_logs.txt 2>&1"
 cru a rclone_cache_clean "0 5 * * * [ -d /tmp/mnt/SF/entware/var/cache/rclone ] && rm -rf /tmp/mnt/SF/entware/var/cache/rclone/*"
 
 # 3. 运行脚本注入公钥区域助手和webdav
