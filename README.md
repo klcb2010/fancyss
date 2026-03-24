@@ -1,7 +1,8 @@
 # DDNS设定相关 让DDNS有优先析IPv6
 - 路由器 系统记录  IPv6 复制地址 回到插件进行下一步
 - DNS设定 自定义dnsmasq 填写 address=/DDNS名称.asuscomm.com/IPv6地址
-- 保存后 重启dnsmasq即可
+- 保存后 重启dnsmasq
+- SSH测试输入 nslookup DDNS名称.asuscomm.com 8.8.8.8 返回结果Address 1: 是ipv6地址 表示设定有效
 
 #   本仓库修改点如下
 
