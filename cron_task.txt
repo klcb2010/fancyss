@@ -40,41 +40,52 @@ fi
 
 #!/bin/sh
 
+# 定义输出函数（防止某些环境 echo_date 未定义导致脚本中断）
+alias echo_date='echo 【$(date +%H:%M:%S)】'
+
 echo_date "======================= 自定义防火墙启动 ======================="
 
 # --- 第一部分：IPv4 端口清理与重注 (2525 WebDAV) ---
-# 暴力清理所有旧的 2525 规则（不管它有多少条，全部循环删干净）
 while iptables -D INPUT -p tcp --dport 2525 -j ACCEPT 2>/dev/null; do :; done
 while iptables -D INPUT -p tcp --dport 2525 -m state --state NEW -m recent --update --seconds 60 --hitcount 10 -j DROP 2>/dev/null; do :; done
 while iptables -D INPUT -p tcp --dport 2525 -m state --state NEW -m recent --set 2>/dev/null; do :; done
 
-# 重新注入唯一规则 (按照作者建议的安全排序：SET -> DROP -> ACCEPT)
 iptables -I INPUT 1 -p tcp --dport 2525 -j ACCEPT
 iptables -I INPUT 1 -p tcp --dport 2525 -m state --state NEW -m recent --update --seconds 60 --hitcount 10 -j DROP
 iptables -I INPUT 1 -p tcp --dport 2525 -m state --state NEW -m recent --set
 echo "✅ IPv4 2525 规则已重置（唯一）"
 
 # --- 第二部分：IPv6 端口清理与重注 (8181 管理) ---
-# 暴力清理 IPv6 侧的 8181
 while ip6tables -D INPUT -p tcp --dport 8181 -j ACCEPT 2>/dev/null; do :; done
-
-# 重新注入唯一规则
 ip6tables -I INPUT 1 -p tcp --dport 8181 -j ACCEPT
 echo "✅ IPv6 8181 规则已重置（唯一）"
 
-# --- 第三部分：AI 分流补漏 (兼容官方版) ---
-# 清理旧的分流重定向
+# --- 第三部分：AI 分流补漏 (核心修复区) ---
 while iptables -t nat -D PREROUTING -p tcp -m set --match-set ai_bypass dst -j REDIRECT 2>/dev/null; do :; done
 
-# 注入补漏 IP 段 (ipset 本身自带 -! 参数防止重复，所以不用 while 删)
 ipset -N ai_bypass hash:net 2>/dev/null
 AI_NETS="104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 104.244.42.0/24 192.133.76.0/22 199.16.156.0/22 199.59.148.0/22 204.92.112.0/22 69.195.160.0/19"
 for net in $AI_NETS; do
     ipset -! add ai_bypass $net 2>/dev/null
 done
 
-# 获取端口并挂载在 PREROUTING 末尾 (兼容官方规则优先)
-FINAL_PORT=$(nvram get ss_status_proxy_port || echo "3333")
-iptables -t nat -A PREROUTING -p tcp -m set --match-set ai_bypass dst -j REDIRECT --to-ports "$FINAL_PORT"
+# 【核心修复】：三重保险获取端口
+# 1. 尝试获取端口，并剔除可能存在的不可见字符
+RAW_PORT=$(nvram get ss_status_proxy_port | tr -d '[:space:]')
 
-echo_date "=======================  自定义防火墙完毕 ======================="
+# 2. 逻辑判断：如果为空、或者是 0，则强制使用 3333
+if [ -z "$RAW_PORT" ] || [ "$RAW_PORT" = "0" ]; then
+    FINAL_PORT="3333"
+else
+    FINAL_PORT="$RAW_PORT"
+fi
+
+# 3. 最终执行检查：只有当端口是纯数字时才执行，防止注入攻击
+if echo "$FINAL_PORT" | grep -q '^[0-9]\+$'; then
+    iptables -t nat -A PREROUTING -p tcp -m set --match-set ai_bypass dst -j REDIRECT --to-ports "$FINAL_PORT"
+    echo "✅ AI 分流已挂载至端口: $FINAL_PORT"
+else
+    echo "❌ 严重错误: 获取到的端口号 [$FINAL_PORT] 非合法数字，跳过分流挂载"
+fi
+
+echo_date "======================= 自定义防火墙完毕 ======================="
