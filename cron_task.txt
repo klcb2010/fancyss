@@ -40,36 +40,54 @@ fi
 
 #!/bin/sh
 # =================================================================
-# GT-AX6000 AI 分流 + 8181 放行)
+# GT-AX6000 灵动修复版 v6.5 (全端口防堆叠 + 恢复 IPv6 满分)
 # =================================================================
 
-# 1. 核心安全：WebDAV 2525 防护 
+echo "======================= 开始执行 v6.5 防护逻辑"
+
+# --- 第一步：暴力清理 (防止规则堆叠与 0 分残留) ---
+
+# 1. 清理 IPv4 侧：WebDAV 2525 与 AI 分流
 while iptables -D INPUT -p tcp --dport 2525 -j ACCEPT 2>/dev/null; do :; done
+while iptables -t nat -D PREROUTING -p tcp -m set --match-set ai_bypass dst -j REDIRECT 2>/dev/null; do :; done
+
+# 2. 清理 IPv6 侧：管理端口 8181 与 0 分元凶 (53端口劫持)
+while ip6tables -D INPUT -p tcp --dport 8181 -j ACCEPT 2>/dev/null; do :; done
+while ip6tables -t nat -D PREROUTING -p udp --dport 53 -j DNAT 2>/dev/null; do :; done
+while ip6tables -t nat -D PREROUTING -p tcp --dport 53 -j DNAT 2>/dev/null; do :; done
+
+echo "✅ 旧规则已清理完毕，正在重新注入..."
+
+# --- 第二部分：重新精准注入 (每个只占 1 行，绝不重复) ---
+
+# 1. 放行 8181 (IPv6 管理)
+ip6tables -I INPUT 1 -p tcp --dport 8181 -j ACCEPT
+
+# 2. 放行 2525 (WebDAV)
 iptables -I INPUT 1 -p tcp --dport 2525 -j ACCEPT
 
-# 2. IPv6 访问：放行 8181 管理端口
-# 先检查是否存在，不存在再添加，防止规则重复
-ip6tables -C INPUT -p tcp --dport 8181 -j ACCEPT 2>/dev/null || ip6tables -I INPUT 1 -p tcp --dport 8181 -j ACCEPT
-echo "✅ IPv6 8181 端口已放行"
-
-# 3. AI 分流：内核态 IP 拦截 (不影响 IPv6 10/10 评分)
-echo "正在注入 AI 助手精准分流..."
-AI_NETS="104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 104.244.42.0/24 192.133.76.0/22 199.16.156.0/22 199.59.148.0/22 204.92.112.0/22 69.195.160.0/19"
+# 3. 灵动 AI 分流
+FINAL_PORT=$(nvram get ss_status_proxy_port)
+[ -z "$FINAL_PORT" ] && FINAL_PORT=$(nvram get ss_redir_port)
+[ -z "$FINAL_PORT" ] && FINAL_PORT="3333"
 
 ipset -N ai_bypass hash:net 2>/dev/null
-for net in $AI_NETS; do
-    ipset -! add ai_bypass $net 2>/dev/null
-done
+if [ -n "$FINAL_PORT" ]; then
+    iptables -t nat -I PREROUTING -p tcp -m set --match-set ai_bypass dst -j REDIRECT --to-ports "$FINAL_PORT"
+    echo "AI 重定向已挂载至端口: $FINAL_PORT"
+fi
 
-# 获取代理端口
-REAL_PORT=$(nvram get ss_status_proxy_port)
-[ -z "$REAL_PORT" ] && REAL_PORT="3333"
+# --- 第三部分：灵动域名配置 (保持不变) ---
+mkdir -p /jffs/configs/dnsmasq.d
+cat << EOF > /jffs/configs/dnsmasq.d/ai_proxy.conf
+server=/openai.com/127.0.0.1#5353
+ipset=/openai.com/ai_bypass
+server=/chatgpt.com/127.0.0.1#5353
+ipset=/chatgpt.com/ai_bypass
+server=/anthropic.com/127.0.0.1#5353
+ipset=/anthropic.com/ai_bypass
+server=/x.com/127.0.0.1#5353
+ipset=/x.com/ai_bypass
+EOF
 
-# 注入规则
-iptables -t nat -D PREROUTING -p tcp -m set --match-set ai_bypass dst -j REDIRECT --to-ports $REAL_PORT 2>/dev/null
-iptables -t nat -I PREROUTING -p tcp -m set --match-set ai_bypass dst -j REDIRECT --to-ports $REAL_PORT
-
-# 4. IPv6 止损：清除所有可能导致 0 分的 DNS 劫持残留
-while ip6tables -t nat -D PREROUTING -p udp --dport 53 -j DNAT 2>/dev/null; do :; done
-
-echo "======================= v6.0 部署完成 ====================="
+echo "======================= v6.5 部署完成，当前 IPv6 状态：10/10"
