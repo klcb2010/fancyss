@@ -38,47 +38,59 @@ else
     echo $! > "$DDNS_PID"
 fi
 
-# ======================= 4.0 防火墙安全与分流逻辑 =======================
+# ======================= 4.0 防火墙安全与分流逻辑 (稳定增强版) =======================
 echo_date "======================= 正在部署 WebDAV 安全规则"
-# 2525 端口暴力重置与精准注入
-while iptables -D INPUT -p tcp --dport 2525 -j ACCEPT 2>/dev/null; do :; done
-while iptables -D INPUT -p tcp --dport 2525 -m state --state NEW -m recent --set 2>/dev/null; do :; done
-while iptables -D INPUT -p tcp --dport 2525 -m state --state NEW -m recent --update --seconds 60 --hitcount 10 -j DROP 2>/dev/null; do :; done
+# 1. WebDAV 2525 端口防护 (先删再加，确保规则在最前且不重复)
+iptables -D INPUT -p tcp --dport 2525 -j ACCEPT 2>/dev/null
+iptables -D INPUT -p tcp --dport 2525 -m state --state NEW -m recent --update --seconds 60 --hitcount 10 -j DROP 2>/dev/null
+iptables -D INPUT -p tcp --dport 2525 -m state --state NEW -m recent --set 2>/dev/null
 
 iptables -I INPUT 1 -p tcp --dport 2525 -j ACCEPT
 iptables -I INPUT 1 -p tcp --dport 2525 -m state --state NEW -m recent --update --seconds 60 --hitcount 10 -j DROP
 iptables -I INPUT 1 -p tcp --dport 2525 -m state --state NEW -m recent --set
 
-# 8181 IPv6 放行
+# 2. 8181 IPv6 放行
 ip6tables -C INPUT -p tcp --dport 8181 -j ACCEPT 2>/dev/null || ip6tables -I INPUT -p tcp --dport 8181 -j ACCEPT
 
-# AI 分流注入
-echo_date "======================= 正在注入 AI 助手代理规则"
-CF_NETS="173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/12 172.64.0.0/13 131.0.72.0/22"
+# 3. AI 分流注入 (独立 ipset 模式，不干扰国内流量)
+echo_date "======================= 正在注入 AI 助手独立分流规则"
+
+# 动态抓取代理端口，增加兜底值防止空参报错
+PROXY_PORT=$(nvram get ss_status_proxy_port)
+[ -z "$PROXY_PORT" ] && PROXY_PORT=$(nvram get ss_redir_port)
+FINAL_PORT=${PROXY_PORT:-3333}
+
+# 使用作者建议的官方精准网段
+CF_NETS="104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22"
 X_NETS="104.244.42.0/24 192.133.76.0/22 199.16.156.0/22 199.59.148.0/22 204.92.112.0/22 69.195.160.0/19"
 
-ipset -N gfwlist hash:net 2>/dev/null
+# 创建并填充 ipset
+ipset -N ai_bypass hash:net 2>/dev/null
 for net in $CF_NETS $X_NETS; do
-    ipset -! add gfwlist $net 2>/dev/null
+    ipset -! add ai_bypass $net 2>/dev/null
 done
 
-# IPv6 DNS 劫持逻辑 (修正版：避开油管 QUIC 干扰)
+# 注入重定向规则 (先删一次防堆叠，带引号保护变量)
+iptables -t nat -D PREROUTING -p tcp -m set --match-set ai_bypass dst -j REDIRECT --to-ports "$FINAL_PORT" 2>/dev/null
+iptables -t nat -I PREROUTING -p tcp -m set --match-set ai_bypass dst -j REDIRECT --to-ports "$FINAL_PORT"
+
+# 4. IPv6 DNS 劫持逻辑 (适配 102.6_0 固件)
+echo_date "======================= 正在处理 IPv6 DNS 劫持"
 IPV6_LAN=$(nvram get ipv6_lan_addr)
-if [ -z "$IPV6_LAN" ]; then
-    # 如果 nvram 为空，尝试实时抓取一次 br0 地址
-    IPV6_LAN=$(ip -6 addr show br0 | grep "global" | awk '{print $2}' | cut -d/ -f1 | head -n1)
-fi
+# Fallback: 如果 nvram 变量为空，实时抓取 br0 地址
+[ -z "$IPV6_LAN" ] && IPV6_LAN=$(ip -6 addr show br0 | grep "global" | awk '{print $2}' | cut -d/ -f1 | head -n1)
 
 if [ -n "$IPV6_LAN" ]; then
-    echo_date "======================= 检测到 IPv6: $IPV6_LAN，执行【精准】劫持"
+    echo_date "检测到 IPv6: $IPV6_LAN，执行带标记劫持"
     
-    # 【核心修正点 1】：使用 while 循环彻底清理旧规则，防止规则堆叠导致油管卡死
-    while ip6tables -t nat -D PREROUTING -p udp --dport 53 -j DNAT --to "$IPV6_LAN" 2>/dev/null; do :; done
+    # 【安全清理】：不再使用 while 循环，改用精确匹配删除
+    # 这里的参数必须和下面的注入参数完全一致才能删除成功
+    ip6tables -t nat -D PREROUTING -p udp -m udp --dport 53 -j DNAT --to "$IPV6_LAN" -m comment --comment "CUSTOM_DNS_HIJACK" 2>/dev/null
     
-    # 【核心修正点 2】：增加 -m udp 显式模块匹配，确保只劫持 DNS (53)，不干扰油管视频流 (443)
-    ip6tables -t nat -I PREROUTING -p udp -m udp --dport 53 -j DNAT --to "$IPV6_LAN"
+    # 【精准注入】：增加备注标记，方便 check_status.sh 统计
+    ip6tables -t nat -I PREROUTING -p udp -m udp --dport 53 -j DNAT --to "$IPV6_LAN" -m comment --comment "CUSTOM_DNS_HIJACK"
 else
-    echo_date "======================= IPv6 地址为空，请确保 dnsmasq 屏蔽了 AAAA"
+    echo_date "警告：无法获取有效 IPv6 地址，跳过劫持"
 fi
 
 echo_date "======================= FancySS Mod 增强配置部署完成 ====================="
