@@ -39,61 +39,46 @@ else
 fi
 
 #!/bin/sh
-# =================================================================
-# GT-AX6000 深度自检脚本 v7.1 (针对 3.5.8 AAAA 过滤优化)
-# =================================================================
 
-echo "==================== [ GT-AX6000 环境监控 ] ===================="
+echo_date "======================= 启动 v7.5 优化部署"
 
-# 1. 核心端口与规则堆叠检查
-check_rule() {
-    local cmd="$1"
-    local port="$2"
-    local count=$($cmd -L INPUT -n --line-numbers | grep "$port" | wc -l)
-    if [ "$count" -eq 1 ]; then
-        echo "✅ $port 端口: 正常 (1条规则)"
-    elif [ "$count" -gt 1 ]; then
-        echo "❌ $port 端口: 堆叠堆死! (当前: $count 条，建议重启 nat-start)"
-    else
-        echo "❌ $port 端口: 缺失 (防火墙未放行)"
-    fi
-}
+# --- 第一部分：作者建议的“暴力清理” (防止规则堆叠) ---
+# 1. IPv4 侧清理 (2525 端口 & AI 分流)
+while iptables -D INPUT -p tcp --dport 2525 -j ACCEPT 2>/dev/null; do :; done
+while iptables -D INPUT -p tcp --dport 2525 -m state --state NEW -m recent --update --seconds 60 --hitcount 10 -j DROP 2>/dev/null; do :; done
+while iptables -D INPUT -p tcp --dport 2525 -m state --state NEW -m recent --set 2>/dev/null; do :; done
+while iptables -t nat -D PREROUTING -p tcp -m set --match-set ai_bypass dst -j REDIRECT 2>/dev/null; do :; done
 
-check_rule "iptables" "2525"
-check_rule "ip6tables" "8181"
+# 2. IPv6 侧清理 (8181 端口 & 0分元凶劫持)
+while ip6tables -D INPUT -p tcp --dport 8181 -j ACCEPT 2>/dev/null; do :; done
+while ip6tables -t nat -D PREROUTING -p udp --dport 53 -j DNAT 2>/dev/null; do :; done
 
-# 2. 灵动分流 (ipset) 活跃度监控
-AI_IP_COUNT=$(ipset list ai_bypass 2>/dev/null | grep -E "^[0-9]" | wc -l)
-if [ "$AI_IP_COUNT" -gt 0 ]; then
-    echo "✅ IPSet (ai_bypass): 激活 (捕获 $AI_IP_COUNT 个 IP)"
-else
-    echo "⚠️  IPSet (ai_bypass): 空闲 (尚未触发灵动分流)"
-fi
+# --- 第二部分：WebDAV 2525 端口安全排序 (SET -> DROP -> ACCEPT) ---
+# 这是作者强调的正确防护顺序，防止爆破的同时确保正常访问
+iptables -I INPUT 1 -p tcp --dport 2525 -j ACCEPT
+iptables -I INPUT 1 -p tcp --dport 2525 -m state --state NEW -m recent --update --seconds 60 --hitcount 10 -j DROP
+iptables -I INPUT 1 -p tcp --dport 2525 -m state --state NEW -m recent --set
 
-# 3. IPv6 AAAA 过滤坑位精准打击 (核心检查)
+# --- 第三部分：IPv6 8181 端口放行 ---
+ip6tables -I INPUT 1 -p tcp --dport 8181 -j ACCEPT
 
-# A. 物理链路测试
-if ping6 -c 1 -w 2 240c::6666 >/dev/null 2>&1; then
-    echo "✅ IPv6 物理链路: 畅通"
-else
-    echo "❌ IPv6 物理链路: 阻塞 (请检查 WAN 口 IPv6)"
-fi
+# --- 第四部分：AI 强制分流 (使用作者建议的 IP 段) ---
+AI_NETS="104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 104.244.42.0/24 192.133.76.0/22 199.16.156.0/22 199.59.148.0/22 204.92.112.0/22 69.195.160.0/19"
 
-# B. 插件 AAAA 过滤开关测试 (模拟请求 OpenAI)
-# 如果返回空或者 0.0.0.0，说明 3.5.8 的那个大坑还没填好
-AAAA_RES=$(nslookup -query=AAAA google.com 127.0.0.1 2>/dev/null | grep "has IPv6 address")
-if [ -z "$AAAA_RES" ]; then
-    echo "🚨 警报: 检测到 AAAA 记录被拦截!"
-    echo "   >>> 请检查插件面板: '过滤代理 AAAA 记录' 必须关闭！"
-else
-    echo "✅ AAAA 解析: 正常 "
-fi
+ipset -N ai_bypass hash:net 2>/dev/null
+for net in $AI_NETS; do
+    ipset -! add ai_bypass $net 2>/dev/null
+done
 
-# 4. 0分元凶：残留的 ip6tables DNAT 检查
-V6_DNAT_COUNT=$(ip6tables -t nat -L PREROUTING -n | grep "DNAT" | grep "53" | wc -l)
-if [ "$V6_DNAT_COUNT" -gt 0 ]; then
-    echo "🚨 发现残留劫持: $V6_DNAT_COUNT 条 (会导致 test-ipv6 报 0 分)"
-    echo "   >>> 解决: 请再次运行 v6.5 nat-start 脚本进行暴力清理"
-fi
+# 获取代理端口并注入重定向
+FINAL_PORT=$(nvram get ss_status_proxy_port)
+[ -z "$FINAL_PORT" ] && FINAL_PORT=$(nvram get ss_redir_port)
+[ -z "$FINAL_PORT" ] && FINAL_PORT="3333"
 
-echo "================================================================"
+iptables -t nat -I PREROUTING 1 -p tcp -m set --match-set ai_bypass dst -j REDIRECT --to-ports "$FINAL_PORT"
+
+# --- 第五部分：重启
+
+service restart_dnsmasq >/dev/null 2>&1
+
+echo_date "=======================w优化完撒花======================="
