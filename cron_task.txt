@@ -38,14 +38,15 @@ else
     echo $! > "$DDNS_PID"
 fi
 
-# 1. 定义像素级对齐函数 (全行日期 + 冒号)
-# 格式：【20260325 23:10:45】: 内容
-echo_date() {
-    echo "【$(date "+%Y%m%d %H:%M:%S")】: $1"
-}
+# --- 自定义逻辑开始 (无函数安全版) ---
 
-# --- 打印官方风格页眉 ---
-echo_date "======================= 自定义防火墙启动 ==============================="
+# 1. 直接通过变量获取格式化时间，规避函数定义的括号冲突
+# 注意：这里去掉了 echo_date() { ... } 整个结构
+LOG_TIME="【$(date "+%Y%m%d %H:%M:%S")】:"
+
+# 2. 直接使用 echo 打印
+echo "$LOG_TIME ======================= 梅林固件 - 【科学上网】 ========================"
+echo "$LOG_TIME ======================= 自定义防火墙启动 ======================="
 
 # --- 第一部分：IPv4 端口清理与重注 (2525 WebDAV) ---
 while iptables -D INPUT -p tcp --dport 2525 -j ACCEPT 2>/dev/null; do :; done
@@ -55,14 +56,14 @@ while iptables -D INPUT -p tcp --dport 2525 -m state --state NEW -m recent --set
 iptables -I INPUT 1 -p tcp --dport 2525 -j ACCEPT
 iptables -I INPUT 1 -p tcp --dport 2525 -m state --state NEW -m recent --update --seconds 60 --hitcount 10 -j DROP
 iptables -I INPUT 1 -p tcp --dport 2525 -m state --state NEW -m recent --set
-echo_date "=======================✅ IPv4 2525 规则已重置 ======================="
+echo "$LOG_TIME ✅ IPv4 2525 规则已重置（唯一）"
 
 # --- 第二部分：IPv6 端口清理与重注 (8181 管理) ---
 while ip6tables -D INPUT -p tcp --dport 8181 -j ACCEPT 2>/dev/null; do :; done
 ip6tables -I INPUT 1 -p tcp --dport 8181 -j ACCEPT
-echo_date "=======================✅ IPv6 8181 规则已重置 ======================="
+echo "$LOG_TIME ✅ IPv6 8181 规则已重置（唯一）"
 
-# --- 第三部分：AI 分流补漏 ---
+# --- 第三部分：AI 分流补漏 (带空值保护) ---
 while iptables -t nat -D PREROUTING -p tcp -m set --match-set ai_bypass dst -j REDIRECT 2>/dev/null; do :; done
 
 ipset -N ai_bypass hash:net 2>/dev/null
@@ -71,7 +72,7 @@ for net in $AI_NETS; do
     ipset -! add ai_bypass $net 2>/dev/null
 done
 
-# 端口获取与校验 (增加默认值 3333)
+# 端口容错获取
 RAW_PORT=$(nvram get ss_status_proxy_port | tr -d '[:space:]')
 if [ -z "$RAW_PORT" ] || ! echo "$RAW_PORT" | grep -q '^[0-9]\+$'; then
     FINAL_PORT="3333"
@@ -80,7 +81,7 @@ else
 fi
 
 iptables -t nat -A PREROUTING -p tcp -m set --match-set ai_bypass dst -j REDIRECT --to-ports "$FINAL_PORT"
-echo_date "=======================✅ AI 分流已挂载 ======================="
+echo "$LOG_TIME ✅ AI 分流已挂载至端口: $FINAL_PORT"
+echo "$LOG_TIME ======================= 自定义防火墙完毕 ======================="
 
-# --- 打印官方风格页脚 ---
-echo_date "======================= 自定义防火墙完毕 ======================="
+# --- 自定义逻辑结束 ---
