@@ -38,47 +38,47 @@ else
     echo $! > "$DDNS_PID"
 fi
 
-# ======================= 4.0 防火墙安全与分流逻辑 =======================
+# ======================= 4.0 防火墙安全与分流逻辑 (作者建议优化版) =======================
 echo_date "======================= 正在部署 WebDAV 安全规则"
-# 2525 端口暴力重置与精准注入
+# 2525 端口：先清理，再注入。确保规则在最前面，防止被 ESTABLISHED 规则抢跑计数
 while iptables -D INPUT -p tcp --dport 2525 -j ACCEPT 2>/dev/null; do :; done
 while iptables -D INPUT -p tcp --dport 2525 -m state --state NEW -m recent --set 2>/dev/null; do :; done
 while iptables -D INPUT -p tcp --dport 2525 -m state --state NEW -m recent --update --seconds 60 --hitcount 10 -j DROP 2>/dev/null; do :; done
 
+# 注入：顺序很重要（Recent Set -> Recent Update -> Accept）
 iptables -I INPUT 1 -p tcp --dport 2525 -j ACCEPT
 iptables -I INPUT 1 -p tcp --dport 2525 -m state --state NEW -m recent --update --seconds 60 --hitcount 10 -j DROP
 iptables -I INPUT 1 -p tcp --dport 2525 -m state --state NEW -m recent --set
 
-# 8181 IPv6 放行
-ip6tables -C INPUT -p tcp --dport 8181 -j ACCEPT 2>/dev/null || ip6tables -I INPUT -p tcp --dport 8181 -j ACCEPT
-
-# AI 分流注入
-echo_date "======================= 正在注入 AI 助手代理规则"
-CF_NETS="173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/12 172.64.0.0/13 131.0.72.0/22"
+# AI 分流注入：【改进点】不再污染 gfwlist，使用独立 ipset 隔离
+echo_date "======================= 正在注入 AI 助手独立分流规则"
+CF_NETS="104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22" # 采用作者提到的官方段
 X_NETS="104.244.42.0/24 192.133.76.0/22 199.16.156.0/22 199.59.148.0/22 204.92.112.0/22 69.195.160.0/19"
 
-ipset -N gfwlist hash:net 2>/dev/null
+# 创建专用的 ai_bypass 集合，避免影响国内 CDN
+ipset -N ai_bypass hash:net 2>/dev/null
 for net in $CF_NETS $X_NETS; do
-    ipset -! add gfwlist $net 2>/dev/null
+    ipset -! add ai_bypass $net 2>/dev/null
 done
 
-# IPv6 DNS 劫持逻辑 (修正版：避开油管 QUIC 干扰)
+# 将这个集合挂载到代理链（假设你的代理 chain 叫 SHADOWSOCKS，请根据实际修改）
+# 如果不确定链名，暂时保留注入 gfwlist，但独立 ipset 是更优解
+iptables -t nat -I PREROUTING -p tcp -m set --match-set ai_bypass dst -j REDIRECT --to-ports $(nvram get ss_status_proxy_port || echo 3333)
+
+# IPv6 DNS 劫持逻辑：【改进点】增加 -m comment 注释，不破坏作者的多 Bridge 架构
 IPV6_LAN=$(nvram get ipv6_lan_addr)
-if [ -z "$IPV6_LAN" ]; then
-    # 如果 nvram 为空，尝试实时抓取一次 br0 地址
-    IPV6_LAN=$(ip -6 addr show br0 | grep "global" | awk '{print $2}' | cut -d/ -f1 | head -n1)
-fi
+[ -z "$IPV6_LAN" ] && IPV6_LAN=$(ip -6 addr show br0 | grep "global" | awk '{print $2}' | cut -d/ -f1 | head -n1)
 
 if [ -n "$IPV6_LAN" ]; then
-    echo_date "======================= 检测到 IPv6: $IPV6_LAN，执行【精准】劫持"
+    echo_date "======================= 检测到 IPv6: $IPV6_LAN，执行【带标记】劫持"
+    # 清理所有带自定义备注的旧规则
+    while ip6tables -t nat -S PREROUTING | grep "CUSTOM_DNS_HIJACK" | sed 's/-A/ip6tables -t nat -D/' | sh 2>/dev/null; do :; done
     
-    # 【核心修正点 1】：使用 while 循环彻底清理旧规则，防止规则堆叠导致油管卡死
-    while ip6tables -t nat -D PREROUTING -p udp --dport 53 -j DNAT --to "$IPV6_LAN" 2>/dev/null; do :; done
-    
-    # 【核心修正点 2】：增加 -m udp 显式模块匹配，确保只劫持 DNS (53)，不干扰油管视频流 (443)
-    ip6tables -t nat -I PREROUTING -p udp -m udp --dport 53 -j DNAT --to "$IPV6_LAN"
+    # 注入规则，带上自定义备注，方便审计
+    ip6tables -t nat -I PREROUTING -p udp -m udp --dport 53 -j DNAT --to "$IPV6_LAN" -m comment --comment "CUSTOM_DNS_HIJACK"
 else
-    echo_date "======================= IPv6 地址为空，请确保 dnsmasq 屏蔽了 AAAA"
+    echo_date "======================= IPv6 地址为空，跳过劫持"
 fi
 
+echo_date "======================= FancySS Mod 增强配置部署完成 ====================="
 echo_date "======================= FancySS Mod 增强配置部署完成 ====================="
