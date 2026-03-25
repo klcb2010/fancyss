@@ -39,55 +39,38 @@ else
 fi
 
 #!/bin/sh
-# ======================= 5.3 极致稳健版 (修复浏览器 IPv6 识别问题) =======================
-# 脚本路径: /jffs/scripts/nat-start
+# =================================================================
+# GT-AX6000 v6.1 (Shebang 修复版 + 灵动域名分流)
+# =================================================================
 
-# 引用插件基础路径
-export KSROOT=/koolshare
-source $KSROOT/scripts/base.sh
-
-echo_date "======================= 正在部署 WebDAV 安全规则"
-# 1. WebDAV 2525 端口防护 (暴力清理 + 精准注入)
+# 1. 核心安全：8181 (IPv6) 与 2525 (WebDAV) 护航
+ip6tables -C INPUT -p tcp --dport 8181 -j ACCEPT 2>/dev/null || ip6tables -I INPUT 1 -p tcp --dport 8181 -j ACCEPT
 while iptables -D INPUT -p tcp --dport 2525 -j ACCEPT 2>/dev/null; do :; done
-while iptables -D INPUT -p tcp --dport 2525 -m state --state NEW -m recent --update --seconds 60 --hitcount 10 -j DROP 2>/dev/null; do :; done
-while iptables -D INPUT -p tcp --dport 2525 -m state --state NEW -m recent --set 2>/dev/null; do :; done
-
 iptables -I INPUT 1 -p tcp --dport 2525 -j ACCEPT
-iptables -I INPUT 1 -p tcp --dport 2525 -m state --state NEW -m recent --update --seconds 60 --hitcount 10 -j DROP
-iptables -I INPUT 1 -p tcp --dport 2525 -m state --state NEW -m recent --set
 
-# 2. IPv6 管理端口放行 (8181)
-ip6tables -C INPUT -p tcp --dport 8181 -j ACCEPT 2>/dev/null || ip6tables -I INPUT -p tcp --dport 8181 -j ACCEPT
-
-# 3. AI 分流：回归“静态精准 CIDR”模式 (避开动态域名嗅探对 DNS 的干扰)
-echo_date "======================= 正在注入 AI 助手 IPv4 精准分流"
-
-# 采用 Cloudflare & X 的官方核心 CIDR (实测这些段涵盖了 99% 的 AI 服务)
-CF_NETS="104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22"
-X_NETS="104.244.42.0/24 192.133.76.0/22 199.16.156.0/22 199.59.148.0/22 204.92.112.0/22 69.195.160.0/19"
-
-# 创建独立 ipset
+# 2. 灵动域名拦截：利用 dnsmasq 的 ipset 自动填坑
+# 这种方式最灵活：只要访问这些域名，IP 会自动进 ai_bypass
 ipset -N ai_bypass hash:net 2>/dev/null
-for net in $CF_NETS $X_NETS; do
-    ipset -! add ai_bypass $net 2>/dev/null
-done
+cat << 'EOF' > /jffs/configs/dnsmasq.d/ai_proxy.conf
+# 自动抓取 AI 相关域名的 IP 并填入 ipset
+server=/openai.com/127.0.0.1#5353
+ipset=/openai.com/ai_bypass
+server=/chatgpt.com/127.0.0.1#5353
+ipset=/chatgpt.com/ai_bypass
+server=/anthropic.com/127.0.0.1#5353
+ipset=/anthropic.com/ai_bypass
+server=/x.com/127.0.0.1#5353
+ipset=/x.com/ai_bypass
+EOF
 
-# 获取代理端口并注入重定向
-PROXY_PORT=$(nvram get ss_status_proxy_port)
-[ -z "$PROXY_PORT" ] && PROXY_PORT=$(nvram get ss_redir_port)
-FINAL_PORT=${PROXY_PORT:-3333}
+# 3. 内核拦截：将 ai_bypass 里的 IP 强行重定向到代理端口
+REAL_PORT=$(nvram get ss_status_proxy_port || echo "3333")
+iptables -t nat -D PREROUTING -p tcp -m set --match-set ai_bypass dst -j REDIRECT --to-ports $REAL_PORT 2>/dev/null
+iptables -t nat -I PREROUTING -p tcp -m set --match-set ai_bypass dst -j REDIRECT --to-ports $REAL_PORT
 
-if [ -n "$FINAL_PORT" ]; then
-    iptables -t nat -D PREROUTING -p tcp -m set --match-set ai_bypass dst -j REDIRECT --to-ports "$FINAL_PORT" 2>/dev/null
-    iptables -t nat -I PREROUTING -p tcp -m set --match-set ai_bypass dst -j REDIRECT --to-ports "$FINAL_PORT"
-    echo_date "AI 分流已就绪，已重定向至端口: $FINAL_PORT"
-fi
+# 4. IPv6 止损：不劫持，只放行
+while ip6tables -t nat -D PREROUTING -p udp --dport 53 -j DNAT 2>/dev/null; do :; done
 
-# 4. 彻底清理 IPv6 劫持残留 (确保不干预浏览器 IPv6 评分)
-echo_date "======================= 正在清理所有自定义 IPv6 劫持逻辑"
-IPV6_LAN=$(nvram get ipv6_lan_addr)
-if [ -n "$IPV6_LAN" ]; then
-    while ip6tables -t nat -D PREROUTING -p udp -m udp --dport 53 -j DNAT --to "$IPV6_LAN" 2>/dev/null; do :; done
-fi
-
-echo_date "======================= 5.3 极致稳健版部署完成 ====================="
+# 5. [关键] 重启服务使域名拦截生效 (这次有 Shebang 了，不会报错)
+service restart_dnsmasq
+echo "======================= v6.1 灵动版部署完成 ====================="
