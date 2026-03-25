@@ -60,7 +60,7 @@ echo "$LOG_TIME ======================= ✅ IPv4 2525 规则已重置 ==========
 # --- 第二部分：IPv6 端口清理与重注 (8181 管理) ---
 while ip6tables -D INPUT -p tcp --dport 8181 -j ACCEPT 2>/dev/null; do :; done
 ip6tables -I INPUT 1 -p tcp --dport 8181 -j ACCEPT
-echo "$LOG_TIME  ======================= ✅ IPv6 8181 规则已重置 ======================= "
+echo "$LOG_TIME ======================= ✅ IPv6 8181 规则已重置 ======================= "
 
 # --- 第三部分：AI 分流补漏 (带空值保护) ---
 while iptables -t nat -D PREROUTING -p tcp -m set --match-set ai_bypass dst -j REDIRECT 2>/dev/null; do :; done
