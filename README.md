@@ -1,4 +1,4 @@
-# DDNS设定相关 让DDNS有优先析IPv6
+# DDNS设定相关 让DDNS优先析IPv6
 - 路由器 系统记录  IPv6 复制地址 回到插件进行下一步
 - DNS设定 自定义dnsmasq 填写 address=/DDNS名称.asuscomm.com/IPv6地址
 - 保存后 重启dnsmasq
