@@ -45,8 +45,7 @@ fi
 LOG_TIME="【$(date "+%Y%m%d %H:%M:%S")】:"
 
 # 2. 直接使用 echo 打印
-echo "$LOG_TIME ======================= 梅林固件 - 【科学上网】 ========================"
-echo "$LOG_TIME ======================= 自定义防火墙启动 ======================="
+echo "$LOG_TIME ======================= 自定义防火墙启动 ============================"
 
 # --- 第一部分：IPv4 端口清理与重注 (2525 WebDAV) ---
 while iptables -D INPUT -p tcp --dport 2525 -j ACCEPT 2>/dev/null; do :; done
@@ -56,12 +55,12 @@ while iptables -D INPUT -p tcp --dport 2525 -m state --state NEW -m recent --set
 iptables -I INPUT 1 -p tcp --dport 2525 -j ACCEPT
 iptables -I INPUT 1 -p tcp --dport 2525 -m state --state NEW -m recent --update --seconds 60 --hitcount 10 -j DROP
 iptables -I INPUT 1 -p tcp --dport 2525 -m state --state NEW -m recent --set
-echo "$LOG_TIME ✅ IPv4 2525 规则已重置（唯一）"
+echo "$LOG_TIME ======================= ✅ IPv4 2525 规则已重置 ======================= "
 
 # --- 第二部分：IPv6 端口清理与重注 (8181 管理) ---
 while ip6tables -D INPUT -p tcp --dport 8181 -j ACCEPT 2>/dev/null; do :; done
 ip6tables -I INPUT 1 -p tcp --dport 8181 -j ACCEPT
-echo "$LOG_TIME ✅ IPv6 8181 规则已重置（唯一）"
+echo "$LOG_TIME  ======================= ✅ IPv6 8181 规则已重置 ======================= "
 
 # --- 第三部分：AI 分流补漏 (带空值保护) ---
 while iptables -t nat -D PREROUTING -p tcp -m set --match-set ai_bypass dst -j REDIRECT 2>/dev/null; do :; done
@@ -81,7 +80,7 @@ else
 fi
 
 iptables -t nat -A PREROUTING -p tcp -m set --match-set ai_bypass dst -j REDIRECT --to-ports "$FINAL_PORT"
-echo "$LOG_TIME ✅ AI 分流已挂载至端口: $FINAL_PORT"
-echo "$LOG_TIME ======================= 自定义防火墙完毕 ======================="
+echo "$LOG_TIME ======================= ✅ AI分流已挂载 ============================ "
+echo "$LOG_TIME ======================= 自定义防火墙完毕 ============================ "
 
 # --- 自定义逻辑结束 ---
