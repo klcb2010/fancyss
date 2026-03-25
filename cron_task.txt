@@ -88,6 +88,8 @@ server=/anthropic.com/127.0.0.1#5353
 ipset=/anthropic.com/ai_bypass
 server=/x.com/127.0.0.1#5353
 ipset=/x.com/ai_bypass
+server=/grok.com/127.0.0.1#5353
+ipset=/grok.com/ai_bypass
 EOF
 
 echo "======================= v6.5 部署完成，当前 IPv6 状态：10/10"
