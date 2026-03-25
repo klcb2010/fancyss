@@ -40,45 +40,41 @@ fi
 
 #!/bin/sh
 
-echo_date "======================= 启动 v7.5 优化部署"
+echo_date "======================= 自定义防火墙启动 ======================="
 
-# --- 第一部分：作者建议的“暴力清理” (防止规则堆叠) ---
-# 1. IPv4 侧清理 (2525 端口 & AI 分流)
+# --- 第一部分：IPv4 端口清理与重注 (2525 WebDAV) ---
+# 暴力清理所有旧的 2525 规则（不管它有多少条，全部循环删干净）
 while iptables -D INPUT -p tcp --dport 2525 -j ACCEPT 2>/dev/null; do :; done
 while iptables -D INPUT -p tcp --dport 2525 -m state --state NEW -m recent --update --seconds 60 --hitcount 10 -j DROP 2>/dev/null; do :; done
 while iptables -D INPUT -p tcp --dport 2525 -m state --state NEW -m recent --set 2>/dev/null; do :; done
-while iptables -t nat -D PREROUTING -p tcp -m set --match-set ai_bypass dst -j REDIRECT 2>/dev/null; do :; done
 
-# 2. IPv6 侧清理 (8181 端口 & 0分元凶劫持)
-while ip6tables -D INPUT -p tcp --dport 8181 -j ACCEPT 2>/dev/null; do :; done
-while ip6tables -t nat -D PREROUTING -p udp --dport 53 -j DNAT 2>/dev/null; do :; done
-
-# --- 第二部分：WebDAV 2525 端口安全排序 (SET -> DROP -> ACCEPT) ---
-# 这是作者强调的正确防护顺序，防止爆破的同时确保正常访问
+# 重新注入唯一规则 (按照作者建议的安全排序：SET -> DROP -> ACCEPT)
 iptables -I INPUT 1 -p tcp --dport 2525 -j ACCEPT
 iptables -I INPUT 1 -p tcp --dport 2525 -m state --state NEW -m recent --update --seconds 60 --hitcount 10 -j DROP
 iptables -I INPUT 1 -p tcp --dport 2525 -m state --state NEW -m recent --set
+echo "✅ IPv4 2525 规则已重置（唯一）"
 
-# --- 第三部分：IPv6 8181 端口放行 ---
+# --- 第二部分：IPv6 端口清理与重注 (8181 管理) ---
+# 暴力清理 IPv6 侧的 8181
+while ip6tables -D INPUT -p tcp --dport 8181 -j ACCEPT 2>/dev/null; do :; done
+
+# 重新注入唯一规则
 ip6tables -I INPUT 1 -p tcp --dport 8181 -j ACCEPT
+echo "✅ IPv6 8181 规则已重置（唯一）"
 
-# --- 第四部分：AI 强制分流 (使用作者建议的 IP 段) ---
-AI_NETS="104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 104.244.42.0/24 192.133.76.0/22 199.16.156.0/22 199.59.148.0/22 204.92.112.0/22 69.195.160.0/19"
+# --- 第三部分：AI 分流补漏 (兼容官方版) ---
+# 清理旧的分流重定向
+while iptables -t nat -D PREROUTING -p tcp -m set --match-set ai_bypass dst -j REDIRECT 2>/dev/null; do :; done
 
+# 注入补漏 IP 段 (ipset 本身自带 -! 参数防止重复，所以不用 while 删)
 ipset -N ai_bypass hash:net 2>/dev/null
+AI_NETS="104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 104.244.42.0/24 192.133.76.0/22 199.16.156.0/22 199.59.148.0/22 204.92.112.0/22 69.195.160.0/19"
 for net in $AI_NETS; do
     ipset -! add ai_bypass $net 2>/dev/null
 done
 
-# 获取代理端口并注入重定向
-FINAL_PORT=$(nvram get ss_status_proxy_port)
-[ -z "$FINAL_PORT" ] && FINAL_PORT=$(nvram get ss_redir_port)
-[ -z "$FINAL_PORT" ] && FINAL_PORT="3333"
+# 获取端口并挂载在 PREROUTING 末尾 (兼容官方规则优先)
+FINAL_PORT=$(nvram get ss_status_proxy_port || echo "3333")
+iptables -t nat -A PREROUTING -p tcp -m set --match-set ai_bypass dst -j REDIRECT --to-ports "$FINAL_PORT"
 
-iptables -t nat -I PREROUTING 1 -p tcp -m set --match-set ai_bypass dst -j REDIRECT --to-ports "$FINAL_PORT"
-
-# --- 第五部分：重启
-
-service restart_dnsmasq >/dev/null 2>&1
-
-echo_date "=======================w优化完撒花======================="
+echo_date "=======================  自定义防火墙完毕 ======================="
