@@ -18,6 +18,8 @@
 
 - 自定义黑白名单  打包即用
 - 注入防火墙规则  两大AI网站不再提示区域问题
+- cat /jffs/scripts/check_status.log查看守护状态
+
 # 相关脚本在 [Asuswrt-Merlin-Custom-Scripts](https://github.com/klcb2010/Asuswrt-Merlin-Custom-Scripts)
 
 - cat /jffs/scripts/check_status.log查看守护状态
