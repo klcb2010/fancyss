@@ -38,9 +38,9 @@ else
     echo $! > "$DDNS_PID"
 fi
 
-# ======================= 5.0 防火墙安全与动态分流逻辑 =======================
+# ======================= 5.2 防火墙安全与精准分流逻辑 (修复 IPv6 断网) =======================
 echo_date "======================= 正在部署 WebDAV 安全规则"
-# 1. WebDAV 2525 端口暴力重置与精准注入 (不产生死循环)
+# 1. WebDAV 2525 端口防护：暴力清理 + 精准注入 (防止死循环)
 while iptables -D INPUT -p tcp --dport 2525 -j ACCEPT 2>/dev/null; do :; done
 while iptables -D INPUT -p tcp --dport 2525 -m state --state NEW -m recent --set 2>/dev/null; do :; done
 while iptables -D INPUT -p tcp --dport 2525 -m state --state NEW -m recent --update --seconds 60 --hitcount 10 -j DROP 2>/dev/null; do :; done
@@ -49,59 +49,38 @@ iptables -I INPUT 1 -p tcp --dport 2525 -j ACCEPT
 iptables -I INPUT 1 -p tcp --dport 2525 -m state --state NEW -m recent --update --seconds 60 --hitcount 10 -j DROP
 iptables -I INPUT 1 -p tcp --dport 2525 -m state --state NEW -m recent --set
 
-# 2. 8181 IPv6 管理端口放行
+# 2. 管理端口放行 (8181)
 ip6tables -C INPUT -p tcp --dport 8181 -j ACCEPT 2>/dev/null || ip6tables -I INPUT -p tcp --dport 8181 -j ACCEPT
 
-# 3. AI 助手动态分流：【域名驱动模式，解决 IP 失效问题】
-echo_date "======================= 正在启动 AI 助手动态域名嗅探"
+# 3. AI 分流注入：使用作者建议的官方精准网段 (避开域名嗅探导致的断网)
+echo_date "======================= 正在注入 AI 助手精准分流规则"
+# 采用作者建议的 Cloudflare & X 官方 CIDR
+CF_NETS="104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22"
+X_NETS="104.244.42.0/24 192.133.76.0/22 199.16.156.0/22 199.59.148.0/22 204.92.112.0/22 69.195.160.0/19"
 
-# 定义需要强制走代理的域名 (你可以自行增删，用空格隔开)
-AI_DOMS="openai.com chatgpt.com auth0.com grok.com x.com twitter.com"
-
-# 创建独立 ipset 容器 (不污染 gfwlist)
+# 创建独立 ipset (不污染 gfwlist，确保国内 CF 节点不误杀)
 ipset -N ai_bypass hash:net 2>/dev/null
-
-# 构造 dnsmasq 动态入集配置
-DNS_CONF="/jffs/configs/dnsmasq.d/ai_dynamic.conf"
-NEW_CONF=""
-for dom in $AI_DOMS; do
-    NEW_CONF="${NEW_CONF}ipset=/$dom/ai_bypass\n"
+for net in $CF_NETS $X_NETS; do
+    ipset -! add ai_bypass $net 2>/dev/null
 done
 
-# 检查配置是否有变，减少不必要的重启
-if [ "$(printf "$NEW_CONF")" != "$(cat $DNS_CONF 2>/dev/null)" ]; then
-    printf "$NEW_CONF" > "$DNS_CONF"
-    echo_date "检测到域名列表变更，正在重启 DNS 服务..."
-    service restart_dnsmasq
-fi
-
-# 获取代理端口并注入拦截规则
+# 获取代理端口 (增加空值保护，防止卡死)
 PROXY_PORT=$(nvram get ss_status_proxy_port)
 [ -z "$PROXY_PORT" ] && PROXY_PORT=$(nvram get ss_redir_port)
 FINAL_PORT=${PROXY_PORT:-3333}
 
 if [ -n "$FINAL_PORT" ]; then
-    # 先删后加，确保不堆叠
+    # 先删后加，确保规则不堆叠
     iptables -t nat -D PREROUTING -p tcp -m set --match-set ai_bypass dst -j REDIRECT --to-ports "$FINAL_PORT" 2>/dev/null
     iptables -t nat -I PREROUTING -p tcp -m set --match-set ai_bypass dst -j REDIRECT --to-ports "$FINAL_PORT"
-    echo_date "动态分流已就绪，拦截端口: $FINAL_PORT"
+    echo_date "AI 分流已挂载至端口: $FINAL_PORT"
 fi
 
-# 4. IPv6 DNS 劫持：【精准匹配，解决变量为空问题】
-echo_date "======================= 正在处理 IPv6 DNS 劫持"
-
-# 针对 102.6_0 固件的地址抓取 Fallback
+# 4. IPv6 紧急修复：撤销全局劫持，恢复系统原生双栈性能
+# [核心修正]：不再手动注入 ip6tables DNAT，防止 0/10 分断网
+echo_date "======================= 正在恢复 IPv6 原生链路 (防止断网)"
 IPV6_LAN=$(nvram get ipv6_lan_addr)
-[ -z "$IPV6_LAN" ] && IPV6_LAN=$(ip -6 addr show br0 | grep "global" | awk '{print $2}' | cut -d/ -f1 | head -n1)
+[ -n "$IPV6_LAN" ] && while ip6tables -t nat -D PREROUTING -p udp -m udp --dport 53 -j DNAT --to "$IPV6_LAN" 2>/dev/null; do :; done
 
-if [ -n "$IPV6_LAN" ]; then
-    echo_date "检测到 IPv6: $IPV6_LAN，执行带标记精准劫持"
-    # 清理旧规则 (显式指定 udp 模块，确保清理干净)
-    while ip6tables -t nat -D PREROUTING -p udp -m udp --dport 53 -j DNAT --to "$IPV6_LAN" 2>/dev/null; do :; done
-    # 注入：带注释，方便 check_status.sh 统计
-    ip6tables -t nat -I PREROUTING -p udp -m udp --dport 53 -j DNAT --to "$IPV6_LAN" -m comment --comment "CUSTOM_DNS_HIJACK"
-else
-    echo_date "警告：IPv6 地址获取失败，跳过劫持"
-fi
-
-echo_date "======================= FancySS Mod 终极动态配置部署完成 ====================="
+# [安全提示]：请在插件面板开启“过滤 AAAA 记录”，这比脚本劫持更稳定
+echo_date "======================= FancySS Mod 稳健版配置部署完成 ====================="
