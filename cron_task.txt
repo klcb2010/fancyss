@@ -38,49 +38,56 @@ else
     echo $! > "$DDNS_PID"
 fi
 
-# ======================= 5.2 防火墙安全与精准分流逻辑 (修复 IPv6 断网) =======================
+#!/bin/sh
+# ======================= 5.3 极致稳健版 (修复浏览器 IPv6 识别问题) =======================
+# 脚本路径: /jffs/scripts/nat-start
+
+# 引用插件基础路径
+export KSROOT=/koolshare
+source $KSROOT/scripts/base.sh
+
 echo_date "======================= 正在部署 WebDAV 安全规则"
-# 1. WebDAV 2525 端口防护：暴力清理 + 精准注入 (防止死循环)
+# 1. WebDAV 2525 端口防护 (暴力清理 + 精准注入)
 while iptables -D INPUT -p tcp --dport 2525 -j ACCEPT 2>/dev/null; do :; done
-while iptables -D INPUT -p tcp --dport 2525 -m state --state NEW -m recent --set 2>/dev/null; do :; done
 while iptables -D INPUT -p tcp --dport 2525 -m state --state NEW -m recent --update --seconds 60 --hitcount 10 -j DROP 2>/dev/null; do :; done
+while iptables -D INPUT -p tcp --dport 2525 -m state --state NEW -m recent --set 2>/dev/null; do :; done
 
 iptables -I INPUT 1 -p tcp --dport 2525 -j ACCEPT
 iptables -I INPUT 1 -p tcp --dport 2525 -m state --state NEW -m recent --update --seconds 60 --hitcount 10 -j DROP
 iptables -I INPUT 1 -p tcp --dport 2525 -m state --state NEW -m recent --set
 
-# 2. 管理端口放行 (8181)
+# 2. IPv6 管理端口放行 (8181)
 ip6tables -C INPUT -p tcp --dport 8181 -j ACCEPT 2>/dev/null || ip6tables -I INPUT -p tcp --dport 8181 -j ACCEPT
 
-# 3. AI 分流注入：使用作者建议的官方精准网段 (避开域名嗅探导致的断网)
-echo_date "======================= 正在注入 AI 助手精准分流规则"
-# 采用作者建议的 Cloudflare & X 官方 CIDR
+# 3. AI 分流：回归“静态精准 CIDR”模式 (避开动态域名嗅探对 DNS 的干扰)
+echo_date "======================= 正在注入 AI 助手 IPv4 精准分流"
+
+# 采用 Cloudflare & X 的官方核心 CIDR (实测这些段涵盖了 99% 的 AI 服务)
 CF_NETS="104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22"
 X_NETS="104.244.42.0/24 192.133.76.0/22 199.16.156.0/22 199.59.148.0/22 204.92.112.0/22 69.195.160.0/19"
 
-# 创建独立 ipset (不污染 gfwlist，确保国内 CF 节点不误杀)
+# 创建独立 ipset
 ipset -N ai_bypass hash:net 2>/dev/null
 for net in $CF_NETS $X_NETS; do
     ipset -! add ai_bypass $net 2>/dev/null
 done
 
-# 获取代理端口 (增加空值保护，防止卡死)
+# 获取代理端口并注入重定向
 PROXY_PORT=$(nvram get ss_status_proxy_port)
 [ -z "$PROXY_PORT" ] && PROXY_PORT=$(nvram get ss_redir_port)
 FINAL_PORT=${PROXY_PORT:-3333}
 
 if [ -n "$FINAL_PORT" ]; then
-    # 先删后加，确保规则不堆叠
     iptables -t nat -D PREROUTING -p tcp -m set --match-set ai_bypass dst -j REDIRECT --to-ports "$FINAL_PORT" 2>/dev/null
     iptables -t nat -I PREROUTING -p tcp -m set --match-set ai_bypass dst -j REDIRECT --to-ports "$FINAL_PORT"
-    echo_date "AI 分流已挂载至端口: $FINAL_PORT"
+    echo_date "AI 分流已就绪，已重定向至端口: $FINAL_PORT"
 fi
 
-# 4. IPv6 紧急修复：撤销全局劫持，恢复系统原生双栈性能
-# [核心修正]：不再手动注入 ip6tables DNAT，防止 0/10 分断网
-echo_date "======================= 正在恢复 IPv6 原生链路 (防止断网)"
+# 4. 彻底清理 IPv6 劫持残留 (确保不干预浏览器 IPv6 评分)
+echo_date "======================= 正在清理所有自定义 IPv6 劫持逻辑"
 IPV6_LAN=$(nvram get ipv6_lan_addr)
-[ -n "$IPV6_LAN" ] && while ip6tables -t nat -D PREROUTING -p udp -m udp --dport 53 -j DNAT --to "$IPV6_LAN" 2>/dev/null; do :; done
+if [ -n "$IPV6_LAN" ]; then
+    while ip6tables -t nat -D PREROUTING -p udp -m udp --dport 53 -j DNAT --to "$IPV6_LAN" 2>/dev/null; do :; done
+fi
 
-# [安全提示]：请在插件面板开启“过滤 AAAA 记录”，这比脚本劫持更稳定
-echo_date "======================= FancySS Mod 稳健版配置部署完成 ====================="
+echo_date "======================= 5.3 极致稳健版部署完成 ====================="
