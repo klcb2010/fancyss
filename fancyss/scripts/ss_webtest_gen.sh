@@ -117,6 +117,62 @@ wt_get_hy2_udphop_port() {
 	fi
 }
 
+wt_strip_null_keys() {
+	local json_file="$1"
+	local tmp_file="${json_file}.tmp"
+
+	[ -f "${json_file}" ] || return 1
+	run jq '
+		def strip_nulls:
+			if type == "object" then
+				with_entries(select(.value != null) | .value |= strip_nulls)
+			elif type == "array" then
+				map(strip_nulls)
+			else
+				.
+			end;
+		strip_nulls
+	' "${json_file}" > "${tmp_file}" || {
+		rm -f "${tmp_file}"
+		return 1
+	}
+	mv -f "${tmp_file}" "${json_file}"
+}
+
+wt_patch_xray_like_outbound_address() {
+	local json_file="$1"
+	local target_addr="$2"
+	[ -n "${json_file}" ] || return 1
+	[ -f "${json_file}" ] || return 1
+	[ -n "${target_addr}" ] || {
+		cat "${json_file}"
+		return 0
+	}
+	run jq --arg addr "${target_addr}" '
+		(.outbound // (.outbounds[0] // {})) as $ob
+		| ($ob.protocol // "") as $protocol
+		| if ($protocol == "vmess" or $protocol == "vless") then
+			if has("outbound") then
+				.outbound.settings.vnext[0].address = $addr
+			elif ((.outbounds // []) | length) > 0 then
+				.outbounds[0].settings.vnext[0].address = $addr
+			else
+				.
+			end
+		elif ($protocol == "socks" or $protocol == "shadowsocks" or $protocol == "trojan") then
+			if has("outbound") then
+				.outbound.settings.servers[0].address = $addr
+			elif ((.outbounds // []) | length) > 0 then
+				.outbounds[0].settings.servers[0].address = $addr
+			else
+				.
+			end
+		else
+			.
+		end
+	' "${json_file}" 2>/dev/null || cat "${json_file}"
+}
+
 wt_write_inbound_routing() {
 	local nu="$1"
 	local mark="$2"
@@ -233,7 +289,7 @@ wt_gen_ss_outbound() {
 		}
 	EOF
 
-	sed -i '/null/d' ${TMP2}/conf_${mark}/${nu}_outbounds.json 2>/dev/null
+	wt_strip_null_keys ${TMP2}/conf_${mark}/${nu}_outbounds.json
 	if [ "${LINUX_VER}" == "26" ]; then
 		sed -i '/tcpFastOpen/d' ${TMP2}/conf_${mark}/${nu}_outbounds.json 2>/dev/null
 	fi
@@ -442,9 +498,22 @@ wt_gen_vmess_outbound() {
 			}
 		EOF
 
-		sed -i '/null/d' ${TMP2}/conf_${mark}/${nu}_outbounds.json 2>/dev/null
+		wt_strip_null_keys ${TMP2}/conf_${mark}/${nu}_outbounds.json
 	else
 		wt_node_get v2ray_json ${nu} | base64_decode >${TMP2}/v2ray_user_${nu}.json
+		local user_host=""
+		local user_host_ip=""
+		{
+			read -r user_host
+			read -r _
+		} <<-EOF
+		$(fss_get_node_server_host_port "${nu}")
+		EOF
+		user_host_ip=$(_get_server_ip "${user_host}")
+		if [ -n "${user_host_ip}" ];then
+			wt_patch_xray_like_outbound_address "${TMP2}/v2ray_user_${nu}.json" "${user_host_ip}" >${TMP2}/v2ray_user_${nu}.json.tmp
+			mv -f ${TMP2}/v2ray_user_${nu}.json.tmp ${TMP2}/v2ray_user_${nu}.json
+		fi
 		local OB=$(cat ${TMP2}/v2ray_user_${nu}.json | run jq .outbound)
 		local OBS=$(cat ${TMP2}/v2ray_user_${nu}.json | run jq .outbounds)
 		if [ "$OB" != "null" ]; then
@@ -712,7 +781,7 @@ wt_gen_vless_outbound() {
 			}
 		EOF
 
-		sed -i '/null/d' ${TMP2}/conf_${mark}/${nu}_outbounds.json 2>/dev/null
+		wt_strip_null_keys ${TMP2}/conf_${mark}/${nu}_outbounds.json
 		if [ "${xray_prot}" == "vless" ];then
 			sed -i '/alterId/d' ${TMP2}/conf_${mark}/${nu}_outbounds.json 2>/dev/null
 		fi
@@ -721,6 +790,19 @@ wt_gen_vless_outbound() {
 		fi
 	else
 		wt_node_get xray_json ${nu} | base64_decode >${TMP2}/xray_user_${nu}.json
+		local user_host=""
+		local user_host_ip=""
+		{
+			read -r user_host
+			read -r _
+		} <<-EOF
+		$(fss_get_node_server_host_port "${nu}")
+		EOF
+		user_host_ip=$(_get_server_ip "${user_host}")
+		if [ -n "${user_host_ip}" ];then
+			wt_patch_xray_like_outbound_address "${TMP2}/xray_user_${nu}.json" "${user_host_ip}" >${TMP2}/xray_user_${nu}.json.tmp
+			mv -f ${TMP2}/xray_user_${nu}.json.tmp ${TMP2}/xray_user_${nu}.json
+		fi
 		local OB=$(cat ${TMP2}/xray_user_${nu}.json | run jq .outbound)
 		local OBS=$(cat ${TMP2}/xray_user_${nu}.json | run jq .outbounds)
 		if [ "$OB" != "null" ]; then

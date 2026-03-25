@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# fancyss script for asuswrt/merlin based router with software center
+# fancyss subscribe script for asuswrt/merlin based router with software center
 source /koolshare/scripts/base.sh
 source /koolshare/scripts/ss_node_common.sh
 NEW_PATH=$(echo $PATH|tr ':' '\n'|sed '/opt/d;/mmc/d'|awk '!a[$0]++'|tr '\n' ':'|sed '$ s/:$//')
@@ -19,8 +19,7 @@ SCHEMA2_EXPORT_JSONL="$DIR/schema2_nodes_export.txt"
 SUB_RAW_CACHE_DIR="/koolshare/configs/fancyss/subscribe_cache/raw"
 SUB_PARSED_CACHE_DIR="/koolshare/configs/fancyss/subscribe_cache/parsed"
 # 订阅缓存的 raw / parsed / meta 都放在持久化目录。
-# 每次调整 meta 结构或比对语义时，只需要递增 schema，
-# 下次订阅就会自动判定旧 meta 失效并重建缓存。
+# 每次调整 meta 结构或缓存判定语义时，递增 schema 即可触发重建。
 SUB_PARSED_CACHE_META_SCHEMA="2"
 SUB_STORAGE_SCHEMA=$(dbus get fss_data_schema)
 [ "${SUB_STORAGE_SCHEMA}" = "2" ] || SUB_STORAGE_SCHEMA="1"
@@ -58,7 +57,7 @@ SUB_VERBOSE_NODE_LOG=1
 LOCAL_SPLIT_META_VALID=0
 alias urldecode='sed "s@+@ @g;s@%@\\\\x@g" | xargs -0 printf "%b"'
 
-# 20230701, some vairiable should be unset
+# 20230701: unset inherited hotplug/environment variables that may interfere with execution.
 unset usb2jffs_time_hour
 unset usb2jffs_week
 unset usb2jffs_title
@@ -97,7 +96,7 @@ unset PWD
 
 sub_list_node_ids(){
 	if [ "${SUB_STORAGE_SCHEMA}" = "2" ];then
-		printf '%s' "$(dbus get fss_node_order)" | tr ',' '\n' | sed '/^$/d'
+		printf '%s\n' "$(dbus get fss_node_order)" | tr ',' '\n' | sed '/^$/d'
 	else
 		dbus list ssconf_basic_name_ | sed -n 's/^.*_\([0-9]\+\)=.*/\1/p' | sort -n
 	fi
@@ -1026,117 +1025,11 @@ sub_restore_active_nodes_after_rewrite(){
 
 sub_refresh_node_state
 
-# 一个节点里可能有的所有信息，记录用
-# ssconf_basic_name_
-# ssconf_basic_server_
-# ssconf_basic_mode_
-# ssconf_basic_method_
-# ssconf_basic_password_
-# ssconf_basic_port_
-# ssconf_basic_ss_obfs_
-# ssconf_basic_ss_obfs_host_
-# ssconf_basic_rss_obfs_
-# ssconf_basic_rss_obfs_param_
-# ssconf_basic_rss_protocol_
-# ssconf_basic_rss_protocol_param_
-# ssconf_basic_koolgame_udp_			#废弃
-# ssconf_basic_use_kcp_					#废弃
-# ssconf_basic_use_lb_					#废弃
-# ssconf_basic_lbmode_					#废弃
-# ssconf_basic_weight_					#废弃
-# ssconf_basic_group_
-# ssconf_basic_v2ray_use_json_
-# ssconf_basic_v2ray_uuid_
-# ssconf_basic_v2ray_alterid_
-# ssconf_basic_v2ray_security_
-# ssconf_basic_v2ray_network_
-# ssconf_basic_v2ray_headtype_tcp_
-# ssconf_basic_v2ray_headtype_kcp_
-# ssconf_basic_v2ray_kcp_seed
-# ssconf_basic_v2ray_headtype_quic_
-# ssconf_basic_v2ray_grpc_mode_
-# ssconf_basic_v2ray_grpc_authority_
-# ssconf_basic_v2ray_network_path_
-# ssconf_basic_v2ray_network_host_
-# ssconf_basic_v2ray_network_security_
-# ssconf_basic_v2ray_network_security_ai_
-# ssconf_basic_v2ray_network_security_alpn_h2_
-# ssconf_basic_v2ray_network_security_alpn_http_
-# ssconf_basic_v2ray_network_security_sni_
-# ssconf_basic_v2ray_mux_enable_
-# ssconf_basic_v2ray_mux_concurrency_
-# ssconf_basic_v2ray_json_
-# ssconf_basic_xray_use_json_
-# ssconf_basic_xray_uuid_
-# ssconf_basic_xray_alterid_
-# ssconf_basic_xray_prot_
-# ssconf_basic_xray_encryption_
-# ssconf_basic_xray_flow_
-# ssconf_basic_xray_network_
-# ssconf_basic_xray_headtype_tcp_
-# ssconf_basic_xray_headtype_kcp_
-# ssconf_basic_xray_kcp_seed
-# ssconf_basic_xray_headtype_quic_
-# ssconf_basic_xray_grpc_mode_
-# ssconf_basic_xray_grpc_authority_
-# ssconf_basic_xray_xhttp_mode_
-# ssconf_basic_xray_network_path_
-# ssconf_basic_xray_network_host_
-# ssconf_basic_xray_network_security_
-# ssconf_basic_xray_network_security_ai_
-# ssconf_basic_xray_network_security_alpn_h2_
-# ssconf_basic_xray_network_security_alpn_http_
-# ssconf_basic_xray_network_security_sni_
-# ssconf_basic_xray_fingerprint_
-# ssconf_basic_xray_show_
-# ssconf_basic_xray_publickey_
-# ssconf_basic_xray_shortid_
-# ssconf_basic_xray_spiderx_
-# ssconf_basic_xray_json_
-# ssconf_basic_trojan_ai_
-# ssconf_basic_trojan_uuid_
-# ssconf_basic_trojan_sni_
-# ssconf_basic_trojan_tfo_
-# ssconf_basic_trojan_plugin_
-# ssconf_basic_trojan_obfs_
-# ssconf_basic_trojan_obfshost_
-# ssconf_basic_trojan_obfsuri_
-# ssconf_basic_naive_prot_
-# ssconf_basic_naive_server_
-# ssconf_basic_naive_port_
-# ssconf_basic_naive_user_
-# ssconf_basic_naive_pass_
-# ssconf_basic_tuic_json_
-# ssconf_basic_hy2_server_
-# ssconf_basic_hy2_port_
-# ssconf_basic_hy2_pass_
-# ssconf_basic_hy2_obfs_
-# ssconf_basic_hy2_obfs_pass_
-# ssconf_basic_hy2_up_
-# ssconf_basic_hy2_dl_
-# ssconf_basic_hy2_sni_
-# ssconf_basic_hy2_tfo_
-# ssconf_basic_hy2_cg_
-# ssconf_basic_type_
-
-# 方案
-# 设计：通过操作文件实现节点的订阅
-# 1.	skipdb2json：订阅前将节点信息导出到文件，通过sed等操作将其转换为一个节点一行的压缩json格式的节点文件：fancyss_nodes_old_spl.txt，如果有有200个节点就是200行json
-# 2.	nodes2files：根据节点中的link_hash信息，将节点文件拆分为多个，usr.txt (用户节点)， local_1_xxxx.txt (机场xxxx)， local_2_yyyy.txt (机场xxxx)
-# 3.	nodes_stats：用拆分文件统计节点信息
-# 4.	remove_null：订阅钱检测下是否有机场不再订阅（用户删除了这个机场的url）
-# 5.	下载订阅
-# 6.	解析订阅
-# 7.	解析节点
-# 8.		过滤节点
-# 9.		点写入更新文件
-# 10. 	对比更新文件和本地节点文件
-# 11. 	写入/不写入节点
-# 12.	
-
-# 7. 最后改写key的顺序，写入dbus
-# 8. 如果节点数量变少了，那么还需要掐尾去尾巴
-# 优点：删除节点，节点排序很方便！
+# 订阅流程说明：
+# 1. 导出本地节点并按来源拆分为文件；
+# 2. 下载并解析每个订阅来源；
+# 3. 对比在线节点与本地节点差异；
+# 4. 生成写入文件并按需更新 dbus。
 
 set_lock(){
 	exec 233>"${LOCK_FILE}"
@@ -1794,6 +1687,7 @@ remove_all_node(){
 	do
 		dbus remove ${conf2}
 	done
+	fss_refresh_node_direct_cache >/dev/null 2>&1
 	echo_date "删除成功！"
 }
 
@@ -1849,6 +1743,7 @@ remove_sub_node(){
 		do
 			dbus remove ${conf2}
 		done
+		fss_refresh_node_direct_cache >/dev/null 2>&1
 		echo_date "所有订阅节点信息已经成功删除！"
 		sub_refresh_node_state
 		return 0
@@ -1875,7 +1770,7 @@ remove_sub_node(){
 	do
 		dbus remove ${conf2}
 	done
-
+	fss_refresh_node_direct_cache >/dev/null 2>&1
 	echo_date "所有订阅节点信息已经成功删除！"
 }
 
@@ -2012,12 +1907,6 @@ add_ss_node(){
 	local action="$2"
 	unset info_first string_nu decrypt_info server_raw encrypt_method password remarks server server_port 
 	unset plugin_support obfs_para plugin_prog ss_obfs ss_obfs_host group
-	# 目前发现4种类型的节点：
-	# 1. ss://YWVzLTEyOC1nY206RkFOQ1lTU19QQVNT@fancyss.net:111/?group=ZmFuY3lzX3Rlc3Q=#FANCYSS%20SS%E6%B5%8B%E8%AF%95%E8%8A%82%E7%82%B91%0A
-	# 2. ss://2022-blake3-aes-256-gcm:czh9CYElDUxw9Y94bzTPjx2Q8URybABYROeiFwZ3o4U=@11.22.33.44:222#FANCYSS%20SS%E6%B5%8B%E8%AF%95%E8%8A%82%E7%82%B92%0A
-	# 3. ss://MjAyMi1ibGFrZTMtYWVzLTI1Ni1nY206TWtjeGJsTkJXbUpKemRvY25ERUpOSk5BUw==@11.22.33.44:333#FANCYSS%20SS%E6%B5%8B%E8%AF%95%E8%8A%82%E7%82%B93%0A
-	# 4. ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpGQU5DWVNTX1BBU1NAdGVzdC5mYW5jeXNzLmNvbTo0NDQ=#FANCYSS%20SS%E6%B5%8B%E8%AF%95%E8%8A%82%E7%82%B94%0A
-
 	remarks=$(echo "${urllink}" | sed -n 's/.*#\(.*\).*$/\1/p' | urldecode | sed 's/^[[:space:]]//g')
 	
 	echo "${remarks}" | isutf8 -q
@@ -2498,12 +2387,84 @@ sub_uri_query_bool(){
 	sub_uri_bool_value "$(sub_uri_query_value "$1" "$2")"
 }
 
+sub_log_unsupported_scheme_once(){
+	local scheme="$1"
+	local seen_file="${2:-${UNSUPPORTED_PROTO_LOG_FILE}}"
+	[ -n "${scheme}" ] || return 0
+	[ -n "${seen_file}" ] || seen_file="${DIR}/unsupported_proto_seen.txt"
+	[ -d "${DIR}" ] || mkdir -p "${DIR}" >/dev/null 2>&1
+	touch "${seen_file}" >/dev/null 2>&1
+	if ! grep -Fxq "${scheme}" "${seen_file}" 2>/dev/null; then
+		printf '%s\n' "${scheme}" >> "${seen_file}"
+		echo_date "⛔检测到不支持的${scheme}格式节点，后续同协议节点将直接跳过！"
+	fi
+}
+
+sub_log_unsupported_scheme_summary(){
+	local file="$1"
+	[ -s "${file}" ] || return 0
+	awk -F '://' '
+		BEGIN {
+			supported["ss"] = 1
+			supported["ssr"] = 1
+			supported["vmess"] = 1
+			supported["vless"] = 1
+			supported["trojan"] = 1
+			supported["hysteria2"] = 1
+			supported["hy2"] = 1
+			supported["tuic"] = 1
+			supported["naive+https"] = 1
+			supported["naive+quic"] = 1
+		}
+		NF >= 2 {
+			scheme = $1
+			if (!(scheme in supported)) {
+				cnt[scheme]++
+			}
+		}
+		END {
+			for (scheme in cnt) {
+				printf "⚫%s节点：%s个（不支持）\n", scheme, cnt[scheme]
+			}
+		}
+	' "${file}" | sort | while IFS= read -r line
+	do
+		[ -n "${line}" ] && echo_date "${line}"
+	done
+}
+
 sub_uri_scheme(){
 	printf '%s' "${1}" | sed -n 's#^\([A-Za-z0-9+.-]\+\)://.*#\1#p'
 }
 
 sub_uri_body(){
 	printf '%s' "${1}" | sed -n 's#^[A-Za-z0-9+.-]\+://\(.*\)$#\1#p'
+}
+
+sub_is_ipv4_literal(){
+	printf '%s' "${1}" | awk -F'.' '
+		NF != 4 { exit 1 }
+		{
+			for (i = 1; i <= 4; i++) {
+				if ($i !~ /^[0-9]+$/ || $i < 0 || $i > 255) {
+					exit 1
+				}
+			}
+		}
+		END { exit 0 }
+	'
+}
+
+sub_is_ipv6_literal(){
+	printf '%s' "${1}" | grep -Eq '^[0-9A-Fa-f:.%]+$' && printf '%s' "${1}" | grep -q ':'
+}
+
+sub_is_ip_literal(){
+	local host="$1"
+	[ -n "${host}" ] || return 1
+	sub_is_ipv4_literal "${host}" && return 0
+	sub_is_ipv6_literal "${host}" && return 0
+	return 1
 }
 
 sub_uri_split_host_port(){
@@ -2842,14 +2803,6 @@ add_vless_node(){
 }
 
 add_trojan_node(){
-	# example, not real
-	# trojan://a479d06e-c8b2-4f47-8f3d-0fdda666c7fc@userm2.su.com:39718?allowInsecure=1&plugin=obfs-local;obfs=websocket;obfs-host=bing.com;obfs-uri=/&tfo=1#香港M2-5|专线|流媒体|
-	# trojan://auto@104.211.135.143:443?peer=elicense3.wawa55.workers.dev&plugin=obfs-local;obfs=websocket;obfs-host=esetsecuritylicense3.wawafec355.workers.dev;obfs-uri=/#United+States
-	# trojan://yaml77@104.121.161.173:443?peer=yaml117.ggggf.net&plugin=obfs-local;obfs=websocket;obfs-host=yaml7.ggff.net;obfs-uri=/#United+States
-	# trojan://amclubs2024@198.162.162.156:443?peer=trer.amub.us&plugin=obfs-local;obfs=websocket;obfs-host=trer.amub.us;obfs-uri=/?ed=2560#United+States
-	# trojan://37470001032741200@grateful-glowworm.treefrog761.one:443#Mexico
-	# trojan://37470001032741200@humble-rodent.treefrog761.one:443#South+Korea
-	
 	local decode_link="$1"
 	local decode_link=$(echo "$1" | urldecode)
 	local action="$2"
@@ -3087,6 +3040,7 @@ add_tuic_node(){
 		tuic_hostport="${tuic_authority}"
 	fi
 
+	tuic_auth=$(printf '%s' "${tuic_auth}" | urldecode)
 	if [ "${tuic_auth#*:}" != "${tuic_auth}" ];then
 		tuic_uuid=$(printf '%s' "${tuic_auth%%:*}" | urldecode)
 		tuic_pass=$(printf '%s' "${tuic_auth#*:}" | urldecode)
@@ -3094,6 +3048,14 @@ add_tuic_node(){
 		tuic_uuid=""
 		tuic_pass=""
 	fi
+
+	# Shadowrocket / sing-box style TUIC links often place credentials in query args
+	# rather than in userinfo, e.g. tuic://host:port?uuid=...&password=...
+	[ -z "${tuic_uuid}" ] && tuic_uuid=$(sub_uri_query_value "${decode_link}" "uuid" | urldecode)
+	[ -z "${tuic_uuid}" ] && tuic_uuid=$(sub_uri_query_value "${decode_link}" "id" | urldecode)
+	[ -z "${tuic_pass}" ] && tuic_pass=$(sub_uri_query_value "${decode_link}" "password" | urldecode)
+	[ -z "${tuic_pass}" ] && tuic_pass=$(sub_uri_query_value "${decode_link}" "passwd" | urldecode)
+	[ -z "${tuic_pass}" ] && tuic_pass=$(sub_uri_query_value "${decode_link}" "token" | urldecode)
 
 	local hostinfo
 	hostinfo=$(sub_uri_split_host_port "${tuic_hostport}")
@@ -3111,7 +3073,7 @@ add_tuic_node(){
 	[ -z "${tuic_skip_verify}" ] && tuic_skip_verify=$(sub_uri_query_bool "${decode_link}" "skip_cert_verify")
 	tuic_server_override=$(sub_uri_query_value "${decode_link}" "sni" | urldecode)
 
-	if [ -n "${tuic_server_override}" -a -n "$(__valid_ip "${tuic_server}")" ];then
+	if [ -n "${tuic_server_override}" ] && sub_is_ip_literal "${tuic_server}"; then
 		tuic_ip="${tuic_server}"
 		tuic_server="${tuic_server_override}"
 	fi
@@ -3628,6 +3590,8 @@ get_online_rule_now(){
 	fi
 	echo ${SUB_LINK_HASH} >>/$DIR/sublink_md5.txt
 	echo ${SUB_SOURCE_TAG} >>/$DIR/subsource_md5.txt
+	UNSUPPORTED_PROTO_LOG_FILE="${DIR}/unsupported_proto_${SUB_SOURCE_TAG}.txt"
+	rm -f "${UNSUPPORTED_PROTO_LOG_FILE}" >/dev/null 2>&1
 
 	# 3. try to delete some file left by last sublink subscribe
 	rm -rf /tmp/ssr_subscribe_file* >/dev/null 2>&1
@@ -3781,6 +3745,7 @@ get_online_rule_now(){
 	[ "${NODE_NU_H2}" -gt "0" ] && echo_date "🟤hysteria2节点：${NODE_NU_H2}个"
 	[ "${NODE_NU_TC}" -gt "0" ] && echo_date "🟫tuic节点：${NODE_NU_TC}个"
 	[ "${NODE_NU_NV}" -gt "0" ] && echo_date "🟧Naïve节点：${NODE_NU_NV}个"
+	sub_log_unsupported_scheme_summary "${DIR}/sub_file_decode_${SUB_LINK_HASH:0:4}.txt"
 	if [ "${pkg_type}" != "full" -a $((${NODE_NU_TC} + ${NODE_NU_NV})) -gt "0" ];then
 		echo_date "⚠️当前插件为lite版本，TUIC/NaïveProxy节点会被跳过。"
 	fi
@@ -3832,7 +3797,7 @@ get_online_rule_now(){
 			;;
 		*)
 			if [ -n "${node_type}" ];then
-				echo_date "⛔不支持${node_type}格式的节点，跳过！"
+				sub_log_unsupported_scheme_once "${node_type}"
 			fi
 			# if [ -n "${node_info}" ];then
 			# 	local _match=$(echo "${node_info}"|grep -E "//")
@@ -3931,6 +3896,7 @@ start_node_subscribe(){
 	if [ -z "$(dbus get ss_online_links)" ];then
 		echo_date "🈳订阅地址输入框为空，准备清理现有订阅节点..."
 		remove_sub_node
+		fss_refresh_node_direct_cache >/dev/null 2>&1
 		sub_clear_subscribe_cache
 		echo_date "🎉订阅节点清理完成！"
 		echo_date "==================================================================="
@@ -3941,6 +3907,7 @@ start_node_subscribe(){
 	if [ "${online_url_nu}" == "0" ];then
 		echo_date "🈳未发现任何有效的订阅地址，准备清理现有订阅节点..."
 		remove_sub_node
+		fss_refresh_node_direct_cache >/dev/null 2>&1
 		sub_clear_subscribe_cache
 		echo_date "🎉订阅节点清理完成！"
 		echo_date "==================================================================="
@@ -4027,6 +3994,7 @@ start_node_subscribe(){
 				echo_date "❌节点信息写入失败！"
 				exit_sub
 			fi
+			fss_refresh_node_direct_cache >/dev/null 2>&1
 		else
 			echo_date "ℹ️本次订阅没有任何节点发生变化，不进行写入，继续！"
 		fi
@@ -4052,6 +4020,7 @@ start_offline_update() {
 	echo_date "ℹ️通过ss/ssr/vmess/vless/trojan/hysteria2/tuic/naive链接添加节点..."
 	mkdir -p $DIR
 	rm -rf $DIR/*
+	UNSUPPORTED_PROTO_LOG_FILE="${DIR}/unsupported_proto_offline.txt"
 	local nodes=$(dbus get ss_base64_links | base64 -d | urldecode)
 	local pkg_type=$(dbus get ss_basic_pkg_type)
 	[ -n "${pkg_type}" ] || pkg_type=$(cat /koolshare/webs/Module_shadowsocks.asp | tr -d '\r' | grep -Eo "PKG_TYPE=.+"|awk -F "=" '{print $2}'|sed 's/"//g')
@@ -4100,7 +4069,7 @@ start_offline_update() {
 			fi
 			;;
 		*)
-			echo_date "⚠️尚不支持${node_type}格式的节点，跳过！"
+			sub_log_unsupported_scheme_once "${node_type}"
 			continue
 			;;
 		esac
@@ -4109,7 +4078,9 @@ start_offline_update() {
 	echo_date "-------------------------------------------------------------------"
 	if [ -f "${DIR}/offline_node_new.txt" ];then
 		echo_date "ℹ️离线节点解析完毕，开始写入节点..."
-		json2skipd "offline_node_new"
+		if json2skipd "offline_node_new"; then
+			fss_refresh_node_direct_cache >/dev/null 2>&1
+		fi
 	else
 		echo_date "ℹ️离线节点解析失败！跳过！"
 	fi
