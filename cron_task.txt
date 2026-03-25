@@ -40,10 +40,14 @@ fi
 
 #!/bin/sh
 
-# 定义输出函数（防止某些环境 echo_date 未定义导致脚本中断）
-alias echo_date='echo 【$(date +%H:%M:%S)】'
+# 1. 定义像素级对齐函数 (全行日期 + 冒号)
+# 格式：【20260325 23:10:45】: 内容
+echo_date() {
+    echo "【$(date "+%Y%m%d %H:%M:%S")】: $1"
+}
 
-echo_date "======================= 自定义防火墙启动 ======================="
+# --- 打印官方风格页眉 ---
+echo_date "======================= 自定义防火墙启动 ==============================="
 
 # --- 第一部分：IPv4 端口清理与重注 (2525 WebDAV) ---
 while iptables -D INPUT -p tcp --dport 2525 -j ACCEPT 2>/dev/null; do :; done
@@ -53,14 +57,14 @@ while iptables -D INPUT -p tcp --dport 2525 -m state --state NEW -m recent --set
 iptables -I INPUT 1 -p tcp --dport 2525 -j ACCEPT
 iptables -I INPUT 1 -p tcp --dport 2525 -m state --state NEW -m recent --update --seconds 60 --hitcount 10 -j DROP
 iptables -I INPUT 1 -p tcp --dport 2525 -m state --state NEW -m recent --set
-echo "✅ IPv4 2525 规则已重置（唯一）"
+echo_date "=======================✅ IPv4 2525 规则已重置 ======================="
 
 # --- 第二部分：IPv6 端口清理与重注 (8181 管理) ---
 while ip6tables -D INPUT -p tcp --dport 8181 -j ACCEPT 2>/dev/null; do :; done
 ip6tables -I INPUT 1 -p tcp --dport 8181 -j ACCEPT
-echo "✅ IPv6 8181 规则已重置（唯一）"
+echo_date "=======================✅ IPv6 8181 规则已重置 ======================="
 
-# --- 第三部分：AI 分流补漏 (核心修复区) ---
+# --- 第三部分：AI 分流补漏 ---
 while iptables -t nat -D PREROUTING -p tcp -m set --match-set ai_bypass dst -j REDIRECT 2>/dev/null; do :; done
 
 ipset -N ai_bypass hash:net 2>/dev/null
@@ -69,23 +73,16 @@ for net in $AI_NETS; do
     ipset -! add ai_bypass $net 2>/dev/null
 done
 
-# 【核心修复】：三重保险获取端口
-# 1. 尝试获取端口，并剔除可能存在的不可见字符
+# 端口获取与校验 (增加默认值 3333)
 RAW_PORT=$(nvram get ss_status_proxy_port | tr -d '[:space:]')
-
-# 2. 逻辑判断：如果为空、或者是 0，则强制使用 3333
-if [ -z "$RAW_PORT" ] || [ "$RAW_PORT" = "0" ]; then
+if [ -z "$RAW_PORT" ] || ! echo "$RAW_PORT" | grep -q '^[0-9]\+$'; then
     FINAL_PORT="3333"
 else
     FINAL_PORT="$RAW_PORT"
 fi
 
-# 3. 最终执行检查：只有当端口是纯数字时才执行，防止注入攻击
-if echo "$FINAL_PORT" | grep -q '^[0-9]\+$'; then
-    iptables -t nat -A PREROUTING -p tcp -m set --match-set ai_bypass dst -j REDIRECT --to-ports "$FINAL_PORT"
-    echo "✅ AI 分流已挂载至端口: $FINAL_PORT"
-else
-    echo "❌ 严重错误: 获取到的端口号 [$FINAL_PORT] 非合法数字，跳过分流挂载"
-fi
+iptables -t nat -A PREROUTING -p tcp -m set --match-set ai_bypass dst -j REDIRECT --to-ports "$FINAL_PORT"
+echo_date "=======================✅ AI 分流已挂载 ======================="
 
+# --- 打印官方风格页脚 ---
 echo_date "======================= 自定义防火墙完毕 ======================="
