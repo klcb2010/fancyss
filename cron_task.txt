@@ -40,41 +40,36 @@ fi
 
 #!/bin/sh
 # =================================================================
-# GT-AX6000 v6.3 灵动修复版 (解决 --to-ports 报错)
+# GT-AX6000 AI 分流 + 8181 放行)
 # =================================================================
 
-# 1. 端口安全获取：增加三层保护逻辑
-# 第一层：从 nvram 获取；第二层：从重定向端口获取；第三层：硬编码默认 3333
-FINAL_PORT=$(nvram get ss_status_proxy_port)
-[ -z "$FINAL_PORT" ] && FINAL_PORT=$(nvram get ss_redir_port)
-[ -z "$FINAL_PORT" ] && FINAL_PORT="3333"
+# 1. 核心安全：WebDAV 2525 防护 
+while iptables -D INPUT -p tcp --dport 2525 -j ACCEPT 2>/dev/null; do :; done
+iptables -I INPUT 1 -p tcp --dport 2525 -j ACCEPT
 
-# 2. 灵动域名拦截 (插入到 dnsmasq 配置)
-ipset -N ai_bypass hash:net 2>/dev/null
-# 修正：采用 -p 保证创建目录不报错，强制覆盖确保配置最新
-mkdir -p /jffs/configs/dnsmasq.d
-cat << EOF > /jffs/configs/dnsmasq.d/ai_proxy.conf
-# 抓取 AI 域名 IP 自动填入内核 ipset
-server=/openai.com/127.0.0.1#5353
-ipset=/openai.com/ai_bypass
-server=/chatgpt.com/127.0.0.1#5353
-ipset=/chatgpt.com/ai_bypass
-server=/anthropic.com/127.0.0.1#5353
-ipset=/anthropic.com/ai_bypass
-server=/x.com/127.0.0.1#5353
-ipset=/x.com/ai_bypass
-EOF
-
-# 3. 稳健注入 iptables (针对刚才报错的修复)
-# 这里用了 "$FINAL_PORT" 确保即使是空格也不会语法错误
-iptables -t nat -D PREROUTING -p tcp -m set --match-set ai_bypass dst -j REDIRECT --to-ports "$FINAL_PORT" 2>/dev/null
-iptables -t nat -I PREROUTING -p tcp -m set --match-set ai_bypass dst -j REDIRECT --to-ports "$FINAL_PORT"
-
-# 4. 8181 IPv6 管理端口放行
+# 2. IPv6 访问：放行 8181 管理端口
+# 先检查是否存在，不存在再添加，防止规则重复
 ip6tables -C INPUT -p tcp --dport 8181 -j ACCEPT 2>/dev/null || ip6tables -I INPUT 1 -p tcp --dport 8181 -j ACCEPT
+echo "✅ IPv6 8181 端口已放行"
 
-# 5. IPv6 0分止损 (彻底解决 test-ipv6 的问题)
-# 只要不强制 DNAT 53 端口，你的 10/10 分就稳了
+# 3. AI 分流：内核态 IP 拦截 (不影响 IPv6 10/10 评分)
+echo "正在注入 AI 助手精准分流..."
+AI_NETS="104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 104.244.42.0/24 192.133.76.0/22 199.16.156.0/22 199.59.148.0/22 204.92.112.0/22 69.195.160.0/19"
+
+ipset -N ai_bypass hash:net 2>/dev/null
+for net in $AI_NETS; do
+    ipset -! add ai_bypass $net 2>/dev/null
+done
+
+# 获取代理端口
+REAL_PORT=$(nvram get ss_status_proxy_port)
+[ -z "$REAL_PORT" ] && REAL_PORT="3333"
+
+# 注入规则
+iptables -t nat -D PREROUTING -p tcp -m set --match-set ai_bypass dst -j REDIRECT --to-ports $REAL_PORT 2>/dev/null
+iptables -t nat -I PREROUTING -p tcp -m set --match-set ai_bypass dst -j REDIRECT --to-ports $REAL_PORT
+
+# 4. IPv6 止损：清除所有可能导致 0 分的 DNS 劫持残留
 while ip6tables -t nat -D PREROUTING -p udp --dport 53 -j DNAT 2>/dev/null; do :; done
 
-echo "灵动版 v6.3 部署成功，重定向端口: $FINAL_PORT"
+echo "======================= v6.0 部署完成 ====================="
