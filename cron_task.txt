@@ -40,19 +40,21 @@ fi
 
 #!/bin/sh
 # =================================================================
-# GT-AX6000 v6.1 (Shebang 修复版 + 灵动域名分流)
+# GT-AX6000 v6.3 灵动修复版 (解决 --to-ports 报错)
 # =================================================================
 
-# 1. 核心安全：8181 (IPv6) 与 2525 (WebDAV) 护航
-ip6tables -C INPUT -p tcp --dport 8181 -j ACCEPT 2>/dev/null || ip6tables -I INPUT 1 -p tcp --dport 8181 -j ACCEPT
-while iptables -D INPUT -p tcp --dport 2525 -j ACCEPT 2>/dev/null; do :; done
-iptables -I INPUT 1 -p tcp --dport 2525 -j ACCEPT
+# 1. 端口安全获取：增加三层保护逻辑
+# 第一层：从 nvram 获取；第二层：从重定向端口获取；第三层：硬编码默认 3333
+FINAL_PORT=$(nvram get ss_status_proxy_port)
+[ -z "$FINAL_PORT" ] && FINAL_PORT=$(nvram get ss_redir_port)
+[ -z "$FINAL_PORT" ] && FINAL_PORT="3333"
 
-# 2. 灵动域名拦截：利用 dnsmasq 的 ipset 自动填坑
-# 这种方式最灵活：只要访问这些域名，IP 会自动进 ai_bypass
+# 2. 灵动域名拦截 (插入到 dnsmasq 配置)
 ipset -N ai_bypass hash:net 2>/dev/null
-cat << 'EOF' > /jffs/configs/dnsmasq.d/ai_proxy.conf
-# 自动抓取 AI 相关域名的 IP 并填入 ipset
+# 修正：采用 -p 保证创建目录不报错，强制覆盖确保配置最新
+mkdir -p /jffs/configs/dnsmasq.d
+cat << EOF > /jffs/configs/dnsmasq.d/ai_proxy.conf
+# 抓取 AI 域名 IP 自动填入内核 ipset
 server=/openai.com/127.0.0.1#5353
 ipset=/openai.com/ai_bypass
 server=/chatgpt.com/127.0.0.1#5353
@@ -63,14 +65,16 @@ server=/x.com/127.0.0.1#5353
 ipset=/x.com/ai_bypass
 EOF
 
-# 3. 内核拦截：将 ai_bypass 里的 IP 强行重定向到代理端口
-REAL_PORT=$(nvram get ss_status_proxy_port || echo "3333")
-iptables -t nat -D PREROUTING -p tcp -m set --match-set ai_bypass dst -j REDIRECT --to-ports $REAL_PORT 2>/dev/null
-iptables -t nat -I PREROUTING -p tcp -m set --match-set ai_bypass dst -j REDIRECT --to-ports $REAL_PORT
+# 3. 稳健注入 iptables (针对刚才报错的修复)
+# 这里用了 "$FINAL_PORT" 确保即使是空格也不会语法错误
+iptables -t nat -D PREROUTING -p tcp -m set --match-set ai_bypass dst -j REDIRECT --to-ports "$FINAL_PORT" 2>/dev/null
+iptables -t nat -I PREROUTING -p tcp -m set --match-set ai_bypass dst -j REDIRECT --to-ports "$FINAL_PORT"
 
-# 4. IPv6 止损：不劫持，只放行
+# 4. 8181 IPv6 管理端口放行
+ip6tables -C INPUT -p tcp --dport 8181 -j ACCEPT 2>/dev/null || ip6tables -I INPUT 1 -p tcp --dport 8181 -j ACCEPT
+
+# 5. IPv6 0分止损 (彻底解决 test-ipv6 的问题)
+# 只要不强制 DNAT 53 端口，你的 10/10 分就稳了
 while ip6tables -t nat -D PREROUTING -p udp --dport 53 -j DNAT 2>/dev/null; do :; done
 
-# 5. [关键] 重启服务使域名拦截生效 (这次有 Shebang 了，不会报错)
-service restart_dnsmasq
-echo "======================= v6.1 灵动版部署完成 ====================="
+echo "灵动版 v6.3 部署成功，重定向端口: $FINAL_PORT"
