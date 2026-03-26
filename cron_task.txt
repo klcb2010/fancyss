@@ -38,65 +38,63 @@ start_service_soft "/jffs/scripts/DDNS_SSH_helper.sh"
 # 启动 frpc (内部已带“存在即跳过”逻辑)
 [ -f "/jffs/scripts/frpc_start.sh" ] && /bin/sh /jffs/scripts/frpc_start.sh
 
-# --- 自定义逻辑开始 (无函数安全版) ---
-
-# 1. 直接通过变量获取格式化时间，规避函数定义的括号冲突
-# 注意：这里去掉了 echo_date() { ... } 整个结构
-LOG_TIME="【$(date "+%Y%m%d %H:%M:%S")】:"
-
 #!/bin/sh
 LOG_TIME=$(date '+%Y-%m-%d %H:%M:%S')
 
-# 1. 定义清理函数（增加强制清理逻辑）
-flush_custom_rules() {
-    local p=$1
-    local proto=$2
-    # 只要规则还在，就一直删，直到报错为止
-    while $proto -D INPUT -p tcp --dport $p -j ACCEPT 2>/dev/null; do :; done
-    while $proto -D INPUT -p tcp --dport $p -m state --state NEW -m recent --set 2>/dev/null; do :; done
-    # 清理所有带 hit_count 的规则（不管它是 8 还是 10，不管它是 LOG 还是 DROP）
-    # 注意：这里可能需要多运行几次或者手动清理残留的复杂 LOG 规则
+echo "$LOG_TIME ==================== 正在重整防火墙：释放 2525 / 加固 8181 ===================="
+
+# ==================== 1. 彻底清除 2525 的所有限制 ====================
+# 无论之前加了什么 LOG、DROP 或 recent 规则，全部循环清理干净
+clean_2525() {
+    local proto=$1
+    while $proto -D INPUT -p tcp --dport 2525 -j ACCEPT 2>/dev/null; do :; done
+    while $proto -D INPUT -p tcp --dport 2525 -m state --state NEW -m recent --set 2>/dev/null; do :; done
+    while $proto -D INPUT -p tcp --dport 2525 -m state --state NEW -m recent --rcheck --seconds 60 --hitcount 8 -j DROP 2>/dev/null; do :; done
+    while $proto -D INPUT -p tcp --dport 2525 -m state --state NEW -m recent --rcheck --seconds 60 --hitcount 8 -j LOG --log-prefix "2525-BLOCK: " 2>/dev/null; do :; done
+    while $proto -D INPUT -p tcp --dport 2525 -m state --state NEW -m recent --update --seconds 60 --hitcount 8 -j LOG --log-prefix "2525-BLOCK: " 2>/dev/null; do :; done
 }
 
-# 2. 强力清理（建议手动执行 iptables -F INPUT 如果你不怕断连，或者按下面精准清理）
-for port in 2525 8181; do
-    flush_custom_rules $port iptables
-    flush_custom_rules $port ip6tables
-done
+clean_2525 iptables
+clean_2525 ip6tables
 
-echo "$LOG_TIME 清理完成，开始应用优化规则..."
+# ==================== 2. 清理并重置 8181 规则 ====================
+# 同样先清理旧的，避免堆叠
+clean_8181() {
+    local proto=$1
+    while $proto -D INPUT -p tcp --dport 8181 -j ACCEPT 2>/dev/null; do :; done
+    while $proto -D INPUT -p tcp --dport 8181 -m state --state NEW -m recent --set 2>/dev/null; do :; done
+    while $proto -D INPUT -p tcp --dport 8181 -m state --state NEW -m recent --rcheck --seconds 60 --hitcount 8 -j DROP 2>/dev/null; do :; done
+    while $proto -D INPUT -p tcp --dport 8181 -m state --state NEW -m recent --update --seconds 60 --hitcount 8 -j LOG --log-prefix "8181-BLOCK: " 2>/dev/null; do :; done
+}
 
-# ---------------------------------------------------------
-# 3. 核心规则应用 (使用 -A 顺序控制)
-# ---------------------------------------------------------
+clean_8181 iptables
+clean_8181 ip6tables
 
-# 【A部分：放行已有连接】（最优先级）
+# ==================== 3. 应用新规则 ====================
+
+# A. 全局放行：已建立的连接永远优先（防掉线）
 iptables -I INPUT 1 -m state --state RELATED,ESTABLISHED -j ACCEPT
 ip6tables -I INPUT 1 -m state --state RELATED,ESTABLISHED -j ACCEPT
 
-# 【B部分：WebDAV 8181 加固】
-# 考虑到 WebDAV 会有缩略图和并发，我们将阈值放宽到 20次/60秒
+# B. 2525 端口：全放行（不再设防，确保 DDNS 等服务正常）
+iptables -A INPUT -p tcp --dport 2525 -j ACCEPT
+ip6tables -A INPUT -p tcp --dport 2525 -j ACCEPT
+
+# C. 8181 端口：保留加固（将阈值放宽到 20 次，防止 WebDAV 扫描时误杀自己）
+# ------------------------------
 for proto in "iptables" "ip6tables"; do
-    # 达到 20 次先记日志
-    $proto -A INPUT -p tcp --dport 8181 -m state --state NEW -m recent --rcheck --seconds 60 --hitcount 20 -m limit --limit 1/min -j LOG --log-prefix "8181-BLOCK: "
-    # 达到 20 次直接踢掉
+    # 60秒内超过20次才拦截（WebDAV 并发较高，20次更安全）
     $proto -A INPUT -p tcp --dport 8181 -m state --state NEW -m recent --rcheck --seconds 60 --hitcount 20 -j DROP
     # 记录并放行
     $proto -A INPUT -p tcp --dport 8181 -m state --state NEW -m recent --set
     $proto -A INPUT -p tcp --dport 8181 -j ACCEPT
 done
 
-# 【C部分：DDNS 2525 加固】
-# 这个端口请求频率低，可以严格一点，维持 8次/60秒
-for proto in "iptables" "ip6tables"; do
-    $proto -A INPUT -p tcp --dport 2525 -m state --state NEW -m recent --rcheck --seconds 60 --hitcount 8 -m limit --limit 1/min -j LOG --log-prefix "2525-BLOCK: "
-    $proto -A INPUT -p tcp --dport 2525 -m state --state NEW -m recent --rcheck --seconds 60 --hitcount 8 -j DROP
-    $proto -A INPUT -p tcp --dport 2525 -m state --state NEW -m recent --set
-    $proto -A INPUT -p tcp --dport 2525 -j ACCEPT
-done
+# ==================== 4. 强制复活（清空缓存） ====================
+# 这一步非常关键：清除 recent 模块记录的所有黑名单 IP
+echo / > /proc/net/xt_recent/DEFAULT 2>/dev/null
 
-echo "$LOG_TIME 规则重载成功！"
-
+echo "$LOG_TIME ======================= ✅ 2525 已释放，8181 已加固 (Hitcount: 20) ========================"
 
 # --- 第三部分：AI 分流补漏 (OpenAI + Grok 纯净稳定版) ---
 # 清空旧规则
