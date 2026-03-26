@@ -1,42 +1,42 @@
 # BEGIN CUSTOM CRON TASK
-# ======================= 清理旧任务，防止重复 =======================
+# ======================= 1.0 & 2.0 注入定时守护与清理任务 =======================
 for task in frpc_guard rclone_guard clean_logs refresh_ddns rclone_cache_clean ss_update_daily daily_check; do
     cru d $task 2>/dev/null
 done
 
-# ======================= 1.0 注入定时守护任务 =======================
-cru a frpc_guard "*/10 * * * * [ -z \"\$(pidof frpc)\" ] && /bin/sh /jffs/scripts/frpc_start.sh"
-cru a rclone_guard "*/20 * * * * [ -z \"\$(pidof rclone)\" ] && /bin/sh /jffs/scripts/rclone_webdav.sh"
+# 统一格式注入定时任务
+cru a frpc_guard "*/10 * * * * /bin/sh /jffs/scripts/frpc_start.sh >/dev/null 2>&1"
+cru a rclone_guard "*/20 * * * * /bin/sh /jffs/scripts/rclone_webdav.sh >/dev/null 2>&1"
 cru a refresh_ddns "30 3 */5 * * /jffs/scripts/refresh_ddns.sh >> /jffs/scripts/ddns_refresh.log 2>&1"
 cru a ss_update_daily "30 4 * * * sh /jffs/.koolshare/scripts/ss_update.sh update >> /jffs/scripts/ss_update.log 2>&1"
-
-# ======================= 2.0 注入清理任务 =======================
-mkdir -p /jffs/scripts
 cru a clean_logs "0 3 * * * /jffs/scripts/clean_logs.sh >> /jffs/scripts/clean_logs.txt 2>&1"
-cru a rclone_cache_clean "0 5 * * * [ -d /tmp/mnt/SF/entware/var/cache/rclone ] && rm -rf /tmp/mnt/SF/entware/var/cache/rclone/*"
-# 每天凌晨 5:30 运行，并将脚本本身的报错也记录到系统日志或黑洞
+
+# 凌晨 5 点清理并拉起
+cru a rclone_cache_clean "0 5 * * * [ -d /tmp/mnt/SF/entware/var/cache/rclone ] && rm -rf /tmp/mnt/SF/entware/var/cache/rclone/* && /bin/sh /jffs/scripts/rclone_webdav.sh >/dev/null 2>&1"
 cru a daily_check "30 5 * * * /bin/sh /jffs/scripts/check_status.sh >> /jffs/scripts/check_status.log 2>&1"
 
-# ======================= 3.0 运行后台服务守护 (PID 锁逻辑) =======================
-# rclone_webdav 守护
-RCLONE_PID="/tmp/rclone_webdav.pid"
-if [ -f "$RCLONE_PID" ] && kill -0 $(cat "$RCLONE_PID") 2>/dev/null; then
-    echo "$(date '+%Y-%m-%d %H:%M:%S') [跳过] rclone_webdav.sh 正在运行" >> /tmp/rclone_webdav.log
-else
-    pkill -f rclone_webdav.sh 2>/dev/null
-    /bin/sh /jffs/scripts/rclone_webdav.sh >> /tmp/rclone_webdav.log 2>&1 &
-    echo $! > "$RCLONE_PID"
-fi
 
-# DDNS_SSH_helper 守护
-DDNS_PID="/tmp/ddns_ssh_helper.pid"
-if [ -f "$DDNS_PID" ] && kill -0 $(cat "$DDNS_PID") 2>/dev/null; then
-    echo "$(date '+%Y-%m-%d %H:%M:%S') [跳过] DDNS_SSH_helper.sh 正在运行" >> /tmp/ddns_ssh_helper.log
-else
-    pkill -f DDNS_SSH_helper.sh 2>/dev/null
-    /bin/sh /jffs/scripts/DDNS_SSH_helper.sh >> /tmp/ddns_ssh_helper.log 2>&1 &
-    echo $! > "$DDNS_PID"
-fi
+# ======================= 3.0 后台服务温柔启动 (存在即跳过) =======================
+start_service_soft() {
+    local _script="$1"
+    local _name=$(basename "$_script")
+    
+    # 第一重检查：检查 ps 进程列表里是否已经有这个脚本在跑
+    if ps -w | grep -v grep | grep -q "$_name"; then
+        return 0
+    fi
+    
+    # 第二重检查：针对 rclone 等二进制程序的检查 (如果脚本已经在跑但没拉起程序，这里补一下)
+    # 这里直接运行脚本，脚本内部建议也带上同样的“存在即跳过”逻辑
+    /bin/sh "$_script" >/dev/null 2>&1 &
+}
+
+# 启动服务
+start_service_soft "/jffs/scripts/rclone_webdav.sh"
+start_service_soft "/jffs/scripts/DDNS_SSH_helper.sh"
+
+# 启动 frpc (内部已带“存在即跳过”逻辑)
+[ -f "/jffs/scripts/frpc_start.sh" ] && /bin/sh /jffs/scripts/frpc_start.sh
 
 # --- 自定义逻辑开始 (无函数安全版) ---
 
