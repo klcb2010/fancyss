@@ -62,23 +62,22 @@ while ip6tables -D INPUT -p tcp --dport 8181 -j ACCEPT 2>/dev/null; do :; done
 ip6tables -I INPUT 1 -p tcp --dport 8181 -j ACCEPT
 echo "$LOG_TIME ======================= ✅ IPv6 8181 规则已重置 ======================= "
 
-# --- 第三部分：AI 分流补漏 (最终优化版 - 干净稳定、零误杀) ---
-
-# 1. 彻底删除旧 iptables 规则
+# --- 第三部分：AI 分流补漏 (仅 OpenAI + Grok 精准版) ---
+# 清空旧规则
 while iptables -t nat -D PREROUTING -p tcp -m set --match-set ai_bypass dst -j REDIRECT 2>/dev/null; do :; done
 
-# 2. 强制重建 ipset 集合（清空所有历史残留，最干净）
+# 重建纯净 ipset
 ipset -F ai_bypass 2>/dev/null
 ipset -X ai_bypass 2>/dev/null
 ipset -N ai_bypass hash:net 2>/dev/null
 
-# 3. AI 服务目标网段（纯净添加）
-AI_NETS="104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 104.244.42.0/24 192.133.76.0/22 199.16.156.0/22 199.59.148.0/22 204.92.112.0/22 69.195.160.0/19"
+# 仅 OpenAI + Grok 精准网段
+AI_NETS="131.0.72.0/22 104.244.42.0/24 192.133.76.0/22 199.59.148.0/22"
 for net in $AI_NETS; do
     ipset -! add ai_bypass $net 2>/dev/null
 done
 
-# 4. 端口安全获取（增强版容错）
+# 端口容错
 RAW_PORT=$(nvram get ss_status_proxy_port | tr -d '[:space:]')
 if [ -z "$RAW_PORT" ] || ! echo "$RAW_PORT" | grep -q '^[0-9]\+$'; then
     FINAL_PORT="3333"
@@ -86,7 +85,7 @@ else
     FINAL_PORT="$RAW_PORT"
 fi
 
-# 5. 应用分流规则（只添加一次，稳定不重复）
+# 应用分流
 iptables -t nat -A PREROUTING -p tcp -m set --match-set ai_bypass dst -j REDIRECT --to-ports "$FINAL_PORT"
 
 echo "$LOG_TIME ======================= ✅ AI分流已挂载 ============================ "
