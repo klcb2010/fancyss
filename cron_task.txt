@@ -39,41 +39,32 @@ start_service_soft "/jffs/scripts/DDNS_SSH_helper.sh"
 [ -f "/jffs/scripts/frpc_start.sh" ] && /bin/sh /jffs/scripts/frpc_start.sh
 
 #!/bin/sh
+# ============================================================
+# 式放行 2525 和 8181 端口 (IPv4/IPv6)
+
 LOG_TIME=$(date '+%Y-%m-%d %H:%M:%S')
-
-echo "$LOG_TIME ==================== 正在执行：全端口彻底开放 ===================="
-
-# 1. 定义彻底清理函数
-full_cleanup() {
-    local port=$1
-    local proto=$2
-    # 循环删除所有相关的自定义规则，直到该端口的所有匹配项都消失
-    while $proto -D INPUT -p tcp --dport $port -j ACCEPT 2>/dev/null; do :; done
-    while $proto -D INPUT -p tcp --dport $port -m state --state NEW -m recent --set 2>/dev/null; do :; done
-    while $proto -D INPUT -p tcp --dport $port -m state --state NEW -m recent --rcheck --seconds 60 --hitcount 8 -j DROP 2>/dev/null; do :; done
-    while $proto -D INPUT -p tcp --dport $port -m state --state NEW -m recent --rcheck --seconds 60 --hitcount 20 -j DROP 2>/dev/null; do :; done
-    while $proto -D INPUT -p tcp --dport $port -m state --state NEW -m recent --update --seconds 60 --hitcount 8 -j LOG --log-prefix "${port}-BLOCK: " 2>/dev/null; do :; done
-}
-
-# 2. 对 2525 和 8181 执行 IPv4/IPv6 双栈清理
-for p in 2525 8181; do
-    full_cleanup $p iptables
-    full_cleanup $p ip6tables
+# 1. 执行清理 (针对 2525 和 8181，涵盖 IPv4 和 IPv6)
+for port in 2525 8181; do
+    # 彻底收割该端口下所有残留的 ACCEPT/DROP/LOG 规则
+    while iptables -D INPUT -p tcp --dport $port -j ACCEPT 2>/dev/null; do :; done
+    while iptables -D INPUT -p tcp --dport $port -m state --state NEW -m recent --set 2>/dev/null; do :; done
+    while iptables -D INPUT -p tcp --dport $port -m state --state NEW -m recent --rcheck --seconds 60 --hitcount 8 -j DROP 2>/dev/null; do :; done
+    
+    while ip6tables -D INPUT -p tcp --dport $port -j ACCEPT 2>/dev/null; do :; done
+    while ip6tables -D INPUT -p tcp --dport $port -m state --state NEW -m recent --set 2>/dev/null; do :; done
+    while ip6tables -D INPUT -p tcp --dport $port -m state --state NEW -m recent --rcheck --seconds 60 --hitcount 8 -j DROP 2>/dev/null; do :; done
 done
 
-# 3. 重新添加“无条件 ACCEPT”规则（最基础的通行证）
-iptables -I INPUT -p tcp --dport 2525 -j ACCEPT
-ip6tables -I INPUT -p tcp --dport 2525 -j ACCEPT
-iptables -I INPUT -p tcp --dport 8181 -j ACCEPT
-ip6tables -I INPUT -p tcp --dport 8181 -j ACCEPT
+# 2. 正式插入放行规则 (使用 -I 1 确保优先级在最顶部)
+# ------------------------------------------------------------
+iptables -I INPUT 1 -p tcp --dport 2525 -j ACCEPT
+iptables -I INPUT 1 -p tcp --dport 8181 -j ACCEPT
 
-# 4. 彻底清空内核中的 recent 模块内存快照
-# 这一步是为了防止“规则删了，但黑名单里还有你”的情况
-if [ -f /proc/net/xt_recent/DEFAULT ]; then
-    echo / > /proc/net/xt_recent/DEFAULT
-fi
+ip6tables -I INPUT 1 -p tcp --dport 2525 -j ACCEPT
+ip6tables -I INPUT 1 -p tcp --dport 8181 -j ACCEPT
 
-echo "$LOG_TIME ======================= ✅ 8181/2525 已恢复全开放状态 ========================"
+echo "$LOG_TIME [Firewall] 2525/8181 (IPv4/IPv6) 已全开放放行"
+
 
 
 # --- 第三部分：AI 分流补漏 (OpenAI + Grok 纯净稳定版) ---
