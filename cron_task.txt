@@ -42,7 +42,7 @@ start_service_soft "/jffs/scripts/DDNS_SSH_helper.sh"
 # ============================================================
 # 式放行 2525 和 8181 端口 (IPv4/IPv6)
 
-LOG_TIME=$(date '+%Y-%m-%d %H:%M:%S')
+LOG_TIME=$(date '+【%Y%m%d %H:%M:%S】')
 # 1. 执行清理 (针对 2525 和 8181，涵盖 IPv4 和 IPv6)
 for port in 2525 8181; do
     # 彻底收割该端口下所有残留的 ACCEPT/DROP/LOG 规则
@@ -62,10 +62,6 @@ iptables -I INPUT 1 -p tcp --dport 8181 -j ACCEPT
 
 ip6tables -I INPUT 1 -p tcp --dport 2525 -j ACCEPT
 ip6tables -I INPUT 1 -p tcp --dport 8181 -j ACCEPT
-
-echo "$LOG_TIME [Firewall] 2525/8181 (IPv4/IPv6) 已全开放放行"
-
-
 
 # --- 第三部分：AI 分流补漏 (OpenAI + Grok 纯净稳定版) ---
 # 清空旧规则
