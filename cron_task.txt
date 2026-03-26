@@ -44,23 +44,51 @@ start_service_soft "/jffs/scripts/DDNS_SSH_helper.sh"
 # 注意：这里去掉了 echo_date() { ... } 整个结构
 LOG_TIME="【$(date "+%Y%m%d %H:%M:%S")】:"
 
-# 2. 直接使用 echo 打印
-echo "$LOG_TIME ======================= 自定义防火墙启动 ============================"
+echo "$LOG_TIME 开始应用 2525/8181 防爆破规则（安全保守版）"
 
-# --- 第一部分：IPv4 端口清理与重注 (2525 WebDAV) ---
+# ==================== 清理旧规则 ====================
+# 清理 2525 IPv4
 while iptables -D INPUT -p tcp --dport 2525 -j ACCEPT 2>/dev/null; do :; done
-while iptables -D INPUT -p tcp --dport 2525 -m state --state NEW -m recent --update --seconds 60 --hitcount 10 -j DROP 2>/dev/null; do :; done
+while iptables -D INPUT -p tcp --dport 2525 -m state --state NEW -m recent --rcheck --seconds 60 --hitcount 8 -j DROP 2>/dev/null; do :; done
 while iptables -D INPUT -p tcp --dport 2525 -m state --state NEW -m recent --set 2>/dev/null; do :; done
 
-iptables -I INPUT 1 -p tcp --dport 2525 -j ACCEPT
-iptables -I INPUT 1 -p tcp --dport 2525 -m state --state NEW -m recent --update --seconds 60 --hitcount 10 -j DROP
-iptables -I INPUT 1 -p tcp --dport 2525 -m state --state NEW -m recent --set
-echo "$LOG_TIME ======================= ✅ IPv4 2525 规则已重置 ======================= "
+# 清理 8181 IPv4
+while iptables -D INPUT -p tcp --dport 8181 -j ACCEPT 2>/dev/null; do :; done
+while iptables -D INPUT -p tcp --dport 8181 -m state --state NEW -m recent --rcheck --seconds 60 --hitcount 8 -j DROP 2>/dev/null; do :; done
+while iptables -D INPUT -p tcp --dport 8181 -m state --state NEW -m recent --set 2>/dev/null; do :; done
 
-# --- 第二部分：IPv6 端口清理与重注 (8181 管理) ---
+# 清理 8181 IPv6
 while ip6tables -D INPUT -p tcp --dport 8181 -j ACCEPT 2>/dev/null; do :; done
-ip6tables -I INPUT 1 -p tcp --dport 8181 -j ACCEPT
-echo "$LOG_TIME ======================= ✅ IPv6 8181 规则已重置 ======================= "
+while ip6tables -D INPUT -p tcp --dport 8181 -m state --state NEW -m recent --rcheck --seconds 60 --hitcount 8 -j DROP 2>/dev/null; do :; done
+while ip6tables -D INPUT -p tcp --dport 8181 -m state --state NEW -m recent --set 2>/dev/null; do :; done
+
+# ==================== 添加新规则 ====================
+
+# 1. 放行已有连接（必须放在最前面）
+iptables -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
+ip6tables -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
+
+# 2. 2525 端口防爆破（IPv4）
+iptables -A INPUT -p tcp --dport 2525 -m state --state NEW -m recent --rcheck --seconds 60 --hitcount 8 -j DROP
+iptables -A INPUT -p tcp --dport 2525 -m state --state NEW -m recent --set
+iptables -A INPUT -p tcp --dport 2525 -j ACCEPT
+# 3. 2525 端口防爆破（IPv46）
+ip6tables -A INPUT -p tcp --dport 2525 -m state --state NEW -m recent --rcheck --seconds 60 --hitcount 8 -j DROP
+ip6tables -A INPUT -p tcp --dport 2525 -m state --state NEW -m recent --set
+ip6tables -A INPUT -p tcp --dport 2525 -j ACCEPT
+
+
+# 4. 8181 端口防爆破（IPv4）
+iptables -A INPUT -p tcp --dport 8181 -m state --state NEW -m recent --rcheck --seconds 60 --hitcount 8 -j DROP
+iptables -A INPUT -p tcp --dport 8181 -m state --state NEW -m recent --set
+iptables -A INPUT -p tcp --dport 8181 -j ACCEPT
+
+# 5. 8181 端口防爆破（IPv6）
+ip6tables -A INPUT -p tcp --dport 8181 -m state --state NEW -m recent --rcheck --seconds 60 --hitcount 8 -j DROP
+ip6tables -A INPUT -p tcp --dport 8181 -m state --state NEW -m recent --set
+ip6tables -A INPUT -p tcp --dport 8181 -j ACCEPT
+
+echo "$LOG_TIME ======================= ✅ 2525/8181 防爆破已启用（安全保守版）======================="
 
 # --- 第三部分：AI 分流补漏 (OpenAI + Grok 纯净稳定版) ---
 # 清空旧规则
