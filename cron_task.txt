@@ -44,7 +44,7 @@ start_service_soft "/jffs/scripts/DDNS_SSH_helper.sh"
 # 注意：这里去掉了 echo_date() { ... } 整个结构
 LOG_TIME="【$(date "+%Y%m%d %H:%M:%S")】:"
 
-echo "$LOG_TIME 开始应用 2525/8181 防爆破规则（安全保守版）"
+#  开始应用 2525 8181 防爆破规则
 
 # ==================== 清理旧规则 ====================
 # 清理 2525 IPv4
@@ -72,7 +72,7 @@ while ip6tables -D INPUT -p tcp --dport 8181 -m state --state NEW -m recent --rc
 while ip6tables -D INPUT -p tcp --dport 8181 -m state --state NEW -m recent --set 2>/dev/null; do :; done
 
 # ==================== 添加新规则 ====================
-echo "$LOG_TIME ======================= 启用 2525/8181 IPv4/IPv6 防爆破（带日志） ========================"
+echo "$LOG_TIME ======================= 启用 2525/8181 IPv4/IPv6 防爆破 ================="
 
 # 1. 放行已有连接
 iptables -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
@@ -110,7 +110,7 @@ ip6tables -A INPUT -p tcp --dport 8181 -m state --state NEW -m recent --update -
 ip6tables -A INPUT -p tcp --dport 8181 -m state --state NEW -m recent --set
 ip6tables -A INPUT -p tcp --dport 8181 -j ACCEPT
 
-echo "$LOG_TIME ======================= 2525/8181 防爆破规则已全部生效 ========================"
+echo "$LOG_TIME ======================= 2525/8181 防爆破规则已全部生效 ================="
 
 
 # --- 第三部分：AI 分流补漏 (OpenAI + Grok 纯净稳定版) ---
