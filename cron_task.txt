@@ -64,31 +64,45 @@ while ip6tables -D INPUT -p tcp --dport 8181 -m state --state NEW -m recent --se
 
 # ==================== 添加新规则 ====================
 
-# 1. 放行已有连接（必须放在最前面）
+
+echo "$LOG_TIME ======================= 启用 2525/8181 IPv4/IPv6 防爆破（带日志） ========================"
+
+# 1. 放行已有连接（必须最前）
 iptables -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
 ip6tables -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
 
-# 2. 2525 端口防爆破（IPv4）
+# 2. 2525 IPv4 防爆破
+# ------------------------------
+iptables -A INPUT -p tcp --dport 2525 -m state --state NEW -m recent --rcheck --seconds 60 --hitcount 8 -j LOG --log-prefix "2525-DDOS: "
 iptables -A INPUT -p tcp --dport 2525 -m state --state NEW -m recent --rcheck --seconds 60 --hitcount 8 -j DROP
 iptables -A INPUT -p tcp --dport 2525 -m state --state NEW -m recent --set
 iptables -A INPUT -p tcp --dport 2525 -j ACCEPT
-# 3. 2525 端口防爆破（IPv46）
+
+# ------------------------------
+# 3. 2525 IPv6 防爆破
+# ------------------------------
+ip6tables -A INPUT -p tcp --dport 2525 -m state --state NEW -m recent --rcheck --seconds 60 --hitcount 8 -j LOG --log-prefix "2525-DDOS: "
 ip6tables -A INPUT -p tcp --dport 2525 -m state --state NEW -m recent --rcheck --seconds 60 --hitcount 8 -j DROP
 ip6tables -A INPUT -p tcp --dport 2525 -m state --state NEW -m recent --set
 ip6tables -A INPUT -p tcp --dport 2525 -j ACCEPT
 
-
-# 4. 8181 端口防爆破（IPv4）
+# ------------------------------
+# 4. 8181 IPv4 防爆破
+# ------------------------------
+iptables -A INPUT -p tcp --dport 8181 -m state --state NEW -m recent --rcheck --seconds 60 --hitcount 8 -j LOG --log-prefix "8181-DDOS: "
 iptables -A INPUT -p tcp --dport 8181 -m state --state NEW -m recent --rcheck --seconds 60 --hitcount 8 -j DROP
 iptables -A INPUT -p tcp --dport 8181 -m state --state NEW -m recent --set
 iptables -A INPUT -p tcp --dport 8181 -j ACCEPT
 
-# 5. 8181 端口防爆破（IPv6）
+# ------------------------------
+# 5. 8181 IPv6 防爆破
+# ------------------------------
+ip6tables -A INPUT -p tcp --dport 8181 -m state --state NEW -m recent --rcheck --seconds 60 --hitcount 8 -j LOG --log-prefix "8181-DDOS: "
 ip6tables -A INPUT -p tcp --dport 8181 -m state --state NEW -m recent --rcheck --seconds 60 --hitcount 8 -j DROP
 ip6tables -A INPUT -p tcp --dport 8181 -m state --state NEW -m recent --set
 ip6tables -A INPUT -p tcp --dport 8181 -j ACCEPT
 
-echo "$LOG_TIME ======================= ✅ 2525/8181 防爆破已启用（安全保守版）======================="
+echo "$LOG_TIME ======================= 2525/8181 防爆破规则已全部生效 ========================"
 
 # --- 第三部分：AI 分流补漏 (OpenAI + Grok 纯净稳定版) ---
 # 清空旧规则
