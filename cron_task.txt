@@ -41,60 +41,40 @@ start_service_soft "/jffs/scripts/DDNS_SSH_helper.sh"
 #!/bin/sh
 LOG_TIME=$(date '+%Y-%m-%d %H:%M:%S')
 
-echo "$LOG_TIME ==================== 正在重整防火墙：释放 2525 / 加固 8181 ===================="
+echo "$LOG_TIME ==================== 正在执行：全端口彻底开放 ===================="
 
-# ==================== 1. 彻底清除 2525 的所有限制 ====================
-# 无论之前加了什么 LOG、DROP 或 recent 规则，全部循环清理干净
-clean_2525() {
-    local proto=$1
-    while $proto -D INPUT -p tcp --dport 2525 -j ACCEPT 2>/dev/null; do :; done
-    while $proto -D INPUT -p tcp --dport 2525 -m state --state NEW -m recent --set 2>/dev/null; do :; done
-    while $proto -D INPUT -p tcp --dport 2525 -m state --state NEW -m recent --rcheck --seconds 60 --hitcount 8 -j DROP 2>/dev/null; do :; done
-    while $proto -D INPUT -p tcp --dport 2525 -m state --state NEW -m recent --rcheck --seconds 60 --hitcount 8 -j LOG --log-prefix "2525-BLOCK: " 2>/dev/null; do :; done
-    while $proto -D INPUT -p tcp --dport 2525 -m state --state NEW -m recent --update --seconds 60 --hitcount 8 -j LOG --log-prefix "2525-BLOCK: " 2>/dev/null; do :; done
+# 1. 定义彻底清理函数
+full_cleanup() {
+    local port=$1
+    local proto=$2
+    # 循环删除所有相关的自定义规则，直到该端口的所有匹配项都消失
+    while $proto -D INPUT -p tcp --dport $port -j ACCEPT 2>/dev/null; do :; done
+    while $proto -D INPUT -p tcp --dport $port -m state --state NEW -m recent --set 2>/dev/null; do :; done
+    while $proto -D INPUT -p tcp --dport $port -m state --state NEW -m recent --rcheck --seconds 60 --hitcount 8 -j DROP 2>/dev/null; do :; done
+    while $proto -D INPUT -p tcp --dport $port -m state --state NEW -m recent --rcheck --seconds 60 --hitcount 20 -j DROP 2>/dev/null; do :; done
+    while $proto -D INPUT -p tcp --dport $port -m state --state NEW -m recent --update --seconds 60 --hitcount 8 -j LOG --log-prefix "${port}-BLOCK: " 2>/dev/null; do :; done
 }
 
-clean_2525 iptables
-clean_2525 ip6tables
-
-# ==================== 2. 清理并重置 8181 规则 ====================
-# 同样先清理旧的，避免堆叠
-clean_8181() {
-    local proto=$1
-    while $proto -D INPUT -p tcp --dport 8181 -j ACCEPT 2>/dev/null; do :; done
-    while $proto -D INPUT -p tcp --dport 8181 -m state --state NEW -m recent --set 2>/dev/null; do :; done
-    while $proto -D INPUT -p tcp --dport 8181 -m state --state NEW -m recent --rcheck --seconds 60 --hitcount 8 -j DROP 2>/dev/null; do :; done
-    while $proto -D INPUT -p tcp --dport 8181 -m state --state NEW -m recent --update --seconds 60 --hitcount 8 -j LOG --log-prefix "8181-BLOCK: " 2>/dev/null; do :; done
-}
-
-clean_8181 iptables
-clean_8181 ip6tables
-
-# ==================== 3. 应用新规则 ====================
-
-# A. 全局放行：已建立的连接永远优先（防掉线）
-iptables -I INPUT 1 -m state --state RELATED,ESTABLISHED -j ACCEPT
-ip6tables -I INPUT 1 -m state --state RELATED,ESTABLISHED -j ACCEPT
-
-# B. 2525 端口：全放行（不再设防，确保 DDNS 等服务正常）
-iptables -A INPUT -p tcp --dport 2525 -j ACCEPT
-ip6tables -A INPUT -p tcp --dport 2525 -j ACCEPT
-
-# C. 8181 端口：保留加固（将阈值放宽到 20 次，防止 WebDAV 扫描时误杀自己）
-# ------------------------------
-for proto in "iptables" "ip6tables"; do
-    # 60秒内超过20次才拦截（WebDAV 并发较高，20次更安全）
-    $proto -A INPUT -p tcp --dport 8181 -m state --state NEW -m recent --rcheck --seconds 60 --hitcount 20 -j DROP
-    # 记录并放行
-    $proto -A INPUT -p tcp --dport 8181 -m state --state NEW -m recent --set
-    $proto -A INPUT -p tcp --dport 8181 -j ACCEPT
+# 2. 对 2525 和 8181 执行 IPv4/IPv6 双栈清理
+for p in 2525 8181; do
+    full_cleanup $p iptables
+    full_cleanup $p ip6tables
 done
 
-# ==================== 4. 强制复活（清空缓存） ====================
-# 这一步非常关键：清除 recent 模块记录的所有黑名单 IP
-echo / > /proc/net/xt_recent/DEFAULT 2>/dev/null
+# 3. 重新添加“无条件 ACCEPT”规则（最基础的通行证）
+iptables -I INPUT -p tcp --dport 2525 -j ACCEPT
+ip6tables -I INPUT -p tcp --dport 2525 -j ACCEPT
+iptables -I INPUT -p tcp --dport 8181 -j ACCEPT
+ip6tables -I INPUT -p tcp --dport 8181 -j ACCEPT
 
-echo "$LOG_TIME ======================= ✅ 2525 已释放，8181 已加固 (Hitcount: 20) ========================"
+# 4. 彻底清空内核中的 recent 模块内存快照
+# 这一步是为了防止“规则删了，但黑名单里还有你”的情况
+if [ -f /proc/net/xt_recent/DEFAULT ]; then
+    echo / > /proc/net/xt_recent/DEFAULT
+fi
+
+echo "$LOG_TIME ======================= ✅ 8181/2525 已恢复全开放状态 ========================"
+
 
 # --- 第三部分：AI 分流补漏 (OpenAI + Grok 纯净稳定版) ---
 # 清空旧规则
