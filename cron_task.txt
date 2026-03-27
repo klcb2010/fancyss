@@ -38,58 +38,6 @@ start_service_soft "/jffs/scripts/DDNS_SSH_helper.sh"
 # 启动 frpc (内部已带“存在即跳过”逻辑)
 [ -f "/jffs/scripts/frpc_start.sh" ] && /bin/sh /jffs/scripts/frpc_start.sh
 
-#!/bin/sh
-# ============================================================
-# 式放行 2525 和 8181 端口 (IPv4/IPv6)
-
-LOG_TIME=$(date '+【%Y%m%d %H:%M:%S】')
-# 1. 执行清理 (针对 2525 和 8181，涵盖 IPv4 和 IPv6)
-for port in 2525 8181; do
-    # 彻底收割该端口下所有残留的 ACCEPT/DROP/LOG 规则
-    while iptables -D INPUT -p tcp --dport $port -j ACCEPT 2>/dev/null; do :; done
-    while iptables -D INPUT -p tcp --dport $port -m state --state NEW -m recent --set 2>/dev/null; do :; done
-    while iptables -D INPUT -p tcp --dport $port -m state --state NEW -m recent --rcheck --seconds 60 --hitcount 8 -j DROP 2>/dev/null; do :; done
-    
-    while ip6tables -D INPUT -p tcp --dport $port -j ACCEPT 2>/dev/null; do :; done
-    while ip6tables -D INPUT -p tcp --dport $port -m state --state NEW -m recent --set 2>/dev/null; do :; done
-    while ip6tables -D INPUT -p tcp --dport $port -m state --state NEW -m recent --rcheck --seconds 60 --hitcount 8 -j DROP 2>/dev/null; do :; done
-done
-
-# 2. 正式插入放行规则 (使用 -I 1 确保优先级在最顶部)
-# ------------------------------------------------------------
-iptables -I INPUT 1 -p tcp --dport 2525 -j ACCEPT
-iptables -I INPUT 1 -p tcp --dport 8181 -j ACCEPT
-
-ip6tables -I INPUT 1 -p tcp --dport 2525 -j ACCEPT
-ip6tables -I INPUT 1 -p tcp --dport 8181 -j ACCEPT
-
-# --- 第三部分：AI 分流补漏 (OpenAI + Grok 纯净稳定版) ---
-# 清空旧规则
-while iptables -t nat -D PREROUTING -p tcp -m set --match-set ai_bypass dst -j REDIRECT 2>/dev/null; do :; done
-
-# 重建纯净 ipset（无残留、无脏数据）
-ipset -F ai_bypass 2>/dev/null
-ipset -X ai_bypass 2>/dev/null
-ipset -N ai_bypass hash:net 2>/dev/null
-
-# 2026最新精准IP：OpenAI + Grok 专用（不误杀任何网站）
-AI_NETS="131.0.72.0/22 104.244.42.0/24 192.133.76.0/22 199.59.148.0/22"
-for net in $AI_NETS; do
-    ipset -! add ai_bypass $net 2>/dev/null
-done
-
-# 端口容错（自动获取代理端口，失败用3333兜底）
-RAW_PORT=$(nvram get ss_status_proxy_port | tr -d '[:space:]')
-if [ -z "$RAW_PORT" ] || ! echo "$RAW_PORT" | grep -q '^[0-9]\+$'; then
-    FINAL_PORT="3333"
-else
-    FINAL_PORT="$RAW_PORT"
-fi
-
-# 应用分流规则（只对 AI 网段生效）
-iptables -t nat -A PREROUTING -p tcp -m set --match-set ai_bypass dst -j REDIRECT --to-ports "$FINAL_PORT"
-
-echo "$LOG_TIME : ======================= ✅ AI分流已挂载 ============================ "
-echo "$LOG_TIME : ======================= 自定义防火墙完毕 ============================ "
+echo "$LOG_TIME : ======================= 自定义任务执行完毕 ============================ "
 
 # --- 自定义逻辑结束 ---
