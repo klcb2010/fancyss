@@ -26,8 +26,7 @@ start_service_soft() {
         return 0
     fi
     
-    # 第二重检查：针对 rclone 等二进制程序的检查 (如果脚本已经在跑但没拉起程序，这里补一下)
-    # 这里直接运行脚本，脚本内部建议也带上同样的“存在即跳过”逻辑
+    # 直接运行脚本，脚本内部建议也带上同样的“存在即跳过”逻辑
     /bin/sh "$_script" >/dev/null 2>&1 &
 }
 
@@ -38,6 +37,9 @@ start_service_soft "/jffs/scripts/DDNS_SSH_helper.sh"
 # 启动 frpc (内部已带“存在即跳过”逻辑)
 [ -f "/jffs/scripts/frpc_start.sh" ] && /bin/sh /jffs/scripts/frpc_start.sh
 
+#!/bin/sh
+
+LOG_TIME=$(date '+【%Y%m%d %H:%M:%S】')
 echo "$LOG_TIME : ======================= 自定义任务执行完毕 ============================ "
 
-# --- 自定义逻辑结束 ---
+
