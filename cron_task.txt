@@ -1,3 +1,8 @@
+#!/bin/sh
+
+LOG_TIME=$(date '+【%Y%m%d %H:%M:%S】')
+echo "$LOG_TIME: ======================= 自定义任务启动开始 ==========================="
+
 # BEGIN CUSTOM CRON TASK
 # ======================= 1.0 & 2.0 注入定时守护与清理任务 =======================
 for task in frpc_guard rclone_guard clean_logs refresh_ddns rclone_cache_clean ss_update_daily; do
@@ -37,10 +42,6 @@ start_service_soft "/jffs/scripts/DDNS_SSH_helper.sh"
 # 启动 frpc (内部已带“存在即跳过”逻辑)
 [ -f "/jffs/scripts/frpc_start.sh" ] && /bin/sh /jffs/scripts/frpc_start.sh
 
-#!/bin/sh
-
-LOG_TIME=$(date '+【%Y%m%d %H:%M:%S】')
-echo "$LOG_TIME ==================== 正在执行DDNS全端口彻底开放 ===================="
 
 # 1. 定义彻底清理函数
 full_cleanup() {
@@ -71,7 +72,6 @@ if [ -f /proc/net/xt_recent/DEFAULT ]; then
     echo / > /proc/net/xt_recent/DEFAULT
 fi
 
-echo "$LOG_TIME: ======================= DDNS已恢复全开放状态 ========================= "
 echo "$LOG_TIME: ======================= 自定义任务启动完毕 =========================== "
 
 
