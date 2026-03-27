@@ -11,8 +11,7 @@
 - 替换 在线规则 保持最新版本
 
 - 自定义黑白名单  打包即用
-- 注入防火墙规则  两大AI网站不再提示区域问题
-- cat /jffs/scripts/check_status.log查看守护状态
+- 自定义dnsmasq address=/DDNS地址/192.168.1.7 保持内网解析到本地  外网IPV6
 
 # 相关脚本在 [Asuswrt-Merlin-Custom-Scripts](https://github.com/klcb2010/Asuswrt-Merlin-Custom-Scripts)
 
