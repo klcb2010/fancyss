@@ -40,6 +40,6 @@ start_service_soft "/jffs/scripts/DDNS_SSH_helper.sh"
 #!/bin/sh
 
 LOG_TIME=$(date '+【%Y%m%d %H:%M:%S】')
-echo "$LOG_TIME : ======================= 自定义任务执行完毕 ============================ "
+echo "$LOG_TIME: ======================= 自定义任务执行完毕 ============================ "
 
 
