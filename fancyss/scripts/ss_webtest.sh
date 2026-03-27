@@ -11,6 +11,7 @@ WT_WEBTEST_STREAM=/tmp/upload/webtest.stream
 WT_WEBTEST_BACKUP=/tmp/upload/webtest_bakcup.txt
 WT_WEBTEST_STOP_FLAG=/tmp/webtest.stop
 WT_WEBTEST_PID_FILE=/tmp/webtest.pid
+WT_WEBTEST_STATE_LOCK=/tmp/webtest.state.lock
 WT_SERVER_RESOLV_MODE=$(dbus get ss_basic_server_resolv_mode)
 [ "${WT_SERVER_RESOLV_MODE}" = "2" ] || WT_SERVER_RESOLV_MODE="1"
 WT_NODE_CACHE_DIR=""
@@ -29,11 +30,36 @@ WT_BATCH_ABORT_REASON=""
 WT_WEBTEST_CACHE_REV="1"
 WT_WEBTEST_CACHE_GEN_REV="20260326_6"
 WT_WEBTEST_CACHE_LOCK="/tmp/fss_webtest_cache.lock"
+WT_MEM_TIER_MID_MB="768"
+WT_MEM_TIER_HIGH_MB="1536"
+WT_PERF_READY="0"
 LINUX_VER=$(uname -r|awk -F"." '{print $1$2}')
 
 wt_cache_log() {
 	[ "${WT_CACHE_LOGGING}" = "1" ] || return 0
 	echo_date "$@"
+}
+
+wt_has_active_test_runner() {
+	local self_pid="${1:-$$}"
+
+	[ -f "/tmp/webtest.lock" ] && return 0
+	ps w 2>/dev/null | awk -v self="${self_pid}" '
+		/ss_webtest\.sh/ && !/grep/ {
+			pid = $1
+			if (pid == self) {
+				next
+			}
+			if ($0 ~ /schedule_warm/ || $0 ~ /schedule_node_direct_refresh/ || $0 ~ /warm_cache/ || $0 ~ /node_direct_refresh/) {
+				next
+			}
+			found = 1
+			exit
+		}
+		END {
+			exit(found ? 0 : 1)
+		}
+	'
 }
 
 wt_ensure_webtest_dir() {
@@ -355,6 +381,7 @@ wt_latency_state_is_terminal() {
 
 wt_init_batch_state_file() {
 	WT_WEBTEST_STATE_FILE="${TMP2}/webtest.state"
+	rm -f "${WT_WEBTEST_STATE_LOCK}"
 	awk -F '|' '
 		NF > 0 && $1 != "" {
 			print $1 ">waiting..."
@@ -362,6 +389,15 @@ wt_init_batch_state_file() {
 	' ${TMP2}/nodes_index.txt > "${WT_WEBTEST_STATE_FILE}"
 	cp -f "${WT_WEBTEST_STATE_FILE}" "${WT_WEBTEST_FILE}"
 	cp -f "${WT_WEBTEST_STATE_FILE}" "${WT_WEBTEST_STREAM}"
+}
+
+wt_batch_state_lock_acquire() {
+	exec 235>"${WT_WEBTEST_STATE_LOCK}"
+	flock -x 235
+}
+
+wt_batch_state_lock_release() {
+	flock -u 235
 }
 
 wt_get_batch_state() {
@@ -385,13 +421,22 @@ wt_set_batch_state() {
 	[ -n "${state}" ] || return 0
 	[ -n "${WT_WEBTEST_STATE_FILE}" ] || return 0
 	[ -f "${WT_WEBTEST_STATE_FILE}" ] || return 0
-	current=$(wt_get_batch_state "${node_id}")
-	[ "${current}" = "${state}" ] && return 0
-	if grep -q "^${node_id}>" "${WT_WEBTEST_STATE_FILE}" 2>/dev/null; then
-		sed -i "/^${node_id}>/c\\${node_id}>${state}" "${WT_WEBTEST_STATE_FILE}"
-	else
-		echo "${node_id}>${state}" >> "${WT_WEBTEST_STATE_FILE}"
+	wt_batch_state_lock_acquire
+	current=$(awk -F '>' -v node="${node_id}" '
+		$1 == node {
+			print $2
+			exit
+		}
+	' "${WT_WEBTEST_STATE_FILE}" 2>/dev/null)
+	if [ "${current}" != "${state}" ]; then
+		if grep -q "^${node_id}>" "${WT_WEBTEST_STATE_FILE}" 2>/dev/null; then
+			sed -i "/^${node_id}>/c\\${node_id}>${state}" "${WT_WEBTEST_STATE_FILE}"
+		else
+			echo "${node_id}>${state}" >> "${WT_WEBTEST_STATE_FILE}"
+		fi
 	fi
+	wt_batch_state_lock_release
+	[ "${current}" = "${state}" ] && return 0
 	wt_append_webtest_line "${node_id}>${state}"
 }
 
@@ -511,14 +556,14 @@ wt_abort_batch_run() {
 		rm -f "${old_state}"
 	fi
 	wt_finalize_batch_output
-	rm -f "${WT_WEBTEST_PID_FILE}" "${WT_WEBTEST_STOP_FLAG}" /tmp/webtest.lock
+	rm -f "${WT_WEBTEST_PID_FILE}" "${WT_WEBTEST_STOP_FLAG}" /tmp/webtest.lock "${WT_WEBTEST_STATE_LOCK}"
 }
 
 wt_finish_batch_run() {
 	[ "${WT_BATCH_FINALIZED}" = "1" ] && return 0
 	WT_BATCH_FINALIZED=1
 	wt_finalize_batch_output
-	rm -f "${WT_WEBTEST_PID_FILE}" "${WT_WEBTEST_STOP_FLAG}" /tmp/webtest.lock
+	rm -f "${WT_WEBTEST_PID_FILE}" "${WT_WEBTEST_STOP_FLAG}" /tmp/webtest.lock "${WT_WEBTEST_STATE_LOCK}"
 }
 
 wt_batch_exit_guard() {
@@ -580,7 +625,7 @@ wt_request_stop_batch() {
 		rm -f "${old_state}"
 		wt_finalize_batch_output
 	fi
-	rm -f "${WT_WEBTEST_PID_FILE}" "${WT_WEBTEST_STOP_FLAG}" /tmp/webtest.lock
+	rm -f "${WT_WEBTEST_PID_FILE}" "${WT_WEBTEST_STOP_FLAG}" /tmp/webtest.lock "${WT_WEBTEST_STATE_LOCK}"
 }
 
 wt_reset_active_node_env() {
@@ -707,21 +752,161 @@ wt_build_node_env_files_bulk() {
 	done < "${ids_file}"
 }
 
-wt_get_cache_build_threads() {
-	local cpu_cores="1"
-	local mem_mb="0"
+wt_get_router_model() {
+	local odmpid=""
+	local productid=""
 
-	cpu_cores=$(grep -c '^processor' /proc/cpuinfo 2>/dev/null)
-	printf '%s' "${cpu_cores}" | grep -Eq '^[0-9]+$' || cpu_cores="1"
-	mem_mb=$(awk '/MemTotal/ {printf "%d", $2 / 1024}' /proc/meminfo 2>/dev/null)
-	printf '%s' "${mem_mb}" | grep -Eq '^[0-9]+$' || mem_mb="0"
-	if [ "${cpu_cores}" -ge 4 ] && [ "${mem_mb}" -ge 1024 ]; then
-		printf '%s' "4"
-	elif [ "${cpu_cores}" -ge 2 ] && [ "${mem_mb}" -ge 512 ]; then
-		printf '%s' "2"
+	odmpid=$(nvram get odmpid 2>/dev/null)
+	productid=$(nvram get productid 2>/dev/null)
+	if [ -n "${odmpid}" ]; then
+		printf '%s' "${odmpid}"
 	else
-		printf '%s' "1"
+		printf '%s' "${productid}"
 	fi
+}
+
+wt_collect_perf_facts() {
+	WT_ARCH=$(uname -m)
+	WT_CPU_CORES=$(grep -c '^processor' /proc/cpuinfo 2>/dev/null)
+	printf '%s' "${WT_CPU_CORES}" | grep -Eq '^[0-9]+$' || WT_CPU_CORES="1"
+	WT_MEM_MB=$(awk '/MemTotal/ {printf "%d", $2/1024}' /proc/meminfo 2>/dev/null)
+	printf '%s' "${WT_MEM_MB}" | grep -Eq '^[0-9]+$' || WT_MEM_MB="0"
+	WT_MODEL=$(wt_get_router_model)
+}
+
+wt_select_perf_profile() {
+	case "${WT_ARCH}" in
+	aarch64)
+		if [ "${WT_CPU_CORES}" -lt 3 ]; then
+			printf '%s\n' "aarch64_dual_core"
+		elif [ "${WT_MEM_MB}" -ge "${WT_MEM_TIER_HIGH_MB}" ]; then
+			printf '%s\n' "aarch64_3plus_2g"
+		elif [ "${WT_MEM_MB}" -ge "${WT_MEM_TIER_MID_MB}" ]; then
+			printf '%s\n' "aarch64_3plus_1g"
+		else
+			printf '%s\n' "aarch64_3plus_512m"
+		fi
+		;;
+	armv7l)
+		if [ "${WT_MODEL}" = "RT-AX89X" ]; then
+			printf '%s\n' "armv7l_rt_ax89x"
+		elif [ "${WT_CPU_CORES}" -ge 4 ]; then
+			if [ "${WT_MEM_MB}" -ge "${WT_MEM_TIER_MID_MB}" ]; then
+				printf '%s\n' "armv7l_quad_core_1g"
+			else
+				printf '%s\n' "armv7l_quad_core_512m"
+			fi
+		elif [ "${WT_CPU_CORES}" -ge 3 ]; then
+			printf '%s\n' "armv7l_tri_core"
+		else
+			printf '%s\n' "armv7l_low_end"
+		fi
+		;;
+	*)
+		printf '%s\n' "generic_low_end"
+		;;
+	esac
+}
+
+wt_apply_perf_profile() {
+	local profile="$1"
+
+	WT_LOW_END=1
+	WT_XRAY_THREADS=4
+	WT_SSR_THREADS=1
+	WT_TUIC_THREADS=1
+	WT_NAIVE_THREADS=1
+	WT_XRAY_BATCH_SIZE=32
+	WT_CACHE_BUILD_THREADS=1
+
+	case "${profile}" in
+	aarch64_3plus_2g)
+		WT_LOW_END=0
+		WT_XRAY_THREADS=12
+		WT_SSR_THREADS=4
+		WT_TUIC_THREADS=3
+		WT_NAIVE_THREADS=3
+		WT_XRAY_BATCH_SIZE=256
+		WT_CACHE_BUILD_THREADS=4
+		;;
+	aarch64_3plus_1g)
+		WT_LOW_END=0
+		WT_XRAY_THREADS=8
+		WT_SSR_THREADS=4
+		WT_TUIC_THREADS=2
+		WT_NAIVE_THREADS=2
+		WT_XRAY_BATCH_SIZE=128
+		WT_CACHE_BUILD_THREADS=4
+		;;
+	aarch64_3plus_512m)
+		WT_LOW_END=1
+		WT_XRAY_THREADS=6
+		WT_SSR_THREADS=2
+		WT_TUIC_THREADS=1
+		WT_NAIVE_THREADS=1
+		WT_XRAY_BATCH_SIZE=64
+		WT_CACHE_BUILD_THREADS=2
+		;;
+	aarch64_dual_core)
+		WT_LOW_END=1
+		WT_XRAY_THREADS=4
+		WT_SSR_THREADS=2
+		WT_TUIC_THREADS=1
+		WT_NAIVE_THREADS=1
+		WT_XRAY_BATCH_SIZE=64
+		WT_CACHE_BUILD_THREADS=2
+		;;
+	armv7l_rt_ax89x)
+		WT_LOW_END=0
+		WT_XRAY_THREADS=8
+		WT_SSR_THREADS=2
+		WT_TUIC_THREADS=2
+		WT_NAIVE_THREADS=2
+		WT_XRAY_BATCH_SIZE=128
+		WT_CACHE_BUILD_THREADS=3
+		;;
+	armv7l_quad_core_1g)
+		WT_LOW_END=1
+		WT_XRAY_THREADS=4
+		WT_SSR_THREADS=2
+		WT_TUIC_THREADS=2
+		WT_NAIVE_THREADS=2
+		WT_XRAY_BATCH_SIZE=64
+		WT_CACHE_BUILD_THREADS=3
+		;;
+	armv7l_quad_core_512m)
+		WT_LOW_END=1
+		WT_XRAY_THREADS=4
+		WT_SSR_THREADS=1
+		WT_TUIC_THREADS=1
+		WT_NAIVE_THREADS=1
+		WT_XRAY_BATCH_SIZE=32
+		WT_CACHE_BUILD_THREADS=2
+		;;
+	armv7l_tri_core)
+		WT_LOW_END=1
+		WT_XRAY_THREADS=4
+		WT_SSR_THREADS=1
+		WT_TUIC_THREADS=1
+		WT_NAIVE_THREADS=1
+		WT_XRAY_BATCH_SIZE=32
+		WT_CACHE_BUILD_THREADS=2
+		;;
+	armv7l_low_end|generic_low_end|*)
+		WT_LOW_END=1
+		WT_XRAY_THREADS=2
+		WT_SSR_THREADS=1
+		WT_TUIC_THREADS=1
+		WT_NAIVE_THREADS=1
+		WT_XRAY_BATCH_SIZE=16
+		WT_CACHE_BUILD_THREADS=1
+		;;
+	esac
+}
+
+wt_get_cache_build_threads() {
+	detect_perf
+	printf '%s' "${WT_CACHE_BUILD_THREADS:-1}"
 }
 
 wt_cache_start_port_get() {
@@ -1330,6 +1515,9 @@ wt_webtest_cache_is_globally_fresh() {
 	[ "${cache_node_config_ts}" = "${node_config_ts}" ] || return 1
 	[ "${cache_xray_count}" = "${current_count}" ] || return 1
 	[ "${cache_xray_ids_md5}" = "${current_ids_md5}" ] || return 1
+	[ -s "${FSS_WEBTEST_CACHE_INDEX_FILE}" ] || return 1
+	awk -F '|' '{print $1}' "${FSS_WEBTEST_CACHE_INDEX_FILE}" 2>/dev/null | cmp -s - "${ids_file}" || return 1
+	[ -s "${FSS_WEBTEST_CACHE_AGG_OUTBOUNDS_FILE}" ] || return 1
 }
 
 wt_webtest_cache_lock_acquire() {
@@ -1487,10 +1675,19 @@ wt_rebuild_webtest_cache_from_ids() {
 		return 0
 	}
 	wt_init_reserved_ports
-	WT_NODE_ENV_DIR="${TMP2}/node_env"
-	mkdir -p "${WT_NODE_ENV_DIR}" || return 1
-	rm -f ${WT_NODE_ENV_DIR}/*.env >/dev/null 2>&1
-	wt_build_node_env_files_bulk "${build_ids_file}" >/dev/null 2>&1 || return 1
+	wt_reset_active_node_env
+	WT_NODE_ENV_DIR=""
+	if [ "$(fss_detect_storage_schema)" = "2" ]; then
+		if fss_refresh_node_env_cache >/dev/null 2>&1 && ls "${FSS_NODE_ENV_CACHE_DIR}"/*.env >/dev/null 2>&1; then
+			WT_NODE_ENV_DIR="${FSS_NODE_ENV_CACHE_DIR}"
+		fi
+	fi
+	if [ -z "${WT_NODE_ENV_DIR}" ]; then
+		WT_NODE_ENV_DIR="${TMP2}/node_env"
+		mkdir -p "${WT_NODE_ENV_DIR}" || return 1
+		rm -f "${WT_NODE_ENV_DIR}"/*.env >/dev/null 2>&1
+		wt_build_node_env_files_bulk "${build_ids_file}" >/dev/null 2>&1 || return 1
+	fi
 	WT_CACHE_START_PORT_MAP_FILE="${TMP2}/cache_start_ports.txt"
 	wt_assign_webtest_cache_start_ports "${build_ids_file}" || return 1
 	worker_threads=$(wt_get_cache_build_threads)
@@ -1527,7 +1724,6 @@ wt_webtest_cache_build_node() {
 	local node_id="$1"
 	local node_type=""
 	local cache_mark=""
-	local direct_object="0"
 	local meta_file=""
 	local cache_out=""
 	local cache_start=""
@@ -1536,7 +1732,6 @@ wt_webtest_cache_build_node() {
 	local tmp_out=""
 	local tmp_start=""
 	local tmp_stop=""
-	local generated_out=""
 	local current_rev="0"
 
 	[ -n "${node_id}" ] || return 1
@@ -1549,24 +1744,23 @@ wt_webtest_cache_build_node() {
 	cache_out="${FSS_WEBTEST_CACHE_NODE_DIR}/${node_id}_outbounds.json"
 	cache_start="${FSS_WEBTEST_CACHE_NODE_DIR}/${node_id}_start.sh"
 	cache_stop="${FSS_WEBTEST_CACHE_NODE_DIR}/${node_id}_stop.sh"
-	generated_out="${TMP2}/conf_${cache_mark}/${node_id}_outbounds.json"
 	tmp_meta="${meta_file}.tmp.$$"
 	tmp_out="${cache_out}.tmp.$$"
 	tmp_start="${cache_start}.tmp.$$"
 	tmp_stop="${cache_stop}.tmp.$$"
 
-	rm -rf "${TMP2}/conf_${cache_mark}" "${TMP2}/bash_${cache_mark}"
-	mkdir -p "${TMP2}/conf_${cache_mark}" "${TMP2}/bash_${cache_mark}" || return 1
+	rm -f "${tmp_meta}" "${tmp_out}" "${tmp_start}" "${tmp_stop}"
 	WT_LAST_START_PORT=""
 	WT_PRESET_START_PORT=""
 	[ -n "${WT_CACHE_START_PORT_MAP_FILE}" ] && WT_PRESET_START_PORT=$(wt_cache_start_port_get "${node_id}")
+	WT_GEN_OUT_FILE="${tmp_out}"
+	WT_GEN_START_FILE="${tmp_start}"
+	WT_GEN_STOP_FILE="${tmp_stop}"
+	WT_OUTBOUND_OBJECT_ONLY="1"
 
 	case "${node_type}" in
 	0)
-		WT_OUTBOUND_OBJECT_ONLY="1"
 		wt_gen_ss_outbound "${node_id}" "${cache_mark}"
-		WT_OUTBOUND_OBJECT_ONLY=""
-		direct_object="1"
 		;;
 	3)
 		wt_gen_vmess_outbound "${node_id}" "${cache_mark}"
@@ -1581,28 +1775,22 @@ wt_webtest_cache_build_node() {
 		wt_gen_hy2_outbound "${node_id}" "${cache_mark}"
 		;;
 	*)
-		rm -rf "${TMP2}/conf_${cache_mark}" "${TMP2}/bash_${cache_mark}"
+		WT_OUTBOUND_OBJECT_ONLY=""
+		WT_GEN_OUT_FILE=""
+		WT_GEN_START_FILE=""
+		WT_GEN_STOP_FILE=""
 		return 1
 		;;
 	esac
+	WT_OUTBOUND_OBJECT_ONLY=""
+	WT_GEN_OUT_FILE=""
+	WT_GEN_START_FILE=""
+	WT_GEN_STOP_FILE=""
 
-	[ -s "${generated_out}" ] || {
-		rm -rf "${TMP2}/conf_${cache_mark}" "${TMP2}/bash_${cache_mark}"
+	[ -s "${tmp_out}" ] || {
+		rm -f "${tmp_meta}" "${tmp_out}" "${tmp_start}" "${tmp_stop}"
 		return 1
 	}
-	if [ "${direct_object}" = "1" ]; then
-		cp -f "${generated_out}" "${tmp_out}" || {
-			rm -f "${tmp_out}"
-			rm -rf "${TMP2}/conf_${cache_mark}" "${TMP2}/bash_${cache_mark}"
-			return 1
-		}
-	else
-		wt_extract_single_outbound_object "${generated_out}" "${tmp_out}" || {
-			rm -f "${tmp_out}"
-			rm -rf "${TMP2}/conf_${cache_mark}" "${TMP2}/bash_${cache_mark}"
-			return 1
-		}
-	fi
 
 	current_rev=$(wt_node_json_meta_get "${node_id}" "_rev")
 	[ -n "${current_rev}" ] || current_rev="0"
@@ -1615,18 +1803,15 @@ wt_webtest_cache_build_node() {
 		built_at=$(date +%s)
 	EOF
 
-	if [ -f "${TMP2}/bash_${cache_mark}/start_${node_id}.sh" ]; then
-		cp -f "${TMP2}/bash_${cache_mark}/start_${node_id}.sh" "${tmp_start}" || true
+	if [ -f "${tmp_start}" ]; then
 		sed -i '/^has_start=/c\has_start=1' "${tmp_meta}" 2>/dev/null
 	fi
-	if [ -f "${TMP2}/bash_${cache_mark}/stop_${node_id}.sh" ]; then
-		cp -f "${TMP2}/bash_${cache_mark}/stop_${node_id}.sh" "${tmp_stop}" || true
+	if [ -f "${tmp_stop}" ]; then
 		sed -i '/^has_stop=/c\has_stop=1' "${tmp_meta}" 2>/dev/null
 	fi
 
 	mv -f "${tmp_out}" "${cache_out}" || {
 		rm -f "${tmp_out}" "${tmp_meta}" "${tmp_start}" "${tmp_stop}"
-		rm -rf "${TMP2}/conf_${cache_mark}" "${TMP2}/bash_${cache_mark}"
 		return 1
 	}
 	if [ -f "${tmp_start}" ]; then
@@ -1643,11 +1828,8 @@ wt_webtest_cache_build_node() {
 	fi
 	mv -f "${tmp_meta}" "${meta_file}" || {
 		rm -f "${tmp_meta}"
-		rm -rf "${TMP2}/conf_${cache_mark}" "${TMP2}/bash_${cache_mark}"
 		return 1
 	}
-
-	rm -rf "${TMP2}/conf_${cache_mark}" "${TMP2}/bash_${cache_mark}"
 	return 0
 }
 
@@ -1655,7 +1837,7 @@ wt_ensure_webtest_cache_ready() {
 	local ids_file="${TMP2}/xray_like_nodes.all"
 	local ret=0
 
-	[ -s "${TMP2}/nodes_index.txt" ] || wt_build_nodes_index || return 1
+	wt_build_nodes_index || return 1
 	wt_collect_xray_like_ids_file "${ids_file}" || return 1
 	if wt_webtest_cache_is_globally_fresh "${ids_file}"; then
 		return 0
@@ -1747,55 +1929,11 @@ wt_prepare_webtest_preview() {
 }
 
 detect_perf(){
-	WT_ARCH=$(uname -m)
-	WT_CPU_CORES=$(grep -c '^processor' /proc/cpuinfo 2>/dev/null)
-	WT_MEM_MB=$(awk '/MemTotal/ {printf "%d", $2/1024}' /proc/meminfo 2>/dev/null)
-	WT_LOW_END=0
-
-	# 低端机型： armv7l设备，或者aarch64设备，内存小于1G
-	# 高端机型： aarch64设备，且内存1G及其以上
-	if [ "${WT_ARCH}" == "armv7l" ];then
-		WT_LOW_END=1
-	elif [ "${WT_ARCH}" == "aarch64" ];then
-		if [ "${WT_CPU_CORES}" -le 2 -o "${WT_MEM_MB}" -lt 768 ];then
-			WT_LOW_END=1
-		fi
-	else
-		WT_LOW_END=1
-	fi
-
-	if [ "${WT_LOW_END}" == "1" ];then
-		WT_XRAY_THREADS=1
-		WT_SSR_THREADS=1
-		WT_MISC_THREADS=1
-		WT_XRAY_BATCH_SIZE=8
-		if [ "$(nvram get odmpid)" == "RT-AX89X" ];then
-			WT_XRAY_THREADS=4
-			WT_SSR_THREADS=2
-			WT_MISC_THREADS=1
-			WT_XRAY_BATCH_SIZE=32
-		fi
-	else
-		if [ "${WT_CPU_CORES}" -ge 3 -a "${WT_MEM_MB}" -ge 1536 ];then
-			# aarch64 3+ cores + ~2G内存：直接放大批次，优先避免 xray-like 节点反复分批。
-			WT_XRAY_THREADS=8
-			WT_SSR_THREADS=4
-			WT_MISC_THREADS=2
-			WT_XRAY_BATCH_SIZE=256
-		elif [ "${WT_CPU_CORES}" -ge 3 -a "${WT_MEM_MB}" -ge 1024 ];then
-			# aarch64 3+ cores + 1G内存：尽量保持单批完成，大节点列表再兜底分批。
-			WT_XRAY_THREADS=8
-			WT_SSR_THREADS=4
-			WT_MISC_THREADS=2
-			WT_XRAY_BATCH_SIZE=128
-		else
-			# aarch64 入门机型：批次适中，避免单批过大导致生成时间和内存抖动。
-			WT_XRAY_THREADS=4
-			WT_SSR_THREADS=2
-			WT_MISC_THREADS=1
-			WT_XRAY_BATCH_SIZE=64
-		fi
-	fi
+	[ "${WT_PERF_READY}" = "1" ] && return 0
+	wt_collect_perf_facts
+	WT_PERF_PROFILE=$(wt_select_perf_profile)
+	wt_apply_perf_profile "${WT_PERF_PROFILE}"
+	WT_PERF_READY="1"
 }
 
 ensure_latency_batch(){
@@ -2368,7 +2506,7 @@ test_11_nv(){
 	esac
 	[ -f "${file_path}" ] || return 0
 	wt_prepare_node_env_cache >/dev/null 2>&1 || true
-	max_threads="${WT_MISC_THREADS}"
+	max_threads="${WT_NAIVE_THREADS}"
 	[ -n "${max_threads}" ] || max_threads=1
 	wt_set_batch_state_from_file "${file_path}" "loading..." "${max_threads}"
 
@@ -2444,7 +2582,7 @@ test_12_tc(){
 	esac
 	[ -f "${file_path}" ] || return 0
 	wt_prepare_node_env_cache >/dev/null 2>&1 || true
-	max_threads="${WT_MISC_THREADS}"
+	max_threads="${WT_TUIC_THREADS}"
 	[ -n "${max_threads}" ] || max_threads=1
 	wt_set_batch_state_from_file "${file_path}" "loading..." "${max_threads}"
 
@@ -2462,9 +2600,6 @@ test_12_tc(){
 			local socks5_port=""
 			local new_addr=""
 			local tuic_json_file=""
-			local relay_server_raw=""
-			local relay_host=""
-			local relay_ip=""
 			local _pid=""
 
 			trap 'echo >&3' EXIT
@@ -2474,20 +2609,11 @@ test_12_tc(){
 			socks5_port=$(get_rand_port)
 			new_addr="127.0.0.1:${socks5_port}"
 			tuic_json_file="${TMP2}/conf/tuic-${socks5_port}.json"
-			wt_node_get tuic_json ${nu} | base64_decode | run jq --arg addr "$new_addr" '.local.server = $addr' >${tuic_json_file}
-			relay_server_raw=$(cat ${tuic_json_file} | run jq -r '.relay.server // empty' 2>/dev/null)
-			{
-				read -r relay_host
-				read -r _
-			} <<-EOF
-			$(fss_extract_tuic_server_host_port "${relay_server_raw}")
-			EOF
-			relay_ip=$(_get_server_ip "${relay_host}")
-			if [ -n "${relay_ip}" ];then
-				cat ${tuic_json_file} | run jq --arg ip "${relay_ip}" '.relay.ip = $ip' | run sponge ${tuic_json_file}
-			else
-				cat ${tuic_json_file} | run jq 'del(.relay.ip)' | run sponge ${tuic_json_file}
-			fi
+			wt_build_tuic_runtime_json "${nu}" "${new_addr}" "${tuic_json_file}" || {
+				echo -en "${nu}>failed\n" >>${TMP2}/results/${nu}.txt
+				wt_append_webtest_file "${TMP2}/results/${nu}.txt"
+				exit 0
+			}
 
 			# 2. start tuic
 			wt_set_batch_state "${nu}" "booting..."
@@ -2889,11 +3015,14 @@ single_test_node(){
 	detect_perf
 	WT_XRAY_THREADS=1
 	WT_SSR_THREADS=1
+	WT_TUIC_THREADS=1
+	WT_NAIVE_THREADS=1
 
 	mkdir -p ${TMP2}
 	mkdir -p ${TMP2}/conf
 	mkdir -p ${TMP2}/pids
 	mkdir -p ${TMP2}/results
+	rm -f "${TMP2}/nodes_index.txt" "${TMP2}/nodes_file_name.txt" "${TMP2}"/wt_*.txt >/dev/null 2>&1
 	rm -rf ${TMP2}/conf/*
 	rm -rf ${TMP2}/pids/*
 	rm -rf ${TMP2}/results/*
@@ -3125,6 +3254,52 @@ _get_server_ip() {
 	#echo "$1 域名解析成功，解析结果：${SERVER_IP}" >>${TMP2}/webtest_log.txt
 	echo $SERVER_IP
 	return 0
+}
+
+wt_json_escape_simple() {
+	printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+wt_build_tuic_runtime_json() {
+	local node_id="$1"
+	local local_addr="$2"
+	local out_file="$3"
+	local raw_json=""
+	local relay_server_raw=""
+	local relay_host=""
+	local relay_ip=""
+	local escaped_local_addr=""
+	local escaped_relay_ip=""
+
+	[ -n "${node_id}" ] || return 1
+	[ -n "${local_addr}" ] || return 1
+	[ -n "${out_file}" ] || return 1
+
+	raw_json=$(wt_node_get tuic_json "${node_id}" | base64_decode 2>/dev/null)
+	[ -n "${raw_json}" ] || return 1
+	raw_json=$(printf '%s' "${raw_json}" | tr -d '\r\n')
+	[ -n "${raw_json}" ] || return 1
+
+	relay_server_raw=$(printf '%s' "${raw_json}" | sed -n 's/.*"relay"[[:space:]]*:[[:space:]]*{[^}]*"server"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+	{
+		read -r relay_host
+		read -r _
+	} <<-EOF
+	$(fss_extract_tuic_server_host_port "${relay_server_raw}")
+	EOF
+	relay_ip=$(_get_server_ip "${relay_host}")
+
+	raw_json=$(printf '%s' "${raw_json}" | sed 's/,"local"[[:space:]]*:[[:space:]]*{[^}]*}//; s/"local"[[:space:]]*:[[:space:]]*{[^}]*},//')
+	raw_json=$(printf '%s' "${raw_json}" | sed 's/,"ip"[[:space:]]*:[[:space:]]*"[^"]*"//; s/"ip"[[:space:]]*:[[:space:]]*"[^"]*",//')
+
+	if [ -n "${relay_ip}" ]; then
+		escaped_relay_ip=$(wt_json_escape_simple "${relay_ip}")
+		raw_json=$(printf '%s' "${raw_json}" | sed '0,/"server"[[:space:]]*:[[:space:]]*"[^"]*"/s//&,"ip":"'"${escaped_relay_ip}"'"/')
+	fi
+
+	escaped_local_addr=$(wt_json_escape_simple "${local_addr}")
+	raw_json=$(printf '%s' "${raw_json}" | sed 's/}[[:space:]]*$/,"local":{"server":"'"${escaped_local_addr}"'"}}/')
+	printf '%s' "${raw_json}" > "${out_file}"
 }
 
 __get_server_resolver() {
@@ -3391,6 +3566,10 @@ case $1 in
 	;;
 schedule_warm)
 	mkdir -p /tmp/upload >/dev/null 2>&1
+	if wt_has_active_test_runner "$$"; then
+		http_response "ok"
+		exit 0
+	fi
 	if ! ps | grep -E "ss_webtest\\.sh warm_cache" | grep -v grep >/dev/null 2>&1; then
 		sh "${KSROOT}/scripts/ss_webtest.sh" warm_cache >> /tmp/upload/ss_log.txt 2>&1 &
 	fi
@@ -3399,6 +3578,10 @@ schedule_warm)
 	;;
 schedule_node_direct_refresh)
 	mkdir -p /tmp/upload >/dev/null 2>&1
+	if wt_has_active_test_runner "$$"; then
+		http_response "ok"
+		exit 0
+	fi
 	if ! ps | grep -E "ss_webtest\\.sh node_direct_refresh" | grep -v grep >/dev/null 2>&1; then
 		sh "${KSROOT}/scripts/ss_webtest.sh" node_direct_refresh >> /tmp/upload/ss_log.txt 2>&1 &
 	fi
@@ -3417,6 +3600,10 @@ esac
 case $2 in
 schedule_warm)
 	mkdir -p /tmp/upload >/dev/null 2>&1
+	if wt_has_active_test_runner "$$"; then
+		http_response "ok"
+		exit 0
+	fi
 	if ! ps | grep -E "ss_webtest\\.sh warm_cache" | grep -v grep >/dev/null 2>&1; then
 		sh "${KSROOT}/scripts/ss_webtest.sh" warm_cache >> /tmp/upload/ss_log.txt 2>&1 &
 	fi
@@ -3425,6 +3612,10 @@ schedule_warm)
 	;;
 schedule_node_direct_refresh)
 	mkdir -p /tmp/upload >/dev/null 2>&1
+	if wt_has_active_test_runner "$$"; then
+		http_response "ok"
+		exit 0
+	fi
 	if ! ps | grep -E "ss_webtest\\.sh node_direct_refresh" | grep -v grep >/dev/null 2>&1; then
 		sh "${KSROOT}/scripts/ss_webtest.sh" node_direct_refresh >> /tmp/upload/ss_log.txt 2>&1 &
 	fi
