@@ -9,7 +9,8 @@ XRAY_CONFIG_FILE="/koolshare/ss/xray.json"
 url_main="https://raw.githubusercontent.com/hq450/fancyss/3.0/binaries/xray"
 
 # arm hnd hnd_v8 qca mtk
-pkg_arch=$(cat /koolshare/webs/Module_shadowsocks.asp | tr -d '\r' | grep -Eo "PKG_ARCH=.+" | awk -F"=" '{print $2}' |sed 's/"//g')
+pkg_arch=$(dbus get ss_basic_pkg_arch)
+[ -n "${pkg_arch}" ] || pkg_arch=$(cat /koolshare/webs/Module_shadowsocks.asp | tr -d '\r' | grep -Eo "PKG_ARCH=.+" | awk -F"=" '{print $2}' |sed 's/"//g')
 case $pkg_arch in
 arm)
 	ARCH=armv5
@@ -30,7 +31,7 @@ esac
 
 # get xray location
 _TARGET_FILE=$(readlink /koolshare/bin/xray)
-if [ -z ${_TARGET_FILE} ];then
+if [ -z "${_TARGET_FILE}" ];then
 	_TARGET_FILE=/koolshare/bin/xray
 fi
 
@@ -210,21 +211,11 @@ start_xray() {
 }
 
 case $2 in
-1)
-	true > /tmp/upload/ss_log.txt
-	http_response "$1"
-	echo_date "===================================================================" | tee -a /tmp/upload/ss_log.txt
-	echo_date "                xray程序更新(Shell by sadog)" | tee -a /tmp/upload/ss_log.txt
-	echo_date "===================================================================" | tee -a /tmp/upload/ss_log.txt
-	get_latest_version latest | tee -a /tmp/upload/ss_log.txt 2>&1
-	echo_date "===================================================================" | tee -a /tmp/upload/ss_log.txt
-	echo XU6J03M6 | tee -a /tmp/upload/ss_log.txt
-	;;
 2)
 	true > /tmp/upload/ss_log.txt
 	http_response "$1"
 	echo_date "===================================================================" | tee -a /tmp/upload/ss_log.txt
-	echo_date "                xray程序更新(Shell by sadog)" | tee -a /tmp/upload/ss_log.txt
+	echo_date "                xray程序更新" | tee -a /tmp/upload/ss_log.txt
 	echo_date "===================================================================" | tee -a /tmp/upload/ss_log.txt
 	get_latest_version latest_2 | tee -a /tmp/upload/ss_log.txt 2>&1
 	echo_date "===================================================================" | tee -a /tmp/upload/ss_log.txt
