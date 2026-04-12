@@ -7,14 +7,14 @@ echo "$LOG_TIME: ======================= 自定义任务启动开始 ===========
 
 # BEGIN CUSTOM CRON TASK
 # ======================= 1.0 & 2.0 注入定时守护与清理任务 =======================
-for task in rclone_guard clean_logs rclone_cache_clean refresh_ddns ss_update_daily; do
+for task in rclone_guard clean_logs rclone_cache_clean ss_update_daily; do
     cru d $task 2>/dev/null
 done
 
 # 统一格式注入定时任务
 # cru a frpc_guard "*/10 * * * * /bin/sh /jffs/scripts/frpc_start.sh >/dev/null 2>&1"
 cru a rclone_guard "*/20 * * * * /bin/sh /jffs/scripts/rclone_webdav.sh >/dev/null 2>&1"
-cru a refresh_ddns "30 3 */5 * * /jffs/scripts/refresh_ddns.sh >> /jffs/scripts/ddns_refresh.log 2>&1"
+# cru a refresh_ddns "30 3 */5 * * /jffs/scripts/refresh_ddns.sh >> /jffs/scripts/ddns_refresh.log 2>&1"
 cru a ss_update_daily "30 4 * * * sh /jffs/.koolshare/scripts/ss_update.sh update >> /jffs/scripts/ss_update.log 2>&1"
 cru a clean_logs "0 3 * * * /jffs/scripts/clean_logs.sh >> /jffs/scripts/clean_logs.txt 2>&1"
 
