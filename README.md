@@ -11,7 +11,7 @@
 - 自定义黑白名单  打包即用
 #   路由器设置
 - 推荐使用GFW或大陆白名单 智能DNS　 否则ipv6测试得分为0　  导致某些zhibo 没网
-- 外部网络 端口转发设定需要DDNS的端口
+- 外部网络 端口转发设定DDNS端口
 - 自定义 DNS里DDNS指向路由器来自光猫分配的IPv4
 # 相关脚本在 [Asuswrt-Merlin-Custom-Scripts](https://github.com/klcb2010/Asuswrt-Merlin-Custom-Scripts)
 
