@@ -51,16 +51,16 @@ jobs:
         run: |
          cat cron_task.txt >> fancyss/ss/ssconfig.sh
 
-      # 5. 设置 build.sh 可执行权限
-      - name: Make build.sh executable
-        run: chmod +x build.sh
+      # 5. 设置 build-custom.sh 可执行权限
+      - name: Make build-custom.sh executable
+        run: chmod +x build-custom.sh
      # 6.0 修复name not allowed
       - name: Setup Git
         run: |
          git config --global user.name "github-actions[bot]"
          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
      
-      # 6.1 添加上游仓库 remote 并 fetch Changelog.txt（放在 build.sh 之前）
+      # 6.1 添加上游仓库 remote 并 fetch Changelog.txt（放在 build-custom.sh 之前）
       - name: Add upstream and fetch Changelog.txt
         run: |
           git remote add upstream https://github.com/hq450/fancyss.git || true
@@ -73,7 +73,7 @@ jobs:
       # 6.2 执行打包，只保留 hnd / hnd_v8 full 包 + 同步 Changelog.txt
       - name: Build FancySS packages
         run: |
-          ./build.sh
+          ./build-custom.sh
           
       # 7. 获取上游版本 + 生成 release 描述（只保留北京时间）
       - name: Generate release body and tag
