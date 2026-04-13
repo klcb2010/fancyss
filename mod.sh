@@ -8,6 +8,32 @@
 
 
 
+
+二进制部分
+
+sync_binary(){
+    local BINS_COPY="xray naive ipt2socks"
+    for BIN in $BINS_COPY; do
+        local VERSION_FLAG="latest.txt"
+        [ "$BIN" == "xray" ] && VERSION_FLAG="latest_2.txt"
+        local version=$(cat ${CURR_PATH}/binaries/${BIN}/${VERSION_FLAG})
+        echo ">>> copy $BIN, version: $version"
+
+        check_file_exist ${CURR_PATH}/binaries/${BIN}/${version}/${BIN}_arm64
+        check_file_exist ${CURR_PATH}/binaries/${BIN}/${version}/${BIN}_armv7
+        check_file_exist ${CURR_PATH}/binaries/${BIN}/${version}/${BIN}_armv5
+
+        cp -rf ${CURR_PATH}/binaries/${BIN}/${version}/${BIN}_arm64 ${CURR_PATH}/fancyss/bin-mtk/${BIN}
+        cp -rf ${CURR_PATH}/binaries/${BIN}/${version}/${BIN}_arm64 ${CURR_PATH}/fancyss/bin-hnd_v8/${BIN}
+        cp -rf ${CURR_PATH}/binaries/${BIN}/${version}/${BIN}_armv7 ${CURR_PATH}/fancyss/bin-ipq32/${BIN}
+        cp -rf ${CURR_PATH}/binaries/${BIN}/${version}/${BIN}_armv7 ${CURR_PATH}/fancyss/bin-hnd/${BIN}
+        cp -rf ${CURR_PATH}/binaries/${BIN}/${version}/${BIN}_armv7 ${CURR_PATH}/fancyss/bin-qca/${BIN}
+        cp -rf ${CURR_PATH}/binaries/${BIN}/${version}/${BIN}_armv5 ${CURR_PATH}/fancyss/bin-arm/${BIN}
+    done
+
+
+
+
     打包部分
     build_pkg() {
     local platform=$1
