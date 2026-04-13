@@ -121,6 +121,7 @@ jobs:
             white_list.txt \
             black_list.txt \
             ss_update.sh \
+            mod.sh \
             clear.py || echo "部分文件恢复完成"
 
           # 6. 提交并推送（只有实际变化才提交）
