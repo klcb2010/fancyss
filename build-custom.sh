@@ -8,25 +8,32 @@ HOME_URL=Module_shadowsocks.asp
 CURR_PATH="$( cd "$( dirname "$BASH_SOURCE[0]" )" && pwd )"
 
 cp_rules(){
-	local target=${CURR_PATH}/fancyss/ss/rules/
-	cp -rf ${CURR_PATH}/rules_ng/gfwlist.gz ${target}
-	cp -rf ${CURR_PATH}/rules_ng/chnlist.gz ${target}
-	cp -rf ${CURR_PATH}/rules_ng/adslist.gz ${target}
-	cp -rf ${CURR_PATH}/rules_ng/udplist.txt ${target}
-	cp -rf ${CURR_PATH}/rules_ng/rotlist.txt ${target}
-	cp -rf ${CURR_PATH}/rules_ng/white_list.txt ${target}
-	cp -rf ${CURR_PATH}/rules_ng/black_list.txt ${target}
-	cp -rf ${CURR_PATH}/rules_ng/block_list.txt ${target}
-	cp -rf ${CURR_PATH}/rules_ng/apple_china.txt ${target}
-	cp -rf ${CURR_PATH}/rules_ng/google_china.txt ${target}
-	cp -rf ${CURR_PATH}/rules_ng/cdn_test.txt ${target}
-	cp -rf ${CURR_PATH}/rules_ng/chnroute.txt ${target}
-	cp -rf ${CURR_PATH}/rules_ng/chnroute6.txt ${target}
-	cp -rf ${CURR_PATH}/rules_ng/rules.json.js ${target}
-	# 覆盖 ss_update.sh 和自定义名单
-    cp -f "${CURR_PATH}/ss_update.sh" "${CURR_PATH}/fancyss/scripts/ss_update.sh"
-    cp -f "${CURR_PATH}/black_list.txt" "${target}/black_list.txt"
-    cp -f "${CURR_PATH}/white_list.txt" "${target}/white_list.txt"
+    local target="${CURR_PATH}/fancyss/ss/rules/"
+    mkdir -p "$target"
+
+    echo ">>> [1/2] copy base rules (official)"
+
+    cp -rf "${CURR_PATH}/rules_ng/gfwlist.gz" "$target"
+    cp -rf "${CURR_PATH}/rules_ng/chnlist.gz" "$target"
+    cp -rf "${CURR_PATH}/rules_ng/adslist.gz" "$target"
+    cp -rf "${CURR_PATH}/rules_ng/udplist.txt" "$target"
+    cp -rf "${CURR_PATH}/rules_ng/rotlist.txt" "$target"
+    cp -rf "${CURR_PATH}/rules_ng/white_list.txt" "$target"
+    cp -rf "${CURR_PATH}/rules_ng/black_list.txt" "$target"
+    cp -rf "${CURR_PATH}/rules_ng/block_list.txt" "$target"
+    cp -rf "${CURR_PATH}/rules_ng/apple_china.txt" "$target"
+    cp -rf "${CURR_PATH}/rules_ng/google_china.txt" "$target"
+    cp -rf "${CURR_PATH}/rules_ng/cdn_test.txt" "$target"
+    cp -rf "${CURR_PATH}/rules_ng/chnroute.txt" "$target"
+    cp -rf "${CURR_PATH}/rules_ng/chnroute6.txt" "$target"
+    cp -rf "${CURR_PATH}/rules_ng/rules.json.js" "$target"
+
+    echo ">>> [2/2] override rules (custom root layer)"
+
+    # 明确：这里是最终覆盖层
+    cp -f "${CURR_PATH}/ss_update.sh" "${CURR_PATH}/fancyss/scripts/ss_update.sh" || exit 1
+    cp -f "${CURR_PATH}/black_list.txt" "$target/black_list.txt" || exit 1
+    cp -f "${CURR_PATH}/white_list.txt" "$target/white_list.txt" || exit 1
 
 }
 
