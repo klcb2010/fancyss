@@ -87,23 +87,31 @@ jobs:
           echo "上游 fancyss 目录无更新，流程结束"
           exit 0
 
-         # 步骤 6: 同步上游代码并推送（重点保护 build-custom.sh）
+               # 步骤 6: 同步上游代码并推送（重点保护 build-custom.sh）
       - name: Sync upstream repository and push
         if: steps.compare_time.outputs.needs_sync == 'true'
         run: |
           # 1. 切换到当前分支
           git checkout ${{ github.ref_name }}
 
-          # 2. 记录当前 HEAD（用于恢复）
+          # 2. 记录当前 HEAD（用于后续恢复）
           OLD_HEAD=$(git rev-parse HEAD)
 
-          # 3. 合并上游代码（上游优先）
+          # 3. 先 commit 本地对 .gitmodules 的修改（避免被 merge 覆盖）
+          if git diff --quiet .gitmodules; then
+            echo "No changes in .gitmodules"
+          else
+            git add .gitmodules
+            git commit -m "Update submodule URLs before sync" || true
+          fi
+
+          # 4. 合并上游代码（上游优先）
           git merge upstream/3.0 -X theirs --no-edit --allow-unrelated-histories || {
             echo "❌ merge 失败，终止流程"
             exit 1
           }
 
-          # 4. 强制恢复我们自己的重要文件（核心保护）
+          # 5. 强制恢复我们自己的重要文件（核心保护）
           echo ">>> 恢复本地保护文件..."
           git restore --source=$OLD_HEAD \
             README.md \
@@ -115,10 +123,10 @@ jobs:
             ss_update.sh \
             clear.py || echo "部分文件恢复完成"
 
-          # 5. 提交并推送（只有实际变化才提交）
+          # 6. 提交并推送（只有实际变化才提交）
           git add .
           if ! git diff --cached --quiet; then
-            git commit -m "Sync upstream hq450/fancyss@3.0 (protected build-custom.sh and custom files)"
+            git commit -m "Sync upstream hq450/fancyss@3.0 (protected custom files)"
             git push origin HEAD:${{ github.ref_name }} --force-with-lease
             echo "✅ 已同步上游并推送保护文件"
           else
@@ -166,10 +174,10 @@ jobs:
           echo "release_name=FancySS v${UPSTREAM_VERSION}" >> $GITHUB_OUTPUT
           echo "body=$(cat release_body.txt)" >> $GITHUB_OUTPUT
 
-      # 步骤 13: 创建/更新 Release（用版本号作为 tag，覆盖同版本）
+       # 步骤 13: 创建/更新 Release（用版本号作为 tag，覆盖同版本）
       - name: Create/Update Release
         if: steps.compare_time.outputs.needs_sync == 'true'
-        uses: softprops/action-gh-release@v2.0.8
+        uses: softprops/action-gh-release@v2.6.1
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         with:
