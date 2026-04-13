@@ -1,5 +1,59 @@
 fancyss Changelog
 
+3.5.13（20260413）
+   - note	本次更新是 3.5.12 之后的收口版本，重点围绕三个方向继续修正一致性问题：一是安装升级链路中 schema 2 secret 与缓存的历史兼容问题；二是“详细状态”页面在 GS7 等机型上的交互体验和输出稳定性；三是统一刷新并确认所有会进入安装包的 Zig 工具分发产物，避免打包时继续混入旧二进制。
+   - update	`install.sh` 现在会在安装阶段显式处理 schema 2 secret 兼容：
+			1. `schema1 -> schema2` 迁移完成后，会再次校正 `password / naive_pass`，确保最终落成 raw；
+			2. 如果当前节点存储已经是 schema 2，但旧插件版本低于 `3.6.0`，安装时会自动探测节点里的 `password / naive_pass` 是否仍误存为 base64，若识别为 base64 则统一纠正为 raw。
+   - update	针对旧版 `< 3.6.0` 的升级路径，`install.sh` 现在会明确强制清理节点运行缓存和 `webtest` 缓存，然后再重建 `node_json_cache` 并预热测速缓存，避免旧缓存格式在安装后继续污染运行时行为。
+   - update	“详细状态”页面重新改为更符合预期的实时执行模型：当前端 WebSocket 可用时，点击“详细状态”会直接通过 `ws` 执行 `ss_proc_status.sh ws`，并将 stdout 流式回传到前端，不再依赖旧的“先执行后台脚本、再读缓存文件”方式，因此不会再优先显示上一次缓存内容。
+   - update	`ss_proc_status.sh` 对详细状态输出顺序做了调整：将最慢的“节点分布”统计移到最后，保证 GS7 这类节点较多的场景下，基础信息、二进制版本和 iptables 状态可以更快显示，不会长时间卡在“节点数量”后面。
+   - update	详细状态页中的“插件主要二进制程序版本”现已补充 fancyss 自带 Zig 工具的版本与备注说明，涵盖 `node-tool`、`sub-tool`、`xapi-tool`、`statusctl`、`webtestctl`、`geotool`、`websocketd` 等工具，并统一为固定宽度排版，便于阅读和排障。
+   - update	恢复 `websocketd` 的旧兼容模型：前端 `push_data_ws()` 重新回到原样发命令，`/koolshare/ss/websocket` 也去掉了大部分 `run_*` 桥接分支，恢复到“前端发什么，后端脚本就执行什么”的模式，降低升级后因 websocket 脚本未及时重启而出现命令不匹配的概率。
+   - update	刷新并重新确认所有会进入安装包的 Zig 工具分发产物：`geotool / node-tool / sub-tool / xapi-tool / status-tool / statusctl / webtest-tool / webtestctl / websocketd` 均已重新走发布构建并同步回 `binaries/`，后续 `build.sh` 打包会统一携带这批最新产物。
+   - fix	修复 GS7 等机型在点击“详细状态”后，弹窗长期停留在“请稍后，正在获取状态中...”，或者第一次显示旧缓存、第二次又不再刷新的问题；当前链路在 GS7 上已完成实机验证。
+   - fix	修复详细状态页面在读取 `ss_proc_status.txt` 时可能读到半截内容、导致文本一开始只显示到“节点数量”，随后又跳变成另一段的问题；现在 HTTP fallback 路径改为临时文件原子落盘，避免读取半成品。
+   - fix	修复详细状态页面中 Zig 工具版本探测串行超时过长，导致“插件主要二进制程序版本”整块刷新过慢的问题；现已改为对可快速返回版本号的工具直接调用固定命令读取。
+
+3.5.12（20260413）
+   - note	本次更新重点围绕升级后的一致性问题收口：补齐安装升级后的缓存刷新、修复 websocket 命令文件热更新失配、统一 schema 2 节点 secret 的 raw 语义，并刷新 `node-tool / sub-tool` 分发链路，避免路由器升级后继续复用旧缓存或旧工具产物。
+   - update	安装脚本升级后会默认刷新节点运行缓存：清理 `node_json_cache`、`node_env_cache`、`webtest_cache` 以及 `webtest` 运行态结果，并在安装完成后重新生成节点 JSON 缓存、异步预热测速缓存，减少“脚本/工具已更新但缓存仍是旧格式”带来的行为不一致。
+   - update	`websocketd` 更新后的切换流程强化：安装完成后若插件未启用，会异步延迟重启 `websocketd` 并清理旧的 `/koolshare/ss/websocket` 子进程，避免旧 websocket 进程继续持有旧脚本；若插件已启用，则由插件完整重启流程接管 websocket 服务切换。
+   - update	前端通过 WebSocket 提交 `ss_config` 时，重新改回直接执行脚本命令 `sh /koolshare/scripts/ss_config.sh ...`，不再强依赖 `/koolshare/ss/websocket` 中的预定义 `run_ss_config_*` 分支，降低更新过程中因 websocket 脚本未及时重启而出现 `not found` 的概率。
+   - update	`node-tool` webtest cache 生成逻辑修正：Hysteria2 节点在端口范围场景下，`settings.port` 现在正确写为 `null`，`udphop.port` 正确保留端口范围字符串，同时 `gen_rev` 对齐到 `20260409_1`，避免 RT-AX89X 等机型继续生成非法 JSON 并导致整组 xray-like 节点 `booting -> failed`。
+   - update	刷新 `node-tool v0.1.1` 分发产物并同步进入 `binaries/node-tool` 与 `fancyss/bin-*`，确保 `build.sh` 打包使用的是修复后的最新版本。
+   - update	刷新 `sub-tool v0.1.9` 分发产物并同步进入 `binaries/sub-tool` 与 `fancyss/bin-*`；`build.sh` 中 `SUBTOOL_VER` 已更新到 `v0.1.9`，后续打包会自动携带新版 `sub-tool`。
+   - fix	修复 RT-AX89X 上因旧版 `node-tool` webtest cache 对 Hysteria2 端口范围输出错误，导致 `wt-xray` 配置文件非法、整组节点测速全部 `failed` 的问题；修复后 RT-AX89X 上 xray-like 节点已可恢复正常测速，仅剩真实节点本身的超时/连接重置结果。
+   - fix	修复 schema 2 下当前节点环境导出与运行态 secret 处理不一致，导致 SS/Naive 等节点在 `webtest` 正常、但正式启用后运行时密码被错误二次处理的问题；schema 2 当前节点 secret 统一按 raw 导出，`ss_base.sh` 不再对 schema 2 的 `password / naive_pass` 做 legacy base64 解码。
+   - fix	修复 SS 分享 URI 导出兼容性：新的二维码/复制 URI 逻辑改为标准形式，只对 `method:password@server:port` 做 base64，节点名单独放到 `#encodeURIComponent(name)`，避免旧版“整段 base64 + emoji 节点名”生成无效 URI。
+   - fix	修复通过分享链接离线导入旧式 `ss://` 节点时，remark 非法 UTF-8 会被当成错误节点整体拒绝的问题；现在 shell 离线导入会在 remark 不可用时回退为 `server:port`，确保节点仍可写入。
+   - fix	`sub-tool` 新增对旧式整段 base64 `ss://` 的兼容解析：支持处理 base64 主体内嵌 `#remark`，并在 CESU-8/非法 UTF-8 场景下尽量恢复可读节点名。对于你提供的旧 URI，当前 `sub-tool` 已可恢复出 `🇭🇰 香港 11` 与正确密码。
+   - fix	优化 `full -> lite` 升级路径：schema 2 下的 `full2lite()` 现在先批量 dump 节点快照，再本地筛出 `naive/tuic` 等 lite 不支持节点并统一重写顺序，避免逐节点 `dbus + base64 + jq` 带来的长时间停顿。
+
+3.5.11（20260412）
+   - note	本次更新重点围绕两条主线继续推进：一是彻底移除节点服务器预解析及其派生设置，统一收敛到动态解析；二是继续瘦身启动链和 WebSocket 通道实现，降低弱性能机型上的启动等待与常驻负担。
+   - add	新增 `ws-tool` 轻量级 `websocketd` 替代实现，并作为独立 Zig 工具项目引入；当前已覆盖 fancyss 前端实际使用的 WebSocket 场景，包括 `echo ws_ok`、`show_message`、实时日志、`. script arg` 指令和 `follow_webtest` 流式输出。
+   - add	新增 `status-tool` / `statusctl` 轻量状态检测工具，将前端按需状态检测和故障转移后台检测从多次 `curl` 调用迁移到 Zig 原生 HTTP/SOCKS5 探测；未开启故障转移时使用常驻 `serve` 按需检测，开启故障转移时使用 `daemon` 周期检测。
+   - add	新增 `webtest-tool` / `webtestctl` 批量测速工具，用 Zig 原生 SOCKS5 + HTTP 探测替代 `ss_webtest.sh` 中最重的 `curl_test` 链路；工具支持批任务 JSON、结果快照、事件流、并发 worker，以及 per-node `start_script / stop_script / wait_port` 钩子。
+   - update	插件 WebSocket 通道已切换到新的 `ws-tool` 发布链路：二进制仍保持 `websocketd` 命名，`build.sh` 与 `binaries/Makefile` 已接入新的多平台产物；`hnd` 平台使用 `armv7hf`，`qca/ipq32` 使用 `armv7a`，`hnd_v8/mtk/ipq64` 使用 `aarch64`。
+   - update	`websocketd` 现已随所有平台、所有安装包一并分发，前端 `ws_ok` 连通性探测不再对特定 `lite` 包关闭；弱性能平台也可统一使用 WebSocket 实时日志与测速状态回传能力。
+   - update	启动链路继续瘦身：`ssconfig.sh` 顶层 `nvram/ps/dbus` 初始化改为进入启动流程后再执行；`ss_base.sh` 当前节点环境导出、分流函数和 SmartDNS/机场特调辅助函数改为按需加载，显著缩短弱性能机型上点击后首行日志出现时间。
+   - update	运行状态检测链路重构：前端状态检测优先通过 WebSocket 与 `status-tool serve` 通讯，HTTP API 仅作为兜底；故障转移后台检测由 `status-tool daemon` 生成统一状态缓存，历史状态日志改为 WebSocket 首屏快照 + 增量追加，避免频繁轮询拖垮路由器 `httpd`。
+   - update	故障转移保存逻辑接入 WebSocket 控制命令，并修复 HTTP fallback 下 `http_response` 的 `curl` 进度输出污染日志窗口的问题；保存本页设置时日志窗口只显示正常业务日志。
+   - update	批量 web 延迟测速主链路迁移到 `webtest-tool`：xray-like 节点一次性准备全部本地入口并以 12 并发交给工具测速；`SS + simple-obfs` 通过 per-node hook 在进入 `testing...` 前按需拉起 `obfs-local`，测速后自动关闭，避免一次性拉起大量 obfs 进程。
+   - update	`SSR / NaiveProxy / TUIC` 的 webtest 运行方式统一为 target manifest + hook 模型，由 `ss_webtest.sh` 生成 `start/stop/wait_port` 信息，再交给 `webtest-tool` 按协议线程限制执行，为后续迁移到 `node-tool` 生成测速运行产物做准备。
+   - update	webtest 状态展示进一步细化并稳定化：新增 `queued...` 状态表示端口已就绪但尚未进入 worker；`waiting / loading / booting / queued` 改为快照刷新，前端收到 `refresh>snapshot` 后整表刷新，避免大量节点时中间状态逐行爬升。
+   - update	外围脚本中的若干二进制调用进一步统一为 `run/run_bg` 的干净环境启动方式，减少杂乱环境变量对子进程的影响，统一 `xray` 更新、故障转移和分流热重载等路径的行为。
+   - update	更新 bundled Zig 工具二进制：同步刷新 `node-tool`、`sub-tool`、`xapi-tool`、`geotool` 的发布产物和打包链路，修正 `hnd` 平台 Zig 工具架构映射，提升不同平台上的一致性。
+   - update	移除前后端“插件触发重启设定”功能及相关逻辑，避免在动态解析模式下继续保留已经失效的基于节点 IP 变化触发重启配置。
+   - update	节点服务器预解析相关前后端配置已完全移除，普通启动、`webtest`、节点分流和故障转移相关链路统一围绕动态解析工作；插件启动末尾仍保留“节点服务器解析地址”日志，便于继续观察当前节点最终解析结果。
+   - update	机场特调 DNS 日志调整为汇总展示所有活跃特调机场；当多个机场均需要 SmartDNS 时，启动日志会以 `AmyTelecom、Nexitally` 这类形式同时显示，便于确认特调是否生效。
+   - fix	修复 RT-BE88U 等机型在订阅完成后，因旧版 `node-tool` 缺少 `airport-domains` 能力而回退 shell 慢路径，导致“节点信息写入成功”后仍额外等待较长时间的问题；更新后的 `node-tool` 可正确支撑机场域名缓存刷新。
+   - fix	修复离线安装或插件重启早期阶段中，`smartdns_ensure_dns_groups` 初始化顺序不当导致的报错；同时为 SmartDNS relay 端口范围补充数值兜底，避免异常环境变量触发启动阶段的越界错误。
+   - fix	修复 `ssconfig.sh` 懒加载当前节点环境后，schema 2 下 SS/SSR 的 `password` 可能沿用 legacy 兼容值并被写成 base64，导致 webtest 有延迟但正式启用 SS 节点无法代理的问题；启动时会从当前节点对象刷新 raw secret 字段，修正过程不再输出面向用户的内部日志。
+   - fix	修复 WebSocket 日志命令未同步导致前端发送 `run_ss_config_start` 时被当作普通命令执行并报 `not found` 的问题；节点应用、停止和分流热重载均改为预设安全命令。
+   - fix	修复通过 WebSocket 应用节点后，后续“查看日志”页面缺少本次启动日志的问题；`start_by_ws` 现在也会同步写入 `/tmp/upload/ss_log.txt`。
+
 3.5.10（20260327）
    - note1	重要！！此版本定义为非稳定版本/尝鲜版本，升级前请备份设置，如在你的机型和固件版本上有问题，请及时回滚
 			1. 目前测试过mtk，hndv8，hnd，qca的部分机型
@@ -38,7 +92,6 @@ fancyss Changelog
    - fix	修复通过分享链接离线添加节点时，重复节点处理策略异常的问题；当前策略改为自动调整重复名称，避免误覆盖现有节点。
    - fix	修复节点编辑和“保存&应用”后，部分订阅节点的`_source_scope / _source_url_hash / _identity`被错误改写，导致后续订阅误判为新增/删除的问题。
    - fix	修复`sub-tool`、`node-tool`、`webtest`和统一运行产物在不同平台、不同缓存状态下的一系列兼容性问题，包括 malformed base64 订阅容错、结果摘要一致性、缓存索引一致性、运行产物输出目录一致性以及 ARM 平台打包适配问题。
-
 
 3.5.9（20260327）
    - note	本次更新重点围绕web延迟测速和运行状态探测做整体重构：重新梳理了测速链路、结果回传、线程调度、节点域名缓存与运行状态延迟检测，让节点较多、协议较杂的场景下也能获得更快、更稳定、更可中断的测速体验。

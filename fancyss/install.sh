@@ -17,6 +17,42 @@ run_bg(){
 	env -i PATH=${PATH} "$@" >/dev/null 2>&1 &
 }
 
+invalidate_runtime_caches_after_install() {
+	rm -rf /koolshare/configs/fancyss/node_json_cache >/dev/null 2>&1
+	rm -f /koolshare/configs/fancyss/node_json_cache.meta >/dev/null 2>&1
+	fss_clear_node_env_cache_artifacts >/dev/null 2>&1 || true
+	fss_clear_webtest_cache_all >/dev/null 2>&1 || true
+	fss_clear_webtest_runtime_results >/dev/null 2>&1 || true
+	rm -rf /tmp/fancyss_webtest >/dev/null 2>&1
+	rm -rf /tmp/fancyss_cache_state >/dev/null 2>&1
+}
+
+refresh_runtime_caches_after_install() {
+	invalidate_runtime_caches_after_install
+	fss_refresh_node_json_cache >/dev/null 2>&1 || true
+	fss_schedule_webtest_cache_warm >/dev/null 2>&1 || true
+}
+
+restart_websocketd_async() {
+	local helper="/tmp/fancyss_restart_websocketd.sh"
+	cat > "${helper}" <<-'EOF'
+		#!/bin/sh
+		sleep 2
+		killall websocketd >/dev/null 2>&1 || true
+		ps w | grep -F "/koolshare/ss/websocket" | grep -v grep | awk '{print $1}' | while read -r pid
+		do
+			[ -n "${pid}" ] || continue
+			kill "${pid}" >/dev/null 2>&1 || true
+		done
+		if [ -x "/koolshare/bin/websocketd" ] && [ -f "/koolshare/ss/websocket" ]; then
+			/koolshare/bin/websocketd --port=803 /koolshare/ss/websocket >/tmp/upload/websocketd.log 2>&1 &
+		fi
+		rm -f "$0" >/dev/null 2>&1
+	EOF
+	chmod +x "${helper}" >/dev/null 2>&1
+	sh "${helper}" >/dev/null 2>&1 &
+}
+
 report_install_migration_progress() {
 	echo_date "$1"
 }
@@ -94,6 +130,93 @@ version_lt() {
 	local right="$2"
 	[ -n "${left}" ] || return 0
 	[ "$(version_to_num "${left}")" -lt "$(version_to_num "${right}")" ]
+}
+
+schema2_secret_decode_candidate() {
+	local value="$1"
+	local decoded=""
+	local normalized=""
+
+	[ -n "${value}" ] || return 1
+	printf '%s' "${value}" | grep -Eq '^[A-Za-z0-9+/=]+$' || return 1
+	[ $(( ${#value} % 4 )) -eq 0 ] || return 1
+
+	decoded="$(printf '%s' "${value}" | base64_decode 2>/dev/null)" || return 1
+	[ -n "${decoded}" ] || return 1
+
+	normalized="$(printf '%s' "${decoded}" | base64_encode 2>/dev/null)"
+	[ -n "${normalized}" ] || return 1
+	[ "${normalized}" = "${value}" ] || return 1
+	[ "${decoded}" != "${value}" ] || return 1
+
+	printf '%s' "${decoded}"
+}
+
+normalize_schema2_secret_fields_after_install() {
+	local reason="$1"
+	local node_id=""
+	local field=""
+	local raw_value=""
+	local plain_value=""
+	local decoded=""
+	local node_json=""
+	local updated_json=""
+	local updated_at=""
+	local changed_nodes=0
+	local changed_fields=0
+	local fields="password naive_pass"
+
+	[ "$(fss_detect_storage_schema 2>/dev/null)" = "2" ] || return 0
+
+	for node_id in $(fss_list_node_ids)
+	do
+		[ -n "${node_id}" ] || continue
+		node_json="$(fss_v2_get_node_json_by_id "${node_id}" 2>/dev/null)" || continue
+		updated_json="${node_json}"
+		updated_at="$(fss_now_ts_ms)"
+		local node_changed=0
+
+		for field in ${fields}
+		do
+			raw_value="$(printf '%s' "${updated_json}" | jq -r --arg f "${field}" '.[$f] // empty' 2>/dev/null)"
+			[ -n "${raw_value}" ] || continue
+
+			plain_value="$(fss_get_node_field_plain "${node_id}" "${field}" 2>/dev/null)"
+			decoded=""
+
+			if [ -n "${plain_value}" ] && [ "${plain_value}" != "${raw_value}" ]; then
+				decoded="${plain_value}"
+			else
+				decoded="$(schema2_secret_decode_candidate "${raw_value}")" || decoded=""
+			fi
+
+			[ -n "${decoded}" ] || continue
+			[ "${decoded}" != "${raw_value}" ] || continue
+
+			updated_json="$(printf '%s' "${updated_json}" | jq -c \
+				--arg f "${field}" \
+				--arg v "${decoded}" \
+				--argjson updated_at "${updated_at}" \
+				'.[$f] = $v
+				| ._b64_mode = "raw"
+				| ._rev = (((._rev // 0) | tonumber? // 0) + 1)
+				| ._updated_at = $updated_at' 2>/dev/null)" || continue
+			node_changed=1
+			changed_fields=$((changed_fields + 1))
+			echo_date "校正 schema2 节点 ${node_id} 的 ${field} 字段：base64 -> raw（${reason}）"
+		done
+
+		if [ "${node_changed}" = "1" ]; then
+			dbus set fss_node_${node_id}="$(fss_b64_encode "${updated_json}")"
+			changed_nodes=$((changed_nodes + 1))
+		fi
+	done
+
+	if [ "${changed_nodes}" -gt 0 ]; then
+		fss_touch_node_catalog_ts >/dev/null 2>&1 || true
+		fss_touch_node_config_ts >/dev/null 2>&1 || true
+		echo_date "已完成 schema2 密码字段校正：节点 ${changed_nodes} 个，字段 ${changed_fields} 项。"
+	fi
 }
 
 cleanup_legacy_smartdns_user_configs() {
@@ -701,19 +824,54 @@ full2lite(){
 		local old_failover="$(fss_get_failover_node_id 2>/dev/null)"
 		local new_current=""
 		local new_failover=""
+		local tmp_dir=""
+		local nodes_dir=""
+		local meta_file=""
+		local removed_ids=""
+		local json_file=""
+		local node_meta=""
+		local TY=""
+		local NAME=""
 		mkdir -p "${backup_dir}"
 		: > "${backup_file}"
-		for NU in $(fss_list_node_ids)
+		tmp_dir="$(fss_mktemp_dir full2lite 2>/dev/null)"
+		nodes_dir="${tmp_dir}/nodes"
+		meta_file="${tmp_dir}/nodes.meta.tsv"
+		if [ -n "${tmp_dir}" ] && fss_dump_v2_node_json_dir "${nodes_dir}" >/dev/null 2>&1; then
+			find "${nodes_dir}" -maxdepth 1 -type f -name '*.json' | sort | xargs -r jq -r '[._id, (.type // ""), (.name // "")] | @tsv' > "${meta_file}" 2>/dev/null || true
+		fi
+		while IFS= read -r NU
 		do
-			local TY=$(fss_get_node_field_plain "${NU}" type)
+			[ -n "${NU}" ] || continue
+			TY=""
+			NAME=""
+			json_file="${nodes_dir}/${NU}.json"
+			if [ -s "${meta_file}" ] && [ -f "${json_file}" ]; then
+				node_meta="$(grep -m1 "^${NU}	" "${meta_file}" 2>/dev/null)"
+				if [ -n "${node_meta}" ]; then
+					TY="$(printf '%s' "${node_meta}" | awk -F '\t' '{print $2}')"
+					NAME="$(printf '%s' "${node_meta}" | cut -f3-)"
+				fi
+			fi
+			if [ -z "${TY}" ]; then
+				TY="$(fss_get_node_field_plain "${NU}" type)"
+				NAME="$(fss_get_node_field_plain "${NU}" name)"
+			fi
 			case "${TY}" in
 			6|7)
-				echo_date "备份并从节点列表里移除第$NU个$(__get_name_by_type ${TY})节点：【$(fss_get_node_field_plain "${NU}" name)】"
-				fss_v2_get_node_json_by_id "${NU}" | jq -c '
-					with_entries(select(.value != "" and .value != null))
-					| del(._schema, ._rev, ._source, ._updated_at, ._migrated_from, .server_ip, .latency, .ping)
-				' >> "${backup_file}"
-				fss_clear_webtest_cache_node "${NU}"
+				echo_date "备份并从节点列表里移除第$NU个$(__get_name_by_type ${TY})节点：【${NAME}】"
+				if [ -f "${json_file}" ]; then
+					jq -c '
+						with_entries(select(.value != "" and .value != null))
+						| del(._schema, ._rev, ._source, ._updated_at, ._migrated_from, .server_ip, .latency, .ping)
+					' "${json_file}" >> "${backup_file}"
+				else
+					fss_v2_get_node_json_by_id "${NU}" | jq -c '
+						with_entries(select(.value != "" and .value != null))
+						| del(._schema, ._rev, ._source, ._updated_at, ._migrated_from, .server_ip, .latency, .ping)
+					' >> "${backup_file}"
+				fi
+				removed_ids="${removed_ids} ${NU}"
 				dbus remove fss_node_${NU}
 				remove_flag=1
 				;;
@@ -724,11 +882,19 @@ full2lite(){
 				fi
 				;;
 			esac
-		done
+		done <<-EOF
+		$(fss_list_node_ids)
+		EOF
 		if [ "${remove_flag}" != "1" ];then
+			rm -rf "${tmp_dir}"
 			rm -rf "${backup_file}"
 			return
 		fi
+		for NU in ${removed_ids}
+		do
+			[ -n "${NU}" ] || continue
+			fss_clear_webtest_cache_node "${NU}"
+		done
 		[ -n "${keep_order}" ] && dbus set fss_node_order="${keep_order}" || dbus remove fss_node_order
 		if [ -n "${keep_order}" ];then
 			if printf '%s' "${keep_order}" | tr ',' '\n' | grep -Fxq "${old_current}" 2>/dev/null;then
@@ -751,6 +917,7 @@ full2lite(){
 		else
 			rm -rf "${backup_file}"
 		fi
+		rm -rf "${tmp_dir}"
 		return
 	fi
 	dbus list ssconf_basic_ | grep -E "_[0-9]+=" | sed '/^ssconf_basic_.\+_[0-9]\+=$/d' | sed 's/^ssconf_basic_//' >"${tmp_kv}"
@@ -908,7 +1075,9 @@ install_now(){
 	# default value
 	local PLVER=$(cat ${DIR}/ss/version)
 	local OLD_VER="$(dbus get ss_basic_version_local)"
+	local FORCE_LEGACY_CACHE_RESET=0
 	[ -z "${OLD_VER}" -a -f "/koolshare/ss/version" ] && OLD_VER="$(cat /koolshare/ss/version 2>/dev/null)"
+	[ -n "${OLD_VER}" ] && version_lt "${OLD_VER}" "3.6.0" && FORCE_LEGACY_CACHE_RESET=1
 
 	#local PKG_ARCH_OLD=$(cat /koolshare/webs/Module_shadowsocks.asp 2>/dev/null | grep -Eo "PKG_ARCH=.+" | awk -F"=" '{print $2}' |sed 's/"//g')
 	#local PKG_TYPE_OLD=$(cat /koolshare/webs/Module_shadowsocks.asp 2>/dev/null | grep -Eo "PKG_TYPE=.+" | awk -F"=" '{print $2}' |sed 's/"//g')
@@ -1106,10 +1275,6 @@ install_now(){
 		rm -rf /tmp/shadowsocks/bin/uredir
 	fi
 	
-	if [ -f "/koolshrae/bin/websocketd" ];then
-		rm -rf /tmp/shadowsocks/bin/websocketd
-	fi
-
 	# 将一些较大的二进制文件安装到/data分区，以节约jffs分区空间
 	# 1. 卸载的时候记得删除/data分区内的二进制
 	# 2. 打包的时候应该用/data分区内的二进制
@@ -1189,21 +1354,6 @@ install_now(){
 	chmod 755 /koolshare/ss/* >/dev/null 2>&1
 	chmod 755 /koolshare/scripts/ss* >/dev/null 2>&1
 	chmod 755 /koolshare/bin/* >/dev/null 2>&1
-	
-	# kill some process before fancyss start
-	ret_0=$(ps | grep "websocketd" | grep "/bin/sh")
-	if [ -n "${ret_0}" ];then
-		killall websocketd >/dev/null 2>&1
-		sleep 1
-		sync
-	fi
-
-	# start some process before fancyss start
-	if [ -x "/koolshare/bin/websocketd" -a -f "/koolshare/ss/websocket" ];then
-		if [ -z "$(pidof websocketd)" ];then
-			run_bg websocketd --port=803 /koolshare/ss/websocket
-		fi
-	fi
 	
 	# intall different UI
 	set_skin
@@ -1307,6 +1457,43 @@ install_now(){
 
 	# 节点存储自动迁移：升级到支持 schema 2 的版本后，直接切换到新结构。
 	export PATH=/koolshare/bin:${PATH}
+	local STORAGE_SCHEMA_BEFORE="$(fss_detect_storage_schema 2>/dev/null)"
+	fss_auto_migrate_if_needed 1 report_install_migration_progress
+	case "$?" in
+	0)
+		if [ "$(dbus get fss_data_schema)" = "2" ];then
+			echo_date "节点数据已经升级到 schema 2 存储。"
+		fi
+		;;
+	2)
+		:
+		;;
+	*)
+		echo_date "节点数据升级到 schema 2 失败，保留旧版节点结构。"
+		;;
+	esac
+
+	if [ "$(fss_detect_storage_schema 2>/dev/null)" = "2" ];then
+		if [ "${STORAGE_SCHEMA_BEFORE}" != "2" ];then
+			normalize_schema2_secret_fields_after_install "schema1 -> schema2 升级"
+		elif [ -n "${OLD_VER}" ] && version_lt "${OLD_VER}" "3.6.0"; then
+			normalize_schema2_secret_fields_after_install "旧版 schema2 数据纠偏"
+		fi
+	fi
+
+	if [ "${FORCE_LEGACY_CACHE_RESET}" = "1" ];then
+		echo_date "检测到旧版 fancyss（${OLD_VER} < 3.6.0），强制清理节点配置缓存和 webtest 缓存..."
+		invalidate_runtime_caches_after_install
+		echo_date "重建节点运行缓存..."
+		fss_refresh_node_json_cache >/dev/null 2>&1 || true
+		fss_schedule_webtest_cache_warm >/dev/null 2>&1 || true
+	else
+		echo_date "刷新节点运行缓存..."
+		refresh_runtime_caches_after_install
+	fi
+
+	# 节点存储自动迁移：升级到支持 schema 2 的版本后，直接切换到新结构。
+	export PATH=/koolshare/bin:${PATH}
 	fss_auto_migrate_if_needed 1 report_install_migration_progress
 	case "$?" in
 	0)
@@ -1338,6 +1525,8 @@ install_now(){
 	if [ "${ENABLE}" == "1" -a -f "/koolshare/ss/ssconfig.sh" ];then
 		echo_date 重启科学上网插件！
 		sh /koolshare/ss/ssconfig.sh restart
+	else
+		restart_websocketd_async
 	fi
 	fss_schedule_webtest_cache_warm >/dev/null 2>&1
 
