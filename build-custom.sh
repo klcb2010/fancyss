@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 MODULE=shadowsocks
-VERSION=$(cat ./fancyss/ss/version | sed -n 1p)
+VERSION=$(cat ./fancyss/ss/version|sed -n 1p)
 TITLE="科学上网"
 DESCRIPTION="科学上网"
 HOME_URL=Module_shadowsocks.asp
@@ -28,6 +28,8 @@ cp_rules(){
     cp -f "${CURR_PATH}/black_list.txt" "${target}/black_list.txt"
     cp -f "${CURR_PATH}/white_list.txt" "${target}/white_list.txt"
 
+}
+
 cp_rules_ng2(){
 	local src=${CURR_PATH}/rules_ng2
 	local target=${CURR_PATH}/fancyss/ss/rules_ng2
@@ -44,25 +46,6 @@ prepare_geodata_assets(){
 	echo ">>> build geosite/geoip dat assets"
 	${CURR_PATH}/scripts/build_geodata_fancyss.sh
 }
-
-# ==================== 官方版本的两个函数 ====================
-cp_rules_ng2(){
-    local src=${CURR_PATH}/rules_ng2
-    local target=${CURR_PATH}/fancyss/ss/rules_ng2
-    rm -rf ${target}
-    if [ -d "${src}" ]; then
-        mkdir -p ${CURR_PATH}/fancyss/ss
-        cp -rf ${src} ${target}
-    fi
-}
-
-prepare_geodata_assets(){
-    echo ">>> refresh rules_ng2 manifest and package mirror"
-    ${CURR_PATH}/scripts/update_geodata_assets.sh --no-fetch
-    echo ">>> build geosite/geoip dat assets"
-    ${CURR_PATH}/scripts/build_geodata_fancyss.sh
-}
-# ===========================================================
 
 sync_binary(){
 	# BINS_REMOVE="naive"
@@ -84,14 +67,9 @@ sync_binary(){
 	do
 		local VERSION_FLAG="latest.txt"
 
-    local TUIC_VERSION=$(cat ${CURR_PATH}/binaries/tuic-client/latest.txt)
-    echo ">>> start to copy latest tuic-client, version: ${TUIC_VERSION}"
-    cp -rf ${CURR_PATH}/binaries/tuic-client/${TUIC_VERSION}/tuic-client_arm64 ${CURR_PATH}/fancyss/bin-mtk/tuic-client
-    cp -rf ${CURR_PATH}/binaries/tuic-client/${TUIC_VERSION}/tuic-client_arm64 ${CURR_PATH}/fancyss/bin-hnd_v8/tuic-client
-    cp -rf ${CURR_PATH}/binaries/tuic-client/${TUIC_VERSION}/tuic-client_armv7 ${CURR_PATH}/fancyss/bin-ipq32/tuic-client
-    cp -rf ${CURR_PATH}/binaries/tuic-client/${TUIC_VERSION}/tuic-client_armv7 ${CURR_PATH}/fancyss/bin-hnd/tuic-client
-    cp -rf ${CURR_PATH}/binaries/tuic-client/${TUIC_VERSION}/tuic-client_armv7 ${CURR_PATH}/fancyss/bin-qca/tuic-client
-    cp -rf ${CURR_PATH}/binaries/tuic-client/${TUIC_VERSION}/tuic-client_armv7 ${CURR_PATH}/fancyss/bin-arm/tuic-client
+		if [ "${BIN}" == "xray" ];then
+			local VERSION_FLAG="latest_2.txt"
+		fi
 
 		local version=$(cat ${CURR_PATH}/binaries/${BIN}/${VERSION_FLAG})
 		echo ">>> start to copy latest ${BIN}, version: ${version}"
@@ -198,7 +176,6 @@ sync_binary(){
 	cp -rf ${CURR_PATH}/binaries/webtest-tool/webtestctl-${WEBTESTTOOL_VER}-linux-armv5te ${CURR_PATH}/fancyss/bin-arm/webtestctl
 }
 
-# 以下 gen_folder、build_pkg、papare、finish、pack、make 完全保留你原来的代码（未做改动）
 gen_folder(){
 	local platform=$1
 	local pkgtype=$2
@@ -336,9 +313,6 @@ gen_folder(){
 		rm -rf ./shadowsocks/bin/ipt2socks
 		rm -rf ./shadowsocks/bin/haveged
 
-		if [ "${platform}" == "hnd" -o "${platform}" == "ipq32" ];then
-			rm -rf ./shadowsocks/bin/websocketd
-		fi
 		# remove scripts
 		rm -rf ./shadowsocks/scripts/ss_v2ray.sh
 		# remove rules
@@ -413,7 +387,7 @@ gen_folder(){
 	# sed -i '/fancyss_todo/d' ./shadowsocks/webs/Module_shadowsocks.asp
 }
 
-build_pkg() {
+ build_pkg() {
     local platform=$1
     local pkgtype=$2
     local release_type=$3
