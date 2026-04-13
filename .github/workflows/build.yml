@@ -87,7 +87,7 @@ jobs:
           echo "上游 fancyss 目录无更新，流程结束"
           exit 0
 
-         # 步骤 6: 同步上游代码并推送（重点保护 build.sh）
+         # 步骤 6: 同步上游代码并推送（重点保护 build-custom.sh）
       - name: Sync upstream repository and push
         if: steps.compare_time.outputs.needs_sync == 'true'
         run: |
@@ -118,7 +118,7 @@ jobs:
           # 5. 提交并推送（只有实际变化才提交）
           git add .
           if ! git diff --cached --quiet; then
-            git commit -m "Sync upstream hq450/fancyss@3.0 (protected build.sh and custom files)"
+            git commit -m "Sync upstream hq450/fancyss@3.0 (protected build-custom.sh and custom files)"
             git push origin HEAD:${{ github.ref_name }} --force-with-lease
             echo "✅ 已同步上游并推送保护文件"
           else
@@ -142,16 +142,16 @@ jobs:
         run: |
          cat cron_task.txt >> fancyss/ss/ssconfig.sh
 
-      # 步骤 10: 设置 build.sh 可执行权限
-      - name: Make build.sh executable
+      # 步骤 10: 设置 build-custom.sh 可执行权限
+      - name: Make build-custom.sh executable
         if: steps.compare_time.outputs.needs_sync == 'true'
-        run: chmod +x build.sh
+        run: chmod +x build-custom.sh
 
       # 步骤 11: 执行打包（只打包 hnd / hnd_v8 full 包）
       - name: Build FancySS packages
         if: steps.compare_time.outputs.needs_sync == 'true'
         run: |
-          ./build.sh
+          ./build-custom.sh
 
       # 步骤 12: 获取上游版本 + 生成 release 描述（只保留北京时间）
       - name: Generate release body and tag
