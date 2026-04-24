@@ -4,12 +4,19 @@
 
 source /koolshare/scripts/base.sh
 eval $(dbus export ss_basic_)
-alias echo_date='echo 【$(TZ=UTC-8 date -R +%Y年%m月%d日\ %X)】:'
+alias echo_date='echo 【$(TZ=UTC-8 date -R +%Y%m%d\ %X)】:'
+run(){
+	env -i PATH=${PATH} "$@"
+}
+run_bg(){
+	env -i PATH=${PATH} "$@" >/dev/null 2>&1 &
+}
 XRAY_CONFIG_FILE="/koolshare/ss/xray.json"
 url_main="https://raw.githubusercontent.com/hq450/fancyss/3.0/binaries/xray"
 
 # arm hnd hnd_v8 qca mtk
-pkg_arch=$(cat /koolshare/webs/Module_shadowsocks.asp | tr -d '\r' | grep -Eo "PKG_ARCH=.+" | awk -F"=" '{print $2}' |sed 's/"//g')
+pkg_arch=$(dbus get ss_basic_pkg_arch)
+[ -n "${pkg_arch}" ] || pkg_arch=$(cat /koolshare/webs/Module_shadowsocks.asp | tr -d '\r' | grep -Eo "PKG_ARCH=.+" | awk -F"=" '{print $2}' |sed 's/"//g')
 case $pkg_arch in
 arm)
 	ARCH=armv5
@@ -30,7 +37,7 @@ esac
 
 # get xray location
 _TARGET_FILE=$(readlink /koolshare/bin/xray)
-if [ -z ${_TARGET_FILE} ];then
+if [ -z "${_TARGET_FILE}" ];then
 	_TARGET_FILE=/koolshare/bin/xray
 fi
 
@@ -56,7 +63,7 @@ get_latest_version(){
 			echo_date "xray安装文件丢失！重新下载！"
 			CUR_VER="0"
 		else
-			CUR_VER=$(xray -version 2>/dev/null | head -n 1 | cut -d " " -f2 | sed 's/v//g')
+			CUR_VER=$(run xray -version 2>/dev/null | head -n 1 | cut -d " " -f2 | sed 's/v//g')
 			[ -z "${CUR_VER}" ] && CUR_VER="0"
 			echo_date "当前已安装Xray版本：${CUR_VER}"
 		fi
@@ -160,8 +167,8 @@ move_binary(){
 	if [ -f ${_TARGET_FILE} -a ! -f /koolshare/bin/xray ];then
 		ln -sf ${_TARGET_FILE} /koolshare/bin/xray
 	fi
-	XRAY_LOCAL_VER=$(/koolshare/bin/xray -version 2>/dev/null | head -n 1 | cut -d " " -f2)
-	XRAY_LOCAL_DATE=$(/koolshare/bin/xray -version 2>/dev/null | head -n 1 | cut -d " " -f5)
+	XRAY_LOCAL_VER=$(run /koolshare/bin/xray -version 2>/dev/null | head -n 1 | cut -d " " -f2)
+	XRAY_LOCAL_DATE=$(run /koolshare/bin/xray -version 2>/dev/null | head -n 1 | cut -d " " -f5)
 	[ -n "$XRAY_LOCAL_VER" ] && dbus set ss_basic_xray_version="$XRAY_LOCAL_VER"
 	[ -n "$XRAY_LOCAL_DATE" ] && dbus set ss_basic_xray_date="$XRAY_LOCAL_DATE"
 	echo_date "xray二进制文件更新成功... "
@@ -189,11 +196,11 @@ start_xray() {
 		EOF
 		chmod +x /koolshare/perp/xray/rc.main
 		chmod +t /koolshare/perp/xray/
-		perpctl -u xray >/dev/null 2>&1
+		run perpctl -u xray >/dev/null 2>&1
 	else
 		echo_date "开启Xray主进程..."
 		cd /koolshare/bin
-		xray run -c $XRAY_CONFIG_FILE >/dev/null 2>&1 &
+		run_bg xray run -c $XRAY_CONFIG_FILE
 	fi
 	local XPID
 	local i=25
@@ -210,21 +217,11 @@ start_xray() {
 }
 
 case $2 in
-1)
-	true > /tmp/upload/ss_log.txt
-	http_response "$1"
-	echo_date "===================================================================" | tee -a /tmp/upload/ss_log.txt
-	echo_date "                xray程序更新(Shell by sadog)" | tee -a /tmp/upload/ss_log.txt
-	echo_date "===================================================================" | tee -a /tmp/upload/ss_log.txt
-	get_latest_version latest | tee -a /tmp/upload/ss_log.txt 2>&1
-	echo_date "===================================================================" | tee -a /tmp/upload/ss_log.txt
-	echo XU6J03M6 | tee -a /tmp/upload/ss_log.txt
-	;;
 2)
 	true > /tmp/upload/ss_log.txt
 	http_response "$1"
 	echo_date "===================================================================" | tee -a /tmp/upload/ss_log.txt
-	echo_date "                xray程序更新(Shell by sadog)" | tee -a /tmp/upload/ss_log.txt
+	echo_date "                xray程序更新" | tee -a /tmp/upload/ss_log.txt
 	echo_date "===================================================================" | tee -a /tmp/upload/ss_log.txt
 	get_latest_version latest_2 | tee -a /tmp/upload/ss_log.txt 2>&1
 	echo_date "===================================================================" | tee -a /tmp/upload/ss_log.txt
