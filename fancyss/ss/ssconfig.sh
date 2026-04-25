@@ -535,30 +535,37 @@ sync_dns_ipv6_policy() {
 }
 
 check_chn_public_ip(){
+	echo_date "检测[公网出口IPV4地址]和[路由器WAN口IPV4地址]..."
+
 	# 5.1 检测路由器公网出口IPV4地址
+	if [ -z "${REMOTE_IP_OUT}" -o "${REMOTE_IP_OUT}" == "null" ];then
+		REMOTE_IP_OUT="$(nvram get wan0_realip_ip)"
+		REMOTE_IP_OUT="$(__valid_ip "${REMOTE_IP_OUT}")"
+		REMOTE_IP_OUT_SRC="nvram: wan0_realip_ip"
+	fi
+
 	if [ -z "${REMOTE_IP_OUT}" ];then
+		echo_date "↪ 本地未获取到公网出口IPV4，尝试在线检测：ip.ddnsto.com"
 		REMOTE_IP_OUT_SRC="http://ip.ddnsto.com"
 		REMOTE_IP_OUT=$(detect_ip ${REMOTE_IP_OUT_SRC} 5 0)
 	fi
 
 	if [ -z "${REMOTE_IP_OUT}" ];then
+		echo_date "↪ 切换在线检测源：ip.clang.cn"
 		REMOTE_IP_OUT_SRC="https://ip.clang.cn"
 		REMOTE_IP_OUT=$(detect_ip ${REMOTE_IP_OUT_SRC} 5 0)
 	fi
 
 	if [ -z "${REMOTE_IP_OUT}" ];then
+		echo_date "↪ 切换在线检测源：whatismyip.akamai.com"
 		REMOTE_IP_OUT_SRC="whatismyip.akamai.com"
 		REMOTE_IP_OUT=$(detect_ip ${REMOTE_IP_OUT_SRC} 5 0)
 	fi
 
 	if [ -z "${REMOTE_IP_OUT}" ];then
+		echo_date "↪ 切换在线检测源：api.myip.com"
 		REMOTE_IP_OUT=$(run curl-fancyss -4sk --connect-timeout 2 http://api.myip.com 2>&1 | grep -v "Terminated" | run jq -r '.ip' | grep -Eo "([0-9]{1,3}[\.]){3}[0-9]{1,3}")
 		REMOTE_IP_OUT_SRC="api.myip.com"
-	fi
-
-	if [ -z "${REMOTE_IP_OUT}" -o "${REMOTE_IP_OUT}" == "null" ];then
-		REMOTE_IP_OUT=$(nvram get wan0_realip_ip)
-		REMOTE_IP_OUT_SRC="nvram: wan0_realip_ip"
 	fi
 
 	if [ -z "${REMOTE_IP_OUT}" ];then
@@ -571,7 +578,6 @@ check_chn_public_ip(){
 	fi
 
 	# 5.2 检测路由器WAN口IPV4地址
-	echo_date "检测[公网出口IPV4地址]和[路由器WAN口IPV4地址]..."
 	if [ -z "${ROUTER_IP_WAN}" ];then
 		local ROUTER_IP_WAN=$(nvram get wan0_ipaddr)
 		local ROUTER_IP_WAN_SRC="nvram get wan0_ipaddr"
@@ -647,9 +653,9 @@ check_chn_public_ip(){
 prepare_system() {
 	# prepare system
 	echo_date "🛠️ 一些准备工作，请稍后..."
+	echo_date "准备工作：加载当前节点和运行环境..."
 	fss_base_load_current_node_env
 	refresh_runtime_context
-	refresh_schema2_secret_fields
 	normalize_ss2022_password
 	# Default enabled in UI: block QUIC to avoid HTTP/3 direct-connect bypassing TCP-only proxy.
 	set_default "ss_basic_block_quic" "1"
@@ -698,10 +704,13 @@ prepare_system() {
 	
 	# 检查端口占用情况
 	# 3333 3334 23456 7913 1051 1052 1055-1070 2055 2056 1091 1092 1093
+	echo_date "准备工作：检查冲突端口占用..."
 	kill_used_port
 
 	# 3. internet detect
+	echo_date "准备工作：检测基础网络连通性..."
 	check_internet
+	echo_date "准备工作：同步DNS与IPv6策略..."
 	check_ipv6_proxy_prerequisites
 	sync_dns_ipv6_policy
 
@@ -728,6 +737,7 @@ prepare_system() {
 	
 	# 检测路由器公网出口IPV4地址
 	if [ "${ss_basic_nochnipcheck}" != "1" ];then
+		echo_date "准备工作：检查公网出口与WAN口地址..."
 		check_chn_public_ip
 	fi
 	
@@ -938,9 +948,12 @@ server_resolv_mode_is_dynamic() {
 }
 
 clear_current_node_server_ip() {
+	unset CURRENT_NODE_SERVER_RESOLVED_IP
+	unset CURRENT_NODE_SERVER_RESOLVED_HOST
 	unset ss_basic_server_ip
+	unset ss_basic_server_ip_host
 	dbus remove ss_basic_server_ip
-	fss_set_current_node_field_plain server_ip ""
+	dbus remove ss_basic_server_ip_host
 }
 
 record_current_node_server_ip() {
@@ -949,9 +962,10 @@ record_current_node_server_ip() {
 		clear_current_node_server_ip
 		return 1
 	}
-	ss_basic_server_ip="${server_ip}"
-	dbus set ss_basic_server_ip="${server_ip}"
-	fss_set_current_node_field_plain server_ip "${server_ip}"
+	CURRENT_NODE_SERVER_RESOLVED_IP="${server_ip}"
+	if [ -n "${ss_basic_server_orig}" ];then
+		CURRENT_NODE_SERVER_RESOLVED_HOST="${ss_basic_server_orig}"
+	fi
 	return 0
 }
 
@@ -1105,19 +1119,20 @@ refresh_node_direct_dns() {
 
 refresh_current_node_server_ip_runtime() {
 	local resolved_ip=""
-	local attempt=1
 	[ -n "${ss_basic_server_orig}" ] || return 1
 	[ -n "$(is_domain "${ss_basic_server_orig}")" ] || return 1
-	while [ "${attempt}" -le 3 ]; do
-		resolved_ip=$(run dnsclient -46 -p 53 -t 2 -i 1 @127.0.0.1 "${ss_basic_server_orig}" 2>/dev/null | head -n1)
-		__valid_ip46 "${resolved_ip}" >/dev/null 2>&1
-		if [ "$?" = "0" -o "$?" = "1" ]; then
-			break
+
+	if [ "${CURRENT_NODE_SERVER_RESOLVED_HOST}" = "${ss_basic_server_orig}" ] && [ -n "${CURRENT_NODE_SERVER_RESOLVED_IP}" ];then
+		__valid_ip46 "${CURRENT_NODE_SERVER_RESOLVED_IP}" >/dev/null 2>&1
+		if [ "$?" = "0" -o "$?" = "1" ];then
+			echo_date "节点服务器域名运行时解析复用缓存：${ss_basic_server_orig} -> ${CURRENT_NODE_SERVER_RESOLVED_IP}"
+			return 0
 		fi
-		resolved_ip=""
-		[ "${attempt}" -lt 3 ] && sleep 1
-		attempt=$((attempt + 1))
-	done
+	fi
+
+	resolved_ip=$(run dnsclient -46 -p 53 -t 1 -i 1 @127.0.0.1 "${ss_basic_server_orig}" 2>/dev/null | head -n1)
+	__valid_ip46 "${resolved_ip}" >/dev/null 2>&1
+	[ "$?" = "0" -o "$?" = "1" ] || resolved_ip=""
 	[ -n "${resolved_ip}" ] || return 1
 	record_current_node_server_ip "${resolved_ip}" || return 1
 	echo_date "节点服务器域名运行时解析成功：${ss_basic_server_orig} -> ${resolved_ip}"
@@ -1347,7 +1362,8 @@ init_current_node_server_state() {
 
 	case "${CURRENT_NODE_SERVER_IS_IP}" in
 	0|1)
-		record_current_node_server_ip "${CURRENT_NODE_SERVER_HOST}"
+		CURRENT_NODE_SERVER_RESOLVED_IP="${CURRENT_NODE_SERVER_HOST}"
+		CURRENT_NODE_SERVER_RESOLVED_HOST="${CURRENT_NODE_SERVER_HOST}"
 		;;
 	esac
 
@@ -1409,31 +1425,31 @@ get_proxy_server_ip(){
 		return
 	fi
 
-	if [ -n "${ss_basic_server_ip}" ]; then
-		__valid_ip46 "${ss_basic_server_ip}"
+	if [ -n "${CURRENT_NODE_SERVER_RESOLVED_IP}" ]; then
+		__valid_ip46 "${CURRENT_NODE_SERVER_RESOLVED_IP}"
 		if [ "$?" == "0" ]; then
 			# ipv4
-			ipset test chnroute ${ss_basic_server_ip} >/dev/null 2>&1
+			ipset test chnroute ${CURRENT_NODE_SERVER_RESOLVED_IP} >/dev/null 2>&1
 			if [ "$?" != "0" ]; then
 				# ss服务器是国外IP
-				ss_real_server_ip="${ss_basic_server_ip}"
-				echo_date "检测到节点服务器的ip地址为：${ss_basic_server_ip}，是国外IP"
+				ss_real_server_ip="${CURRENT_NODE_SERVER_RESOLVED_IP}"
+				echo_date "检测到节点服务器的ip地址为：${CURRENT_NODE_SERVER_RESOLVED_IP}，是国外IP"
 			else
 				# ss服务器是国内ip （可能用了国内中转）
 				ss_real_server_ip=""
-				echo_date "检测到代理服务器的ip地址为：${ss_basic_server_ip}，是国内IP，可能是国内中转节点！"
+				echo_date "检测到代理服务器的ip地址为：${CURRENT_NODE_SERVER_RESOLVED_IP}，是国内IP，可能是国内中转节点！"
 			fi
 		elif [ "$?" == "1" ]; then
 			# ipv6
-			ipset test chnroute6 ${ss_basic_server_ip} >/dev/null 2>&1
+			ipset test chnroute6 ${CURRENT_NODE_SERVER_RESOLVED_IP} >/dev/null 2>&1
 			if [ "$?" != "0" ]; then
 				# ss服务器是国外IP
-				ss_real_server_ip="${ss_basic_server_ip}"
-				echo_date "检测到节点服务器的ip地址为：${ss_basic_server_ip}，是国外IP"
+				ss_real_server_ip="${CURRENT_NODE_SERVER_RESOLVED_IP}"
+				echo_date "检测到节点服务器的ip地址为：${CURRENT_NODE_SERVER_RESOLVED_IP}，是国外IP"
 			else
 				# ss服务器是国内ip （可能用了国内中转）
 				ss_real_server_ip=""
-				echo_date "检测到代理服务器的ip地址为：${ss_basic_server_ip}，是国内IP，可能是国内中转节点！"
+				echo_date "检测到代理服务器的ip地址为：${CURRENT_NODE_SERVER_RESOLVED_IP}，是国内IP，可能是国内中转节点！"
 			fi
 		else
 			# 不是ip
@@ -1848,10 +1864,13 @@ $(fss_airport_special_iter_active_tsv 2>/dev/null)
 	[ "${ss_basic_block_resov}" = "1" ] && echo "domain-set -name block_list -file /tmp/block_list.txt" >> "${outfile}"
 
 	local shunt_proxy_file=""
-	if [ "$(get_runtime_proxy_mode)" = "7" ] && type fss_shunt_get_proxy_domain_file >/dev/null 2>&1; then
+	if [ "$(get_runtime_proxy_mode)" = "7" ] && type fss_shunt_resolve_proxy_domain_file >/dev/null 2>&1; then
+		fss_shunt_resolve_proxy_domain_file >/dev/null 2>&1 || true
+		shunt_proxy_file="${FSS_SHUNT_PROXY_DOMAIN_FILE_RESULT}"
+	elif [ "$(get_runtime_proxy_mode)" = "7" ] && type fss_shunt_get_proxy_domain_file >/dev/null 2>&1; then
 		shunt_proxy_file="$(fss_shunt_get_proxy_domain_file 2>/dev/null)"
-		[ -n "${shunt_proxy_file}" ] && [ -s "${shunt_proxy_file}" ] && echo "domain-set -name shunt_proxy -file ${shunt_proxy_file}" >> "${outfile}"
 	fi
+	[ -n "${shunt_proxy_file}" ] && [ -s "${shunt_proxy_file}" ] && echo "domain-set -name shunt_proxy -file ${shunt_proxy_file}" >> "${outfile}"
 
 	[ "${mode}" = "3" ] && echo "conf-file /tmp/whitelist_ip.txt" >> "${outfile}"
 	cat >> "${outfile}" <<-'EOF'
@@ -3149,31 +3168,43 @@ add_white_black() {
 
 	# {black_list}, black domain
 	local shunt_proxy_file=""
+	local shunt_proxy_count="0"
 	echo_date "生成域名黑名单！"
-	if [ "${ss_basic_mode}" = "7" ]; then
+	if [ "${ss_basic_mode}" = "7" ] && type fss_shunt_resolve_proxy_domain_file >/dev/null 2>&1; then
+		fss_shunt_resolve_proxy_domain_file >/dev/null 2>&1 || true
+		shunt_proxy_file="${FSS_SHUNT_PROXY_DOMAIN_FILE_RESULT}"
+	elif [ "${ss_basic_mode}" = "7" ]; then
 		shunt_proxy_file="$(fss_shunt_get_proxy_domain_file 2>/dev/null)"
 	fi
 	{
 		printf '%s\n' ip.sb api.skk.moe ip.skk.moe ipinfo.io ip-api.com us.ip111.cn
-		[ -n "${ss_wan_black_domain}" ] && fss_b64_decode "${ss_wan_black_domain}"
 		[ "${ss_basic_proxy_newb}" = "1" ] && printf '%s\n' "bing.com"
-		[ -n "${shunt_proxy_file}" ] && [ -s "${shunt_proxy_file}" ] && cat "${shunt_proxy_file}"
-	} | awk '
-		{
-			gsub(/\r/, "")
-			sub(/#.*/, "")
-			for (i = 1; i <= NF; i++) {
-				domain = tolower($i)
-				gsub(/^[*.]+/, "", domain)
-				if (domain ~ /^[a-z0-9._-]+(\.[a-z0-9._-]+)+$/ && !seen[domain]++) {
-					print domain
+	} > /tmp/black_list.txt
+	if [ -n "${shunt_proxy_file}" ] && [ -s "${shunt_proxy_file}" ]; then
+		shunt_proxy_count="$(wc -l < "${shunt_proxy_file}" | tr -d ' ')"
+		[ -n "${shunt_proxy_count}" ] || shunt_proxy_count="0"
+		echo_date "ℹ️分流运行时代理域名 ${shunt_proxy_count} 条，并入域名黑名单。"
+		cat "${shunt_proxy_file}" >> /tmp/black_list.txt
+	elif [ "${ss_basic_mode}" = "7" ]; then
+		echo_date "ℹ️当前没有额外分流代理域名并入域名黑名单。"
+	fi
+	if [ -n "${ss_wan_black_domain}" ]; then
+		fss_b64_decode "${ss_wan_black_domain}" | awk '
+			{
+				gsub(/\r/, "")
+				sub(/#.*/, "")
+				for (i = 1; i <= NF; i++) {
+					domain = tolower($i)
+					gsub(/^[*.]+/, "", domain)
+					if (domain ~ /^[a-z0-9._-]+(\.[a-z0-9._-]+)+$/ && !seen[domain]++) {
+						print domain
+					}
 				}
 			}
-		}
-	' > /tmp/black_list.txt
+		' >> /tmp/black_list.txt
+	fi
 
 	# {white_list}, white ip
-	[ -n "${ss_basic_server_ip}" ] && SBSI="${ss_basic_server_ip}" || SBSI=""
 	[ -n "${ISP_DNS1}" ] && ISP_DNS_a="${ISP_DNS1}" || ISP_DNS_a=""
 	[ -n "${IFIP_DNS2}" ] && ISP_DNS_b="${ISP_DNS2}" || ISP_DNS_b=""
 	local ALL_NODE_DOMAINS=$(dbus list ssconf|grep _server_|awk -F"=" '{print $NF}'|sort -u|grep -E "([0-9]{1,3}[\.]){3}[0-9]{1,3}")
@@ -4963,27 +4994,56 @@ load_tproxy() {
 
 flush_ipset() {
 	# flush ipset
-	echo_date "清除ipset规则集..."
-	ipset -F ignlist >/dev/null 2>&1 && ipset -X ignlist >/dev/null 2>&1
-	ipset -F ignlist6 >/dev/null 2>&1 && ipset -X ignlist6 >/dev/null 2>&1
-	
-	ipset -F white_list >/dev/null 2>&1 && ipset -X white_list >/dev/null 2>&1
-	ipset -F white_list6 >/dev/null 2>&1 && ipset -X white_list6 >/dev/null 2>&1
-	
-	ipset -F black_list >/dev/null 2>&1 && ipset -X black_list >/dev/null 2>&1
-	ipset -F black_list6 >/dev/null 2>&1 && ipset -X black_list6 >/dev/null 2>&1
+	local existing_sets=""
+	local set_name=""
+	local restore_file="/tmp/fss_ipset_flush.$$"
+	local restore_ok="0"
 
-	ipset -F chnlist >/dev/null 2>&1 && ipset -X chnlist >/dev/null 2>&1
-	ipset -F chnlist6 >/dev/null 2>&1 && ipset -X chnlist6 >/dev/null 2>&1
-	
-	ipset -F gfwlist >/dev/null 2>&1 && ipset -X gfwlist >/dev/null 2>&1
-	ipset -F gfwlist6 >/dev/null 2>&1 && ipset -X gfwlist6 >/dev/null 2>&1
-	
-	ipset -F router >/dev/null 2>&1 && ipset -X router >/dev/null 2>&1
-	ipset -F router6 >/dev/null 2>&1 && ipset -X router6 >/dev/null 2>&1
+	existing_sets="$(ipset list -name 2>/dev/null)"
+	if [ -n "${existing_sets}" ]; then
+		: > "${restore_file}" || true
+		while IFS= read -r set_name
+		do
+			case "${set_name}" in
+			ignlist|ignlist6|white_list|white_list6|black_list|black_list6|chnlist|chnlist6|gfwlist|gfwlist6|router|router6|chnroute|chnroute6)
+				printf 'flush %s\ndestroy %s\n' "${set_name}" "${set_name}" >> "${restore_file}"
+				;;
+			esac
+		done <<EOF
+${existing_sets}
+EOF
+		if [ -s "${restore_file}" ]; then
+			echo_date "清除ipset规则集..."
+			if ipset -R < "${restore_file}" >/dev/null 2>&1; then
+				restore_ok="1"
+			fi
+		fi
+		rm -f "${restore_file}" >/dev/null 2>&1
+	fi
 
-	ipset -F chnroute >/dev/null 2>&1 && ipset -X chnroute >/dev/null 2>&1
-	ipset -F chnroute6 >/dev/null 2>&1 && ipset -X chnroute6 >/dev/null 2>&1
+	if [ "${restore_ok}" != "1" ]; then
+		echo_date "清除ipset规则集..."
+		ipset -F ignlist >/dev/null 2>&1 && ipset -X ignlist >/dev/null 2>&1
+		ipset -F ignlist6 >/dev/null 2>&1 && ipset -X ignlist6 >/dev/null 2>&1
+
+		ipset -F white_list >/dev/null 2>&1 && ipset -X white_list >/dev/null 2>&1
+		ipset -F white_list6 >/dev/null 2>&1 && ipset -X white_list6 >/dev/null 2>&1
+
+		ipset -F black_list >/dev/null 2>&1 && ipset -X black_list >/dev/null 2>&1
+		ipset -F black_list6 >/dev/null 2>&1 && ipset -X black_list6 >/dev/null 2>&1
+
+		ipset -F chnlist >/dev/null 2>&1 && ipset -X chnlist >/dev/null 2>&1
+		ipset -F chnlist6 >/dev/null 2>&1 && ipset -X chnlist6 >/dev/null 2>&1
+
+		ipset -F gfwlist >/dev/null 2>&1 && ipset -X gfwlist >/dev/null 2>&1
+		ipset -F gfwlist6 >/dev/null 2>&1 && ipset -X gfwlist6 >/dev/null 2>&1
+
+		ipset -F router >/dev/null 2>&1 && ipset -X router >/dev/null 2>&1
+		ipset -F router6 >/dev/null 2>&1 && ipset -X router6 >/dev/null 2>&1
+
+		ipset -F chnroute >/dev/null 2>&1 && ipset -X chnroute >/dev/null 2>&1
+		ipset -F chnroute6 >/dev/null 2>&1 && ipset -X chnroute6 >/dev/null 2>&1
+	fi
 	#remove_redundant_rule
 	local ip_rule_exist=$(ip rule show | grep "lookup 310" | grep -c 310)
 	if [ -n "${ip_rule_exist}" ]; then
@@ -4997,6 +5057,80 @@ flush_ipset() {
 	#remove_route_table
 	#echo_date 删除ip route规则.
 	ip route del local 0.0.0.0/0 dev lo table 310 >/dev/null 2>&1
+}
+
+flush_iptables_restore_append() {
+	local ipt="$1"
+	local table="$2"
+	local match="$3"
+	local label="$4"
+	local restore_file="$5"
+	local rules=""
+	local line=""
+	local chain=""
+
+	[ -n "${ipt}" ] || return 1
+	[ -n "${restore_file}" ] || return 1
+	rules="$("${ipt}" -t "${table}" -S 2>/dev/null | grep -E "${match}")"
+	[ -n "${rules}" ] || return 1
+	echo_date "${label}"
+	{
+		printf '*%s\n' "${table}"
+		while IFS= read -r line
+		do
+			case "${line}" in
+			-A\ *)
+				printf -- '-D %s\n' "${line#-A }"
+				;;
+			esac
+		done <<EOF
+${rules}
+EOF
+		while IFS= read -r line
+		do
+			case "${line}" in
+			-N\ *)
+				chain="${line#-N }"
+				printf -- '-F %s\n-X %s\n' "${chain}" "${chain}"
+				;;
+			esac
+		done <<EOF
+${rules}
+EOF
+		echo COMMIT
+	} >> "${restore_file}"
+	return 0
+}
+
+flush_iptables_legacy_table() {
+	local ipt="$1"
+	local table="$2"
+	local match="$3"
+	local label="$4"
+	local rules=""
+	local line=""
+	local chain=""
+
+	rules="$("${ipt}" -t "${table}" -S 2>/dev/null | grep -E "${match}" | sort)"
+	[ -n "${rules}" ] || return 0
+	echo_date "${label}"
+	while IFS= read -r line
+	do
+		case "${line}" in
+		-A\ *)
+			set -- ${line}
+			shift
+			run_bg "${ipt}" -t "${table}" -D "$@"
+			;;
+		-N\ *)
+			chain="${line#-N }"
+			run_bg "${ipt}" -t "${table}" -F "${chain}"
+			run_bg "${ipt}" -t "${table}" -X "${chain}"
+			;;
+		esac
+	done <<EOF
+${rules}
+EOF
 }
 
 # creat ipset rules
@@ -5572,124 +5706,40 @@ dns_hijack_control() {
 
 flush_iptables() {
 	# use different xtables libdir
+	local restore_v4="/tmp/fss_iptables_flush.$$"
+	local restore_v6="/tmp/fss_ip6tables_flush.$$"
+	local need_v4="0"
+	local need_v6="0"
+	local restore_v4_ok="0"
+	local restore_v6_ok="0"
 	if [ -d "/tmp/.xt" ];then
 		export XTABLES_LIBDIR=/tmp/.xt
 	fi
-	
-	# flush NAT
-	local NAT_RULES=$(iptables -t nat -S | grep -E "SHADOWSOCKS|3333" | sort)
-	if [ -n "${NAT_RULES}" ];then
-		echo_date "清除iptables nat规则..."
-		echo "${NAT_RULES}" | while read line
-		do
-			local TYPE=$(echo "$line" | awk '{print $1}' | sed 's/^-//g')
-			#echo "$TYPE" "$line"
-			if [ "${TYPE}" == "A" ];then
-				local CMD1=$(echo "$line" | sed 's/^-A/iptables -t nat -D/g')
-				run_bg $CMD1
-			elif [ "${TYPE}" == "N" ];then
-				local CMD2=$(echo "$line" | sed 's/^-N/iptables -t nat -F/g')
-				run_bg $CMD2
-				local CMD3=$(echo "$line" | sed 's/^-N/iptables -t nat -X/g')
-				run_bg $CMD3
-			fi
-		done
-	fi
 
-	# flush MANGLE
-	local MANGLE_RULES=$(iptables -t mangle -S | grep -E "SHADOWSOCKS|3333|0x7" | sort)
-	if [ -n "${MANGLE_RULES}" ];then
-		echo_date "清除iptables mangle规则..."
-		echo "${MANGLE_RULES}" | while read line
-		do
-			local TYPE=$(echo "$line" | awk '{print $1}' | sed 's/^-//g')
-			#echo "$TYPE" "$line"
-			if [ "${TYPE}" == "A" ];then
-				local CMD1=$(echo "$line" | sed 's/^-A/iptables -t mangle -D/g')
-				run_bg $CMD1
-			elif [ "${TYPE}" == "N" ];then
-				local CMD2=$(echo "$line" | sed 's/^-N/iptables -t mangle -F/g')
-				run_bg $CMD2
-				local CMD3=$(echo "$line" | sed 's/^-N/iptables -t mangle -X/g')
-				run_bg $CMD3
-			fi
-		done
+	: > "${restore_v4}" || true
+	: > "${restore_v6}" || true
+	flush_iptables_restore_append iptables nat "SHADOWSOCKS|3333" "清除iptables nat规则..." "${restore_v4}" && need_v4="1"
+	flush_iptables_restore_append iptables mangle "SHADOWSOCKS|3333|0x7" "清除iptables mangle规则..." "${restore_v4}" && need_v4="1"
+	flush_iptables_restore_append iptables filter "SHADOWSOCKS" "清除iptables filter规则..." "${restore_v4}" && need_v4="1"
+	flush_iptables_restore_append ip6tables nat "SHADOWSOCKS6|3333|3334" "清除ip6tables nat规则..." "${restore_v6}" && need_v6="1"
+	flush_iptables_restore_append ip6tables mangle "SHADOWSOCKS6|3333|3334|0x7" "清除ip6tables mangle规则..." "${restore_v6}" && need_v6="1"
+	flush_iptables_restore_append ip6tables filter "SHADOWSOCKS6" "清除ip6tables filter规则..." "${restore_v6}" && need_v6="1"
+	if [ "${need_v4}" = "1" ] && iptables-restore -n < "${restore_v4}" >/dev/null 2>&1; then
+		restore_v4_ok="1"
 	fi
-
-	# flush MANGLE
-	local FILTER_RULES=$(iptables -t filter -S | grep -E "SHADOWSOCKS" | sort)
-	if [ -n "${FILTER_RULES}" ];then
-		echo_date "清除iptables filter规则..."
-		echo "${FILTER_RULES}" | while read line
-		do
-			local TYPE=$(echo "$line" | awk '{print $1}' | sed 's/^-//g')
-			if [ "${TYPE}" == "A" ];then
-				local CMD1=$(echo "$line" | sed 's/^-A/iptables -t filter -D/g')
-				run_bg $CMD1
-			elif [ "${TYPE}" == "N" ];then
-				local CMD2=$(echo "$line" | sed 's/^-N/iptables -t filter -F/g')
-				run_bg $CMD2
-				local CMD3=$(echo "$line" | sed 's/^-N/iptables -t filter -X/g')
-				run_bg $CMD3
-			fi
-		done
+	if [ "${need_v6}" = "1" ] && ip6tables-restore -n < "${restore_v6}" >/dev/null 2>&1; then
+		restore_v6_ok="1"
 	fi
-
-	# flush IPv6 NAT
-	local NAT6_RULES=$(ip6tables -t nat -S 2>/dev/null | grep -E "SHADOWSOCKS6|3333|3334" | sort)
-	if [ -n "${NAT6_RULES}" ];then
-		echo_date "清除ip6tables nat规则..."
-		echo "${NAT6_RULES}" | while read line
-		do
-			local TYPE=$(echo "$line" | awk '{print $1}' | sed 's/^-//g')
-			if [ "${TYPE}" == "A" ];then
-				local CMD1=$(echo "$line" | sed 's/^-A/ip6tables -t nat -D/g')
-				run_bg $CMD1
-			elif [ "${TYPE}" == "N" ];then
-				local CMD2=$(echo "$line" | sed 's/^-N/ip6tables -t nat -F/g')
-				run_bg $CMD2
-				local CMD3=$(echo "$line" | sed 's/^-N/ip6tables -t nat -X/g')
-				run_bg $CMD3
-			fi
-		done
+	rm -f "${restore_v4}" "${restore_v6}" >/dev/null 2>&1
+	if [ "${need_v4}" = "1" ] && [ "${restore_v4_ok}" != "1" ]; then
+		flush_iptables_legacy_table iptables nat "SHADOWSOCKS|3333" "清除iptables nat规则..."
+		flush_iptables_legacy_table iptables mangle "SHADOWSOCKS|3333|0x7" "清除iptables mangle规则..."
+		flush_iptables_legacy_table iptables filter "SHADOWSOCKS" "清除iptables filter规则..."
 	fi
-
-	# flush IPv6 MANGLE
-	local MANGLE6_RULES=$(ip6tables -t mangle -S 2>/dev/null | grep -E "SHADOWSOCKS6|3333|3334|0x7" | sort)
-	if [ -n "${MANGLE6_RULES}" ];then
-		echo_date "清除ip6tables mangle规则..."
-		echo "${MANGLE6_RULES}" | while read line
-		do
-			local TYPE=$(echo "$line" | awk '{print $1}' | sed 's/^-//g')
-			if [ "${TYPE}" == "A" ];then
-				local CMD1=$(echo "$line" | sed 's/^-A/ip6tables -t mangle -D/g')
-				run_bg $CMD1
-			elif [ "${TYPE}" == "N" ];then
-				local CMD2=$(echo "$line" | sed 's/^-N/ip6tables -t mangle -F/g')
-				run_bg $CMD2
-				local CMD3=$(echo "$line" | sed 's/^-N/ip6tables -t mangle -X/g')
-				run_bg $CMD3
-			fi
-		done
-	fi
-
-	# flush IPv6 FILTER
-	local FILTER6_RULES=$(ip6tables -t filter -S 2>/dev/null | grep -E "SHADOWSOCKS6" | sort)
-	if [ -n "${FILTER6_RULES}" ];then
-		echo_date "清除ip6tables filter规则..."
-		echo "${FILTER6_RULES}" | while read line
-		do
-			local TYPE=$(echo "$line" | awk '{print $1}' | sed 's/^-//g')
-			if [ "${TYPE}" == "A" ];then
-				local CMD1=$(echo "$line" | sed 's/^-A/ip6tables -t filter -D/g')
-				run_bg $CMD1
-			elif [ "${TYPE}" == "N" ];then
-				local CMD2=$(echo "$line" | sed 's/^-N/ip6tables -t filter -F/g')
-				run_bg $CMD2
-				local CMD3=$(echo "$line" | sed 's/^-N/ip6tables -t filter -X/g')
-				run_bg $CMD3
-			fi
-		done
+	if [ "${need_v6}" = "1" ] && [ "${restore_v6_ok}" != "1" ]; then
+		flush_iptables_legacy_table ip6tables nat "SHADOWSOCKS6|3333|3334" "清除ip6tables nat规则..."
+		flush_iptables_legacy_table ip6tables mangle "SHADOWSOCKS6|3333|3334|0x7" "清除ip6tables mangle规则..."
+		flush_iptables_legacy_table ip6tables filter "SHADOWSOCKS6" "清除ip6tables filter规则..."
 	fi
 
 	local ip6_rule_exist=$(ip -6 rule show 2>/dev/null | grep "lookup 310" | grep -c 310)
@@ -6489,14 +6539,40 @@ load_module() {
 }
 
 # write number into nvram with no commit
+read_rules_runtime_numbers_tsv() {
+	[ -f "/koolshare/ss/rules/rules.json.js" ] || return 1
+	run /koolshare/bin/jq -r '
+		def text($v):
+			if $v == null then
+				""
+			elif ($v | type) == "string" then
+				$v
+			else
+				($v | tostring)
+			end;
+		[
+			text(.gfwlist.date),
+			text(.chnlist.date),
+			text(.chnroute.date),
+			text(.gfwlist.count),
+			text(.chnroute.count),
+			text(.chnroute.count_ip),
+			text(.chnlist.count)
+		] | join("\u001f")
+	' /koolshare/ss/rules/rules.json.js 2>/dev/null
+}
+
 write_numbers() {
-	nvram set update_gfwlist="$(cat /koolshare/ss/rules/rules.json.js | run /koolshare/bin/jq -r '.gfwlist.date')"
-	nvram set update_chnlist="$(cat /koolshare/ss/rules/rules.json.js | run /koolshare/bin/jq -r '.chnlist.date')"
-	nvram set update_chnroute="$(cat /koolshare/ss/rules/rules.json.js | run /koolshare/bin/jq -r '.chnroute.date')"
-	nvram set gfwlist_numbers="$(cat /koolshare/ss/rules/rules.json.js | run /koolshare/bin/jq -r '.gfwlist.count')"
-	nvram set chnroute_numbers="$(cat /koolshare/ss/rules/rules.json.js | run /koolshare/bin/jq -r '.chnroute.count')"
-	nvram set chnroute_ips="$(cat /koolshare/ss/rules/rules.json.js | run /koolshare/bin/jq -r '.chnroute.count_ip')"
-	nvram set chnlist_numbers="$(cat /koolshare/ss/rules/rules.json.js | run /koolshare/bin/jq -r '.chnlist.count')"
+	IFS="$(printf '\037')" read -r rule_gfw_date rule_chnlist_date rule_chnroute_date rule_gfw_count rule_chnroute_count rule_chnroute_ip_count rule_chnlist_count <<-EOF
+	$(read_rules_runtime_numbers_tsv)
+	EOF
+	nvram set update_gfwlist="${rule_gfw_date}"
+	nvram set update_chnlist="${rule_chnlist_date}"
+	nvram set update_chnroute="${rule_chnroute_date}"
+	nvram set gfwlist_numbers="${rule_gfw_count}"
+	nvram set chnroute_numbers="${rule_chnroute_count}"
+	nvram set chnroute_ips="${rule_chnroute_ip_count}"
+	nvram set chnlist_numbers="${rule_chnlist_count}"
 }
 
 remove_ss_reboot_job() {
@@ -6570,17 +6646,68 @@ ss_pre_stop() {
 	done
 }
 
+stop_status_kill_pid_list() {
+	local label="$1"
+	local pids_raw="$2"
+	local signal="${3:--9}"
+	local pids=""
+	pids="$(printf '%s\n' "${pids_raw}" | tr ' ' '\n' | sed '/^$/d' | awk '!seen[$0]++')" || pids=""
+	[ -n "${pids}" ] || return 1
+	echo_date "关闭${label}..."
+	printf '%s\n' "${pids}" | while IFS= read -r pid
+	do
+		[ -n "${pid}" ] || continue
+		kill "${signal}" "${pid}" >/dev/null 2>&1
+	done
+	return 0
+}
+
+stop_status_kill_pidfile() {
+	local label="$1"
+	local pidfile="$2"
+	[ -f "${pidfile}" ] || return 1
+	local pid=""
+	pid="$(cat "${pidfile}" 2>/dev/null)"
+	[ -n "${pid}" ] || return 1
+	kill -0 "${pid}" >/dev/null 2>&1 || return 1
+	echo_date "关闭${label}..."
+	start-stop-daemon -K -q -p "${pidfile}" >/dev/null 2>&1
+	return 0
+}
+
 stop_status() {
-	kill -9 $(pidof ss_status_main.sh) >/dev/null 2>&1
-	kill -9 $(pidof ss_status.sh) >/dev/null 2>&1
-	ps w | grep -F "sh /koolshare/scripts/ss_status_main.sh" | grep -v grep | awk '{print $1}' | while read -r pid; do
-		kill -9 "${pid}" >/dev/null 2>&1
-	done
-	ps w | grep -F "sh /koolshare/scripts/ss_status.sh" | grep -v grep | awk '{print $1}' | while read -r pid; do
-		kill -9 "${pid}" >/dev/null 2>&1
-	done
-	killall curl-status >/dev/null 2>&1
-	sh /koolshare/scripts/ss_status_daemon.sh stop >/dev/null 2>&1
+	local status_tool_bin="/koolshare/bin/status-tool"
+	local status_daemon_pidfile="/var/run/status-tool.pid"
+	local status_serve_pidfile="/var/run/status-tool-serve.pid"
+	local status_daemon_state="/tmp/upload/ss_status_daemon.json"
+	local status_daemon_legacy="/tmp/upload/ss_status_front.txt"
+	local status_serve_socket="/tmp/status-tool.sock"
+	local pids=""
+
+	pids="$(pidof ss_status_main.sh 2>/dev/null)"
+	stop_status_kill_pid_list "状态检测主脚本" "${pids}" "-9" || {
+		pids="$(ps w | grep -F "sh /koolshare/scripts/ss_status_main.sh" | grep -v grep | awk '{print $1}')"
+		stop_status_kill_pid_list "状态检测主脚本" "${pids}" "-9" || true
+	}
+
+	pids="$(pidof ss_status.sh 2>/dev/null)"
+	stop_status_kill_pid_list "状态检测前端脚本" "${pids}" "-9" || {
+		pids="$(ps w | grep -F "sh /koolshare/scripts/ss_status.sh" | grep -v grep | awk '{print $1}')"
+		stop_status_kill_pid_list "状态检测前端脚本" "${pids}" "-9" || true
+	}
+
+	if pidof curl-status >/dev/null 2>&1; then
+		echo_date "关闭curl-status进程..."
+		killall curl-status >/dev/null 2>&1
+	fi
+
+	stop_status_kill_pidfile "status-tool daemon进程" "${status_daemon_pidfile}" || true
+	stop_status_kill_pidfile "status-tool serve进程" "${status_serve_pidfile}" || true
+
+	pids="$(ps w | grep -E '(^| )(/koolshare/bin/status-tool|/tmp/status-tool-serve) (daemon|serve)( |$)' | grep -v grep | awk '{print $1}')"
+	stop_status_kill_pid_list "status-tool残留进程" "${pids}" "-15" || true
+
+	rm -f "${status_daemon_pidfile}" "${status_serve_pidfile}" "${status_daemon_state}" "${status_daemon_legacy}" "${status_serve_socket}" >/dev/null 2>&1
 	rm -rf /tmp/upload/ss_status.txt
 }
 
@@ -6668,34 +6795,34 @@ check_frn_public_ip(){
 
 
 	# 检测节点解析结果
-	if [ -z "${ss_basic_server_ip}" ] && [ -n "${ss_basic_server_orig}" ] && [ -n "$(is_domain "${ss_basic_server_orig}")" ]; then
+	if [ -z "${CURRENT_NODE_SERVER_RESOLVED_IP}" ] && [ -n "${ss_basic_server_orig}" ] && [ -n "$(is_domain "${ss_basic_server_orig}")" ]; then
 		refresh_current_node_server_ip_runtime >/dev/null 2>&1 || true
 	fi
-	if [ -n "${ss_basic_server_ip}" ]; then
-		__valid_ip46 "${ss_basic_server_ip}"
+	if [ -n "${CURRENT_NODE_SERVER_RESOLVED_IP}" ]; then
+		__valid_ip46 "${CURRENT_NODE_SERVER_RESOLVED_IP}"
 		if [ "$?" == "0" ]; then
 			# ipv4
-			ipset test chnroute ${ss_basic_server_ip} >/dev/null 2>&1
+			ipset test chnroute ${CURRENT_NODE_SERVER_RESOLVED_IP} >/dev/null 2>&1
 			if [ "$?" != "0" ]; then
 				# 国外ip
-				ss_real_server_ip="${ss_basic_server_ip}"
-				echo_date "节点服务器解析地址：${ss_basic_server_ip}，属地：海外，来源：${ss_basic_server_orig}"
+				ss_real_server_ip="${CURRENT_NODE_SERVER_RESOLVED_IP}"
+				echo_date "节点服务器解析地址：${CURRENT_NODE_SERVER_RESOLVED_IP}，属地：海外，来源：${ss_basic_server_orig}"
 			else
 				# 国内ip
 				ss_real_server_ip=""
-				echo_date "节点服务器解析地址：${ss_basic_server_ip}，属地：大陆，来源：${ss_basic_server_orig}"
+				echo_date "节点服务器解析地址：${CURRENT_NODE_SERVER_RESOLVED_IP}，属地：大陆，来源：${ss_basic_server_orig}"
 			fi
 		elif [ "$?" == "1" ]; then
 			# ipv6
-			ipset test chnroute6 ${ss_basic_server_ip} >/dev/null 2>&1
+			ipset test chnroute6 ${CURRENT_NODE_SERVER_RESOLVED_IP} >/dev/null 2>&1
 			if [ "$?" != "0" ]; then
 				# 国外ip
-				ss_real_server_ip="${ss_basic_server_ip}"
-				echo_date "节点服务器解析地址：${ss_basic_server_ip}，属地：海外，来源：${ss_basic_server_orig}"
+				ss_real_server_ip="${CURRENT_NODE_SERVER_RESOLVED_IP}"
+				echo_date "节点服务器解析地址：${CURRENT_NODE_SERVER_RESOLVED_IP}，属地：海外，来源：${ss_basic_server_orig}"
 			else
 				# 国内ip
 				ss_real_server_ip=""
-				echo_date "节点服务器解析地址：${ss_basic_server_ip}，属地：大陆，来源：${ss_basic_server_orig}"
+				echo_date "节点服务器解析地址：${CURRENT_NODE_SERVER_RESOLVED_IP}，属地：大陆，来源：${ss_basic_server_orig}"
 			fi
 		fi
 	fi
@@ -6910,11 +7037,88 @@ apply_ss_by_nat() {
 	echo_date ------------------------ 【科学上网】 启动完毕 ------------------------
 }
 
-start_ws(){
-	stop_ws
-	if [ -x "/koolshare/bin/websocketd" -a -f "/koolshare/ss/websocket" ];then
-		start-stop-daemon -S -q -b -m -p "${WS_PIDFILE}" -x /koolshare/bin/websocketd -- --port=803 /koolshare/ss/websocket
+pick_start_stop_daemon(){
+	for candidate in /sbin/start-stop-daemon /usr/sbin/start-stop-daemon /bin/start-stop-daemon /usr/bin/start-stop-daemon
+	do
+		[ -x "${candidate}" ] && {
+			echo "${candidate}"
+			return 0
+		}
+	done
+	return 1
+}
+
+force_kill_pid(){
+	local pid="$1"
+	[ -n "${pid}" ] || return 0
+	kill "${pid}" >/dev/null 2>&1
+	sleep 1
+	kill -9 "${pid}" >/dev/null 2>&1
+}
+
+get_ws_master_pid(){
+	local pid=""
+	if [ -f "${WS_PIDFILE}" ];then
+		pid=$(cat "${WS_PIDFILE}" 2>/dev/null)
+		if [ -n "${pid}" ] && kill -0 "${pid}" >/dev/null 2>&1; then
+			echo "${pid}"
+			return 0
+		fi
 	fi
+	pid=$(ps w | grep -F "/koolshare/bin/websocketd --port=803 /koolshare/ss/websocket" | grep -v grep | awk 'NR==1{print $1}')
+	[ -n "${pid}" ] && echo "${pid}"
+}
+
+cleanup_ws_shells_once(){
+	local active_ws_pid="$1"
+	local pid=""
+	local ppid=""
+	[ -n "${active_ws_pid}" ] || active_ws_pid="$(get_ws_master_pid)"
+	ps w | grep -E '(/bin/sh|[[:space:]]sh)[[:space:]]+/koolshare/ss/websocket([[:space:]]|$)' | grep -v grep | awk '{print $1}' | while read -r pid
+	do
+		[ -n "${pid}" ] || continue
+		ppid="$(sed -n 's/^PPid:[[:space:]]*//p' "/proc/${pid}/status" 2>/dev/null | sed -n '1p')"
+		if [ -n "${active_ws_pid}" ] && [ "${ppid}" = "${active_ws_pid}" ]; then
+			continue
+		fi
+		force_kill_pid "${pid}"
+	done
+}
+
+sync_ws_pidfile(){
+	local active_ws_pid="$1"
+	[ -n "${active_ws_pid}" ] || active_ws_pid="$(get_ws_master_pid)"
+	if [ -n "${active_ws_pid}" ]; then
+		echo "${active_ws_pid}" > "${WS_PIDFILE}" 2>/dev/null || true
+	else
+		rm -f "${WS_PIDFILE}" >/dev/null 2>&1 || true
+	fi
+}
+
+start_ws(){
+	local ssd=""
+	local active_ws_pid=""
+	active_ws_pid="$(get_ws_master_pid)"
+	if [ -z "${active_ws_pid}" ] && [ -x "/koolshare/bin/websocketd" -a -f "/koolshare/ss/websocket" ];then
+		ssd="$(pick_start_stop_daemon 2>/dev/null)"
+		rm -f "${WS_PIDFILE}" >/dev/null 2>&1 || true
+		if [ -n "${ssd}" ]; then
+			"${ssd}" -S -q -b -m -p "${WS_PIDFILE}" -x /koolshare/bin/websocketd -- --port=803 /koolshare/ss/websocket
+		else
+			/koolshare/bin/websocketd --port=803 /koolshare/ss/websocket >/tmp/upload/websocketd.log 2>&1 &
+			echo $! > "${WS_PIDFILE}"
+		fi
+	fi
+	active_ws_pid="$(get_ws_master_pid)"
+	sync_ws_pidfile "${active_ws_pid}"
+	cleanup_ws_shells_once "${active_ws_pid}"
+}
+
+stop_ws(){
+	local active_ws_pid=""
+	active_ws_pid="$(get_ws_master_pid)"
+	sync_ws_pidfile "${active_ws_pid}"
+	cleanup_ws_shells_once "${active_ws_pid}"
 }
 
 stop_ws(){
@@ -6935,9 +7139,9 @@ start)
 	set_lock
 	if [ "$ss_basic_enable" == "1" ]; then
 		logger "[软件中心]: wan-start启动科学上网插件！"
+		start_ws
 		apply_ss 2>&1 | tee -a "$LOG_FILE" | tee -a "/tmp/upload/ss_wan_log.txt"
 		echo XU6J03M6 | tee -a "$LOG_FILE"
-		start_ws
 	else
 		logger "[软件中心]: 科学上网插件未开启，不启动！"
 	fi
@@ -6956,8 +7160,8 @@ stop)
 restart)
 	# start/restart by web or user
 	set_lock
-	apply_ss
 	start_ws
+	apply_ss
 	echo_date
 	echo_date "Across the Great Wall we can reach every corner in the world!"
 	echo_date

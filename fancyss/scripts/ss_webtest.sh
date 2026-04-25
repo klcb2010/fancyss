@@ -144,7 +144,7 @@ wt_try_node_tool_webtest_cache() {
 
 	[ -f "${ids_file}" ] || return 1
 	node_tool="$(wt_pick_node_tool 2>/dev/null)" || return 1
-	"${node_tool}" warm-cache --webtest --ids-file "${ids_file}" >/dev/null 2>&1 || return 1
+	"${node_tool}" warm-cache --webtest --effective --ids-file "${ids_file}" >/dev/null 2>&1 || return 1
 	wt_cache_log "ℹ️通过node-tool构建/复用webtest节点配置缓存。"
 	wt_log_node_tool_webtest_summary
 	return 0
@@ -154,7 +154,7 @@ wt_try_node_tool_webtest_cache_all() {
 	local node_tool=""
 
 	node_tool="$(wt_pick_node_tool 2>/dev/null)" || return 1
-	"${node_tool}" warm-cache --webtest >/dev/null 2>&1 || return 1
+	"${node_tool}" warm-cache --webtest --effective >/dev/null 2>&1 || return 1
 	wt_cache_log "ℹ️通过node-tool构建/复用webtest节点配置缓存。"
 	wt_log_node_tool_webtest_summary
 	return 0
@@ -164,7 +164,7 @@ wt_try_node_tool_webtest_groups() {
 	local node_tool=""
 
 	node_tool="$(wt_pick_node_tool 2>/dev/null)" || return 1
-	"${node_tool}" webtest-groups --output-dir "${TMP2}" >/dev/null 2>&1 || return 1
+	"${node_tool}" webtest-groups --effective --output-dir "${TMP2}" >/dev/null 2>&1 || return 1
 	wt_cache_log "ℹ️通过node-tool生成webtest分组清单。"
 	return 0
 }
@@ -1222,6 +1222,14 @@ wt_set_batch_state_from_file() {
 	local old_state_file=""
 
 	[ -f "${file_path}" ] || return 0
+	if [ "${WT_SINGLE}" = "1" ]; then
+		while read node_id
+		do
+			[ -n "${node_id}" ] || continue
+			wt_set_batch_state "${node_id}" "${state}"
+		done < "${file_path}"
+		return 0
+	fi
 	if [ -z "${limit}" ] && [ -n "${WT_WEBTEST_STATE_FILE}" ] && [ -f "${WT_WEBTEST_STATE_FILE}" ]; then
 		old_state_file="${WT_WEBTEST_STATE_FILE}.bulk.$$"
 		cp -f "${WT_WEBTEST_STATE_FILE}" "${old_state_file}"
@@ -1907,13 +1915,16 @@ wt_rotate_node_file_from_begin() {
 	local file_path="$1"
 	local begn_node="$2"
 	local first_bgn=""
+	local match_line=""
 
 	[ -f "${file_path}" ] || return 1
 	[ -n "${begn_node}" ] || return 0
 	first_bgn=$(sed -n '1p' "${file_path}")
 	if [ -n "${first_bgn}" ] && [ "${begn_node}" -gt "${first_bgn}" ] 2>/dev/null; then
-		sed -n "/${begn_node}/,\$p" "${file_path}" > "${TMP2}/re-arrange-1.txt"
-		sed -n "1,/^${begn_node}\$/p" "${file_path}" | sed '$d' > "${TMP2}/re-arrange-2.txt"
+		match_line=$(awk -v target="${begn_node}" '$0 == target {print NR; exit}' "${file_path}")
+		[ -n "${match_line}" ] || return 0
+		sed -n "${match_line},\$p" "${file_path}" > "${TMP2}/re-arrange-1.txt"
+		sed -n "1,${match_line}p" "${file_path}" | sed '$d' > "${TMP2}/re-arrange-2.txt"
 		cat "${TMP2}/re-arrange-1.txt" "${TMP2}/re-arrange-2.txt" > "${file_path}"
 		rm -f "${TMP2}/re-arrange-1.txt" "${TMP2}/re-arrange-2.txt"
 	fi
@@ -2803,15 +2814,9 @@ detect_perf(){
 }
 
 ensure_latency_batch(){
-	if [ -z "${ss_basic_latency_batch}" ];then
-		detect_perf
-		if [ "${WT_LOW_END}" == "1" ];then
-			dbus set ss_basic_latency_batch="0"
-			ss_basic_latency_batch="0"
-		else
-			dbus set ss_basic_latency_batch="1"
-			ss_basic_latency_batch="1"
-		fi
+	if [ "${ss_basic_latency_batch}" != "1" ]; then
+		dbus set ss_basic_latency_batch="1"
+		ss_basic_latency_batch="1"
 	fi
 }
 
@@ -2865,10 +2870,6 @@ get_webtest_usable_count(){
 
 webtest_web(){
 	ensure_latency_batch
-	if [ "${ss_basic_latency_batch}" != "1" ];then
-		wt_http_response "batch_disabled"
-		return 0
-	fi
 	set_default "ss_basic_lt_web_time" "30"
 	# 1. 如果 lock 存在，说明正在 webtest，那么告诉 web 自己去拿结果吧
 	if [ -f "/tmp/webtest.lock" ];then
@@ -2885,19 +2886,19 @@ webtest_web(){
 		local backup_usable=$(get_webtest_usable_count "${WT_WEBTEST_BACKUP}")
 		if [ "${backup_usable}" -gt "0" ];then
 			cp -f "${WT_WEBTEST_BACKUP}" "${WT_WEBTEST_FILE}" >/dev/null 2>&1
-			wt_http_response "ok3, partial cache exists, keep it"
+		else
+			clean_webtest
+			start_webtest
 			return 0
 		fi
-		clean_webtest
-		start_webtest
-		return 0
 	fi
 
 	# 3. 如果有结果该文件，且没有lock（webtest完成了的），需要检测下节点数量和webtest数量是否一致，避免新增节点没有webtest
 	local webtest_nu=$(cat "${WT_WEBTEST_FILE}" | awk -F ">" '{print $1}' | sort -un | sed '/stop/d' | wc -l)
 	local node_nu=$(wt_node_count)
 	if [ "${webtest_nu}" -ne "${node_nu}" ];then
-		wt_http_response "ok3, partial cache exists, keep it"
+		clean_webtest
+		start_webtest
 		return 0
 	fi
 
@@ -3520,6 +3521,7 @@ creat_hy2_yaml(){
 
 single_test_node(){
 	local test_node="$1"
+	local prepared="${2:-0}"
 	if [ -z "${test_node}" ];then
 		return 1
 	fi
@@ -3541,12 +3543,15 @@ single_test_node(){
 	rm -rf ${TMP2}/conf/*
 	rm -rf ${TMP2}/pids/*
 	rm -rf ${TMP2}/results/*
-	: > "${WT_WEBTEST_STATE_FILE}"
+	[ -f "${WT_WEBTEST_STATE_FILE}" ] || : > "${WT_WEBTEST_STATE_FILE}"
 	wt_init_reserved_ports
-	wt_prune_webtest_entries "${test_node}"
+	if [ "${prepared}" != "1" ]; then
+		: > "${WT_WEBTEST_STATE_FILE}"
+		wt_prune_webtest_entries "${test_node}"
+		wt_set_batch_state "${test_node}" "waiting..."
+	fi
 	wt_prepare_node_cache >/dev/null 2>&1
 	wt_ensure_node_direct_dns_ready >/dev/null 2>&1
-	wt_set_batch_state "${test_node}" "waiting..."
 
 	local single_file="wt_single_${test_node}.txt"
 	echo "${test_node}" > ${TMP2}/${single_file}
@@ -3572,6 +3577,19 @@ single_test_node(){
 	# 避免内部测速函数复用局部变量名后把原节点序号冲掉。
 	update_single_backup "${test_node}"
 	wt_append_webtest_line "stop>stop"
+}
+
+wt_prepare_single_test_state() {
+	local test_node="$1"
+
+	[ -n "${test_node}" ] || return 1
+	WT_SINGLE=1
+	WT_WEBTEST_STATE_FILE="${TMP2}/webtest.single.state"
+	mkdir -p "${TMP2}" >/dev/null 2>&1 || return 1
+	: > "${WT_WEBTEST_STATE_FILE}"
+	wt_prune_webtest_entries "${test_node}"
+	wt_set_batch_state "${test_node}" "waiting..."
+	return 0
 }
 
 warm_webtest_cache() {
@@ -3890,13 +3908,143 @@ clean_webtest(){
 	rm -rf ${TMP2}/*
 }
 
+wt_follow_webtest_ws() {
+	local stream_inode=""
+	local last_stream_inode=""
+	local stream_lines=0
+	local last_stream_lines=0
+	local idle_loops=0
+
+	[ -f "${WT_WEBTEST_FILE}" ] || : > "${WT_WEBTEST_FILE}"
+	[ -f "${WT_WEBTEST_STREAM}" ] || : > "${WT_WEBTEST_STREAM}"
+	if [ -f "${WT_WEBTEST_FILE}" ]; then
+		cat "${WT_WEBTEST_FILE}" || exit 0
+	fi
+	if grep -q '^stop>stop$' "${WT_WEBTEST_FILE}" 2>/dev/null; then
+		exit 0
+	fi
+	while true
+	do
+		[ -f "${WT_WEBTEST_FILE}" ] || : > "${WT_WEBTEST_FILE}"
+		[ -f "${WT_WEBTEST_STREAM}" ] || : > "${WT_WEBTEST_STREAM}"
+		stream_inode="$(ls -i "${WT_WEBTEST_STREAM}" 2>/dev/null | awk '{print $1}')"
+		if [ -z "${stream_inode}" ]; then
+			sleep 1
+			continue
+		fi
+		if [ "${stream_inode}" != "${last_stream_inode}" ]; then
+			last_stream_inode="${stream_inode}"
+			last_stream_lines=0
+		fi
+		stream_lines="$(wc -l < "${WT_WEBTEST_STREAM}" 2>/dev/null)"
+		[ -n "${stream_lines}" ] || stream_lines=0
+		if [ "${stream_lines}" -gt "${last_stream_lines}" ]; then
+			sed -n "$((last_stream_lines + 1)),${stream_lines}p" "${WT_WEBTEST_STREAM}" 2>/dev/null | while IFS= read -r line
+			do
+				[ -n "${line}" ] || continue
+				if [ "${line}" = "refresh>snapshot" ]; then
+					awk '
+						BEGIN {
+							print "__FSS_WEBTEST_SNAPSHOT_BEGIN__"
+							chunk = ""
+							count = 0
+						}
+						{
+							gsub(/\r/, "")
+							chunk = chunk $0 "__FSS_NL__"
+							count++
+							if (count >= 64) {
+								print "__FSS_WEBTEST_SNAPSHOT_CHUNK__" chunk
+								chunk = ""
+								count = 0
+							}
+						}
+						END {
+							if (count > 0) {
+								print "__FSS_WEBTEST_SNAPSHOT_CHUNK__" chunk
+							}
+							print "__FSS_WEBTEST_SNAPSHOT_END__"
+						}
+					' "${WT_WEBTEST_FILE}" 2>/dev/null
+					continue
+				fi
+				echo "${line}" || exit 0
+				[ "${line}" = "stop>stop" ] && exit 0
+			done
+			last_stream_lines="${stream_lines}"
+			idle_loops=0
+		elif [ -f "/tmp/webtest.lock" ]; then
+			idle_loops=0
+		else
+			idle_loops=$((idle_loops + 1))
+		fi
+		if grep -q '^stop>stop$' "${WT_WEBTEST_FILE}" 2>/dev/null; then
+			exit 0
+		fi
+		if [ "${idle_loops}" -ge 8 ]; then
+			exit 0
+		fi
+		sleep 1
+	done
+}
+
+wt_follow_webtest_single_ws() {
+	local node_id="$1"
+	local current_line=""
+	local stream_lines=0
+	local last_stream_lines=0
+	local idle_loops=0
+
+	[ -n "${node_id}" ] || exit 0
+	[ -f "${WT_WEBTEST_FILE}" ] || : > "${WT_WEBTEST_FILE}"
+	[ -f "${WT_WEBTEST_STREAM}" ] || : > "${WT_WEBTEST_STREAM}"
+	current_line="$(awk -F '>' -v node="${node_id}" '$1 == node {last=$0} END {if (last != "") print last}' "${WT_WEBTEST_FILE}" 2>/dev/null)"
+	[ -n "${current_line}" ] && echo "${current_line}"
+	last_stream_lines="$(wc -l < "${WT_WEBTEST_STREAM}" 2>/dev/null)"
+	[ -n "${last_stream_lines}" ] || last_stream_lines=0
+	while true
+	do
+		[ -f "${WT_WEBTEST_STREAM}" ] || : > "${WT_WEBTEST_STREAM}"
+		stream_lines="$(wc -l < "${WT_WEBTEST_STREAM}" 2>/dev/null)"
+		[ -n "${stream_lines}" ] || stream_lines=0
+		if [ "${stream_lines}" -gt "${last_stream_lines}" ]; then
+			sed -n "$((last_stream_lines + 1)),${stream_lines}p" "${WT_WEBTEST_STREAM}" 2>/dev/null | while IFS= read -r line
+			do
+				[ -n "${line}" ] || continue
+				case "${line}" in
+					"${node_id}>"*)
+						echo "${line}" || exit 0
+						state="${line#*>}"
+						case "${state}" in
+							waiting...|loading...|booting...|queued...|warming...|testing...)
+								;;
+							*)
+								exit 0
+								;;
+						esac
+						;;
+					"stop>stop")
+						echo "${line}" || exit 0
+						exit 0
+						;;
+				esac
+			done
+			last_stream_lines="${stream_lines}"
+			idle_loops=0
+		elif [ -f "/tmp/webtest.lock" ]; then
+			idle_loops=0
+		else
+			idle_loops=$((idle_loops + 1))
+		fi
+		if [ "${idle_loops}" -ge 8 ]; then
+			exit 0
+		fi
+		sleep 1
+	done
+}
+
 set_latency_job() {
 	ensure_latency_batch
-	if [ "${ss_basic_latency_batch}" != "1" ]; then
-		echo_date "批量web延迟测试已关闭!"
-		sed -i '/sslatencyjob/d' /var/spool/cron/crontabs/* >/dev/null 2>&1
-		return 0
-	fi
 	if [ "${ss_basic_lt_cru_opts}" == "0" ]; then
 		echo_date "定时测试节点延迟未开启!"
 		sed -i '/sslatencyjob/d' /var/spool/cron/crontabs/* >/dev/null 2>&1
@@ -3909,7 +4057,7 @@ set_latency_job() {
 
 wt_is_named_action() {
 	case "$1" in
-	schedule_warm|schedule_node_direct_refresh|warm_cache|ensure_cache_ids_file|node_direct_refresh|web_webtest|clear_webtest|cleanup_helpers|single_test|manual_webtest|close_latency_test|stop_webtest|ws_start_batch|ws_stop_batch|ws_clear_cache|ws_close_latency|ws_single_test)
+	schedule_warm|schedule_node_direct_refresh|warm_cache|ensure_cache_ids_file|node_direct_refresh|web_webtest|clear_webtest|cleanup_helpers|single_test|manual_webtest|close_latency_test|stop_webtest|ws_start_batch|ws_stop_batch|ws_clear_cache|ws_close_latency|ws_single_test|follow_webtest_ws|follow_webtest_single_ws)
 		return 0
 		;;
 	esac
@@ -4046,19 +4194,20 @@ single_test)
 		wt_http_response "busy"
 		exit 0
 	fi
+	wt_prepare_single_test_state "${WEBTEST_ACTION_ARG}" >/dev/null 2>&1 || {
+		wt_http_response "busy"
+		exit 0
+	}
 	wt_http_response $1
-	single_test_node "${WEBTEST_ACTION_ARG}"
+	single_test_node "${WEBTEST_ACTION_ARG}" "1"
 	;;
 manual_webtest)
 	ensure_latency_batch
-	if [ "${ss_basic_latency_batch}" != "1" ];then
-		wt_http_response "batch_disabled"
-		exit 0
-	fi
 	clean_webtest
 	rm -f "${WT_WEBTEST_BACKUP}"
 	dbus remove ss_basic_webtest_ts
 	wt_http_response $1
+	sh /koolshare/scripts/ss_webtest.sh web_webtest >/dev/null 2>&1 &
 	;;
 close_latency_test)
 	wt_http_response $1
@@ -4071,12 +4220,9 @@ stop_webtest)
 	;;
 ws_start_batch)
 	ensure_latency_batch
-	if [ "${ss_basic_latency_batch}" != "1" ];then
-		echo "batch_disabled"
-		exit 0
-	fi
 	dbus set ss_basic_latency_val=2 >/dev/null 2>&1
 	clean_webtest
+	rm -f "${WT_WEBTEST_BACKUP}"
 	sh /koolshare/scripts/ss_webtest.sh web_webtest >/dev/null 2>&1 &
 	echo XU6J03M6
 	;;
@@ -4108,9 +4254,19 @@ ws_single_test)
 	if [ -f "/tmp/webtest.lock" ];then
 		echo busy
 	else
-		sh /koolshare/scripts/ss_webtest.sh single_test "${WEBTEST_ACTION_ARG}" >/dev/null 2>&1 &
-		echo XU6J03M6
+		if wt_prepare_single_test_state "${WEBTEST_ACTION_ARG}" >/dev/null 2>&1; then
+			sh /koolshare/scripts/ss_webtest.sh single_test "${WEBTEST_ACTION_ARG}" >/dev/null 2>&1 &
+			echo XU6J03M6
+		else
+			echo busy
+		fi
 	fi
+	;;
+follow_webtest_ws)
+	wt_follow_webtest_ws
+	;;
+follow_webtest_single_ws)
+	wt_follow_webtest_single_ws "${WEBTEST_ACTION_ARG}"
 	;;
 0)
 	wt_http_response $1

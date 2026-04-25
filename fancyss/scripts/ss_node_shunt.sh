@@ -24,6 +24,7 @@ FSS_SHUNT_RUNTIME_RULE_DIR="${FSS_SHUNT_RUNTIME_DIR}/rules"
 FSS_SHUNT_RUNTIME_ACTIVE_FILE="${FSS_SHUNT_RUNTIME_DIR}/active_rules.tsv"
 FSS_SHUNT_RUNTIME_TARGET_FILE="${FSS_SHUNT_RUNTIME_DIR}/target_nodes.txt"
 FSS_SHUNT_RUNTIME_META_FILE="${FSS_SHUNT_RUNTIME_DIR}/runtime.meta"
+FSS_SHUNT_PROXY_META_FILE="${FSS_SHUNT_RUNTIME_DIR}/proxy.meta"
 FSS_SHUNT_RUNTIME_OUTBOUND_DIR="${FSS_SHUNT_RUNTIME_DIR}/outbounds"
 FSS_SHUNT_RUNTIME_ARTIFACT_DIR="${FSS_SHUNT_RUNTIME_DIR}/runtime_artifacts"
 FSS_SHUNT_RUNTIME_ARTIFACT_LOCK="/tmp/fss_runtime_artifact_shunt.lock"
@@ -635,16 +636,88 @@ fss_shunt_write_rules_mirror() {
 	printf '%s\n' "${json}" > "${FSS_SHUNT_RULES_FILE}"
 }
 
-fss_shunt_node_supported() {
+fss_shunt_get_node_index_fields() {
 	local node_id="$1"
+	local line=""
+	local line_rest=""
 	local node_type=""
 	local ss_obfs=""
 
 	[ -n "${node_id}" ] || return 1
-	node_type="$(fss_get_node_field_plain "${node_id}" type)"
+	[ "$(fss_detect_storage_schema 2>/dev/null)" = "2" ] || return 1
+	[ -s "${FSS_NODE_JSON_INDEX_FILE}" ] || return 1
+	line="$(grep -m1 "^${node_id}|" "${FSS_NODE_JSON_INDEX_FILE}" 2>/dev/null)" || return 1
+	[ -n "${line}" ] || return 1
+	line_rest="${line#*|}"
+	node_type="${line_rest%%|*}"
+	line_rest="${line_rest#*|}"
+	ss_obfs="${line_rest%%|*}"
+	node_type="${node_type#0}"
+	[ -n "${node_type}" ] || node_type="0"
+	printf '%s|%s\n' "${node_type}" "${ss_obfs}"
+}
+
+fss_shunt_get_node_support_fields_native() {
+	local node_id="$1"
+	local node_tool=""
+	local node_meta=""
+	local line=""
+	local node_type=""
+	local ss_obfs=""
+
+	[ -n "${node_id}" ] || return 1
+	node_tool="$(fss_pick_node_tool 2>/dev/null)" || return 1
+	node_meta="$("${node_tool}" current-env --ids "${node_id}" --fields "type ss_obfs" 2>/dev/null)" || return 1
+	while IFS= read -r line
+	do
+		case "${line}" in
+		export\ ss_basic_type=*)
+			node_type="${line#export ss_basic_type=}"
+			node_type="${node_type#\'}"
+			node_type="${node_type%\'}"
+			;;
+		export\ ss_basic_ss_obfs=*)
+			ss_obfs="${line#export ss_basic_ss_obfs=}"
+			ss_obfs="${ss_obfs#\'}"
+			ss_obfs="${ss_obfs%\'}"
+			;;
+		esac
+	done <<EOF
+${node_meta}
+EOF
+	[ -n "${node_type}" ] || return 1
+	printf '%s|%s\n' "${node_type}" "${ss_obfs}"
+}
+
+fss_shunt_node_supported() {
+	local node_id="$1"
+	local node_type=""
+	local ss_obfs=""
+	local node_json=""
+	local schema=""
+	local cache_fields=""
+
+	[ -n "${node_id}" ] || return 1
+	schema="$(fss_detect_storage_schema 2>/dev/null)"
+	if [ "${schema}" = "2" ]; then
+		cache_fields="$(fss_shunt_get_node_index_fields "${node_id}" 2>/dev/null)"
+		[ -n "${cache_fields}" ] || cache_fields="$(fss_shunt_get_node_support_fields_native "${node_id}" 2>/dev/null)"
+		if [ -n "${cache_fields}" ]; then
+			node_type="${cache_fields%%|*}"
+			ss_obfs="${cache_fields#*|}"
+		else
+			node_json="$(fss_v2_get_node_json_by_id "${node_id}" 2>/dev/null)" || return 1
+			node_type="$(printf '%s' "${node_json}" | sed -n 's/.*"type"[[:space:]]*:[[:space:]]*"\{0,1\}\([0-9][0-9]*\)"\{0,1\}.*/\1/p' | sed -n '1p')"
+			ss_obfs="$(printf '%s' "${node_json}" | sed -n 's/.*"ss_obfs"[[:space:]]*:[[:space:]]*"\{0,1\}\([^",}]*\)"\{0,1\}.*/\1/p' | sed -n '1p')"
+		fi
+	else
+		node_type="$(fss_get_node_field_plain "${node_id}" type)"
+	fi
 	case "${node_type}" in
 	0)
-		ss_obfs="$(fss_get_node_field_plain "${node_id}" ss_obfs)"
+		if [ "${schema}" != "2" ]; then
+			ss_obfs="$(fss_get_node_field_plain "${node_id}" ss_obfs)"
+		fi
 		[ -z "${ss_obfs}" ] || [ "${ss_obfs}" = "0" ]
 		;;
 	3|4|5|8)
@@ -746,11 +819,16 @@ fss_shunt_get_configured_default_target() {
 		return 0
 	fi
 	fss_shunt_target_is_reject "${target}" && return 1
-	if printf '%s' "${target}" | grep -Eq '^[0-9]+$' && fss_shunt_target_is_proxy_node "${target}"; then
+	if printf '%s' "${target}" | grep -Eq '^[0-9]+$'; then
 		echo "${target}"
 		return 0
 	fi
-	mapped="$(fss_shunt_resolve_target_id "${target}" "${target_identity}" 2>/dev/null)" || return 1
+	if [ -n "${target_identity}" ]; then
+		mapped="$(fss_find_node_id_by_identity "${target_identity}" 2>/dev/null)" || return 1
+		[ -n "${mapped}" ] || return 1
+	else
+		mapped="$(fss_shunt_resolve_target_id "${target}" "${target_identity}" 2>/dev/null)" || return 1
+	fi
 	echo "${mapped}"
 }
 
@@ -775,32 +853,47 @@ fss_shunt_get_effective_default_target() {
 	fss_shunt_get_default_node_id
 }
 
-fss_shunt_get_default_node_id() {
+fss_shunt_resolve_default_node_id() {
 	local node_id="$1"
+	FSS_SHUNT_DEFAULT_NODE_ID_PICK=""
 
 	[ -n "${node_id}" ] || node_id="$(fss_shunt_get_configured_default_target 2>/dev/null)"
 	if [ -n "${node_id}" ] && fss_shunt_target_is_proxy_node "${node_id}"; then
-		echo "${node_id}"
+		FSS_SHUNT_DEFAULT_NODE_ID_PICK="${node_id}"
 		return 0
 	fi
-	node_id="$(fss_get_current_node_id)"
+	if type fss_resolve_current_node_id >/dev/null 2>&1; then
+		fss_resolve_current_node_id >/dev/null 2>&1 || true
+		node_id="${FSS_CURRENT_NODE_ID_RESULT}"
+	else
+		node_id="$(fss_get_current_node_id)"
+	fi
 	if [ -n "${node_id}" ] && fss_shunt_target_is_proxy_node "${node_id}"; then
-		echo "${node_id}"
+		FSS_SHUNT_DEFAULT_NODE_ID_PICK="${node_id}"
 		return 0
 	fi
 	node_id="$(fss_shunt_get_first_rule_target_id)"
 	if [ -n "${node_id}" ] && fss_shunt_target_is_proxy_node "${node_id}"; then
-		echo "${node_id}"
+		FSS_SHUNT_DEFAULT_NODE_ID_PICK="${node_id}"
 		return 0
 	fi
-	fss_list_node_ids | while read -r node_id
-	do
-		[ -n "${node_id}" ] || continue
-		if fss_shunt_target_is_proxy_node "${node_id}"; then
-			echo "${node_id}"
-			break
-		fi
-	done | sed -n '1p'
+	node_id="$(
+		fss_list_node_ids | while read -r node_id
+		do
+			[ -n "${node_id}" ] || continue
+			if fss_shunt_target_is_proxy_node "${node_id}"; then
+				echo "${node_id}"
+				break
+			fi
+		done | sed -n '1p'
+	)"
+	FSS_SHUNT_DEFAULT_NODE_ID_PICK="${node_id}"
+	[ -n "${FSS_SHUNT_DEFAULT_NODE_ID_PICK}" ]
+}
+
+fss_shunt_get_default_node_id() {
+	fss_shunt_resolve_default_node_id "$@" || return 1
+	printf '%s\n' "${FSS_SHUNT_DEFAULT_NODE_ID_PICK}"
 }
 
 fss_shunt_validate_current_node() {
@@ -850,6 +943,14 @@ fss_shunt_runtime_meta_get() {
 	sed -n "s/^${key}=//p" "${FSS_SHUNT_RUNTIME_META_FILE}" | sed -n '1p'
 }
 
+fss_shunt_proxy_meta_get() {
+	local key="$1"
+
+	[ -n "${key}" ] || return 1
+	[ -f "${FSS_SHUNT_PROXY_META_FILE}" ] || return 1
+	sed -n "s/^${key}=//p" "${FSS_SHUNT_PROXY_META_FILE}" | sed -n '1p'
+}
+
 fss_shunt_enabled_rule_count() {
 	local json=""
 	local jq_bin=""
@@ -891,6 +992,20 @@ fss_shunt_write_runtime_meta() {
 		built_at=$(date +%s)
 	EOF
 	mv -f "${tmp_file}" "${FSS_SHUNT_RUNTIME_META_FILE}"
+}
+
+fss_shunt_write_proxy_meta() {
+	local runtime_key="$1"
+	local has_proxy="$2"
+	local tmp_file="${FSS_SHUNT_PROXY_META_FILE}.tmp.$$"
+
+	mkdir -p "${FSS_SHUNT_RUNTIME_DIR}" >/dev/null 2>&1 || return 1
+	cat > "${tmp_file}" <<-EOF
+		runtime_key=${runtime_key}
+		has_proxy=${has_proxy}
+		updated_at=$(date +%s)
+	EOF
+	mv -f "${tmp_file}" "${FSS_SHUNT_PROXY_META_FILE}"
 }
 
 fss_shunt_materialize_rule_domains() {
@@ -1051,11 +1166,43 @@ fss_shunt_rebuild_proxy_domains() {
 }
 
 fss_shunt_get_proxy_domain_file() {
+	fss_shunt_resolve_proxy_domain_file || return 1
+	printf '%s\n' "${FSS_SHUNT_PROXY_DOMAIN_FILE_RESULT}"
+}
+
+fss_shunt_resolve_proxy_domain_file() {
+	local runtime_key=""
+	local cached_key=""
+	local cached_has_proxy=""
+
+	FSS_SHUNT_PROXY_DOMAIN_FILE_RESULT=""
 	fss_shunt_mode_selected || return 1
 	fss_shunt_rules_enabled || return 1
+	runtime_key="$(fss_shunt_runtime_key)"
+	if [ "${FSS_SHUNT_RUNTIME_READY}" = "1" ] && [ "${FSS_SHUNT_RUNTIME_READY_KEY}" = "${runtime_key}" ] && [ -s "${FSS_SHUNT_RUNTIME_PROXY_FILE}" ]; then
+		FSS_SHUNT_PROXY_DOMAIN_FILE_RESULT="${FSS_SHUNT_RUNTIME_PROXY_FILE}"
+		return 0
+	fi
+	cached_key="$(fss_shunt_proxy_meta_get runtime_key 2>/dev/null)"
+	cached_has_proxy="$(fss_shunt_proxy_meta_get has_proxy 2>/dev/null)"
+	if [ -n "${cached_key}" ] && [ "${cached_key}" = "${runtime_key}" ]; then
+		if [ "${cached_has_proxy}" = "1" ] && [ -s "${FSS_SHUNT_RUNTIME_PROXY_FILE}" ]; then
+			FSS_SHUNT_PROXY_DOMAIN_FILE_RESULT="${FSS_SHUNT_RUNTIME_PROXY_FILE}"
+			return 0
+		fi
+		if [ "${cached_has_proxy}" = "0" ]; then
+			return 1
+		fi
+	fi
 	fss_shunt_prepare_runtime || return 1
-	[ -s "${FSS_SHUNT_RUNTIME_PROXY_FILE}" ] || return 1
-	printf '%s\n' "${FSS_SHUNT_RUNTIME_PROXY_FILE}"
+	if [ -s "${FSS_SHUNT_RUNTIME_PROXY_FILE}" ]; then
+		fss_shunt_write_proxy_meta "${runtime_key}" "1" >/dev/null 2>&1 || true
+	else
+		fss_shunt_write_proxy_meta "${runtime_key}" "0" >/dev/null 2>&1 || true
+		return 1
+	fi
+	FSS_SHUNT_PROXY_DOMAIN_FILE_RESULT="${FSS_SHUNT_RUNTIME_PROXY_FILE}"
+	return 0
 }
 
 fss_shunt_prepare_runtime() {
@@ -1624,6 +1771,7 @@ fss_shunt_try_prepare_node_tool_runtime_artifacts() {
 		fss_shunt_log "ℹ️正在生成当前分流所需节点运行产物。"
 		"${node_tool}" runtime-artifact \
 			--profile shunt \
+			--effective \
 			--ids-file "${ids_file}" \
 			--output-dir "${FSS_SHUNT_RUNTIME_ARTIFACT_DIR}" >/dev/null 2>&1 || ret=1
 	else

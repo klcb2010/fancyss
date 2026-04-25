@@ -3,12 +3,14 @@
 # fancyss subscribe script for asuswrt/merlin based router with software center
 source /koolshare/scripts/base.sh
 source /koolshare/scripts/ss_node_common.sh
+[ -f /koolshare/scripts/ss_subscribe_profile_lib.sh ] && source /koolshare/scripts/ss_subscribe_profile_lib.sh
 NEW_PATH=$(echo $PATH|tr ':' '\n'|sed '/opt/d;/mmc/d'|awk '!a[$0]++'|tr '\n' ':'|sed '$ s/:$//')
 export PATH=${NEW_PATH}
 LC_ALL=C
 LANG=C
 LOCK_FILE=/var/lock/node_subscribe.lock
-LOG_FILE=/tmp/upload/ss_log.txt
+LOG_FILE=/tmp/upload/ss_subscribe_log.txt
+mkdir -p /tmp/upload >/dev/null 2>&1
 DIR="/tmp/fancyss_subs"
 LOCAL_NODES_SPL="$DIR/ss_nodes_spl.txt"
 LOCAL_NODES_BAK="$DIR/ss_nodes_bak.txt"
@@ -24,8 +26,8 @@ SUB_PARSED_CACHE_DIR="/koolshare/configs/fancyss/subscribe_cache/parsed"
 # 订阅缓存的 raw / parsed / meta 都放在持久化目录。
 # 每次调整 meta 结构或缓存判定语义时，递增 schema 即可触发重建。
 SUB_PARSED_CACHE_META_SCHEMA="2"
-SUB_STORAGE_SCHEMA=$(dbus get fss_data_schema)
-[ "${SUB_STORAGE_SCHEMA}" = "2" ] || SUB_STORAGE_SCHEMA="1"
+SUB_STORAGE_SCHEMA=""
+SUB_SCHEMA2_NATIVE_INITIALIZED=0
 NODES_SEQ=""
 NODE_INDEX=""
 SEQ_NU="0"
@@ -34,6 +36,7 @@ SUB_MODE=$(dbus get ssr_subscribe_mode)
 HY2_UP_SPEED=$(dbus get ss_basic_hy2_up_speed)
 HY2_DL_SPEED=$(dbus get ss_basic_hy2_dl_speed)
 HY2_TFO_SWITCH=$(dbus get ss_basic_hy2_tfo_switch)
+HY2_CG_OPT=$(dbus get ss_basic_hy2_cg_opt)
 CURR_NODE=""
 FAILOVER_NODE=""
 CURR_NODE_NAME=""
@@ -81,6 +84,80 @@ SUB_TOOL_DIFF_SUMMARY_FILE_CURRENT=""
 SUB_TOOL_PARSE_SUMMARY_FILE_CURRENT=""
 SUB_NODE_TOOL_PLAN_FILE_CURRENT=""
 SUB_REFERENCE_RESOLVED_IDENTITY=""
+SUB_ACTIVE_PROFILE_ID=""
+SUB_ACTIVE_PROFILE_NAME=""
+SUB_ACTIVE_UA_MODE=""
+SUB_ACTIVE_UA_PRESET=""
+SUB_ACTIVE_UA_CUSTOM=""
+SUB_LAST_ONLINE_GROUP=""
+SUB_LAST_URL_HASH=""
+SUB_LAST_DOWNLOAD_TOOL=""
+SUB_LAST_DOWNLOAD_PATH=""
+SUB_LAST_DOWNLOAD_MODE=""
+SUB_LAST_DOWNLOAD_UA=""
+SUB_LAST_DOWNLOAD_ERROR=""
+SUB_SINGLE_PROFILE_SYNC=0
+
+sub_init_storage_schema(){
+	local schema=""
+	local legacy_count="0"
+
+	schema=$(dbus get fss_data_schema)
+	if [ "${schema}" = "2" ];then
+		fss_clear_legacy_nodes >/dev/null 2>&1 || true
+		SUB_STORAGE_SCHEMA="2"
+		return 0
+	fi
+
+	legacy_count=$(fss_legacy_node_count 2>/dev/null | sed -n '1p')
+	[ -n "${legacy_count}" ] || legacy_count=0
+	if [ "${legacy_count}" = "0" ];then
+		fss_mark_native_schema2_storage >/dev/null 2>&1 || {
+			dbus set fss_data_schema=2
+			fss_set_storage_schema_cache 2 >/dev/null 2>&1 || true
+			[ -n "$(dbus get fss_node_next_id)" ] || dbus set fss_node_next_id=1
+			dbus remove fss_data_migration_notice
+			dbus remove fss_data_migration_time
+			dbus remove fss_data_legacy_snapshot
+			dbus remove fss_data_migrating
+		}
+		SUB_STORAGE_SCHEMA="2"
+		SUB_SCHEMA2_NATIVE_INITIALIZED=1
+		return 0
+	fi
+
+	SUB_STORAGE_SCHEMA="1"
+}
+
+sub_now_epoch(){
+	date +%s 2>/dev/null || echo 0
+}
+
+sub_elapsed_text(){
+	local start="$1"
+	local end=""
+	end=$(sub_now_epoch)
+	if [ -n "${start}" ] && [ -n "${end}" ] && [ "${start}" -gt "0" ] 2>/dev/null && [ "${end}" -ge "${start}" ] 2>/dev/null;then
+		echo "$((end - start))s"
+	else
+		echo "未知"
+	fi
+}
+
+sub_schedule_background_sync(){
+	echo_date "💾节点数据已提交，后台同步磁盘缓存，不阻塞订阅窗口..."
+	( sync >/dev/null 2>&1 ) &
+}
+
+sub_refresh_runtime_caches_async(){
+	echo_date "⚙️节点运行缓存已失效，后台刷新直连域名/测速缓存；慢速设备可能需要几十秒，但不影响本次订阅完成。"
+	(
+		fss_refresh_node_direct_cache >/dev/null 2>&1
+		fss_schedule_webtest_cache_warm "" "${SUB_WEBTEST_WARM_LOG}" >/dev/null 2>&1
+	) &
+}
+
+sub_init_storage_schema
 
 # 20230701: unset inherited hotplug/environment variables that may interfere with execution.
 unset usb2jffs_time_hour
@@ -137,8 +214,189 @@ sub_get_online_urls(){
 	printf '%s\n' "${SUB_ONLINE_URLS}" | sed '/^$/d'
 }
 
+sub_reset_active_profile_context() {
+	SUB_ACTIVE_PROFILE_ID=""
+	SUB_ACTIVE_PROFILE_NAME=""
+	SUB_ACTIVE_UA_MODE=""
+	SUB_ACTIVE_UA_PRESET=""
+	SUB_ACTIVE_UA_CUSTOM=""
+	SUB_BY_PROXY=$(dbus get ss_basic_online_links_proxy)
+	SUB_AI=$(dbus get ss_basic_sub_ai)
+	SUB_TOOL_NODE_LOG=$(dbus get ss_basic_sub_node_log)
+	SUB_KEEP_INFO_NODE=$(dbus get ss_basic_sub_keep_info_node)
+	[ -z "${SUB_BY_PROXY}" ] && SUB_BY_PROXY=0
+	[ -n "${SUB_TOOL_NODE_LOG}" ] || SUB_TOOL_NODE_LOG=0
+	[ -n "${SUB_KEEP_INFO_NODE}" ] || SUB_KEEP_INFO_NODE=0
+	SUB_MODE=$(dbus get ssr_subscribe_mode)
+	[ -z "${SUB_MODE}" ] && SUB_MODE=2
+	HY2_UP_SPEED=$(dbus get ss_basic_hy2_up_speed)
+	HY2_DL_SPEED=$(dbus get ss_basic_hy2_dl_speed)
+	HY2_TFO_SWITCH=$(dbus get ss_basic_hy2_tfo_switch)
+	HY2_CG_OPT=$(dbus get ss_basic_hy2_cg_opt)
+	KEY_WORDS_1_RAW=$(dbus get ss_basic_exclude | sed 's/,$//g')
+	KEY_WORDS_2_RAW=$(dbus get ss_basic_include | sed 's/,$//g')
+	KEY_WORDS_1=$(printf '%s' "${KEY_WORDS_1_RAW}" | sed 's/,/|/g')
+	KEY_WORDS_2=$(printf '%s' "${KEY_WORDS_2_RAW}" | sed 's/,/|/g')
+}
+
+sub_apply_active_profile_context() {
+	local profile_id="$1"
+	local profile_name="$2"
+	local subscribe_mode="$3"
+	local download_policy="$4"
+	local ua_mode="$5"
+	local ua_preset="$6"
+	local ua_custom="$7"
+	local exclude_raw="$8"
+	local include_raw="$9"
+	shift 9
+	local allow_insecure="$1"
+	local node_log="$2"
+	local keep_info_node="$3"
+	local hy2_up="$4"
+	local hy2_dl="$5"
+	local hy2_tfo_switch="$6"
+	local hy2_cg_opt="$7"
+
+	SUB_ACTIVE_PROFILE_ID="${profile_id}"
+	SUB_ACTIVE_PROFILE_NAME="${profile_name}"
+	SUB_MODE="${subscribe_mode}"
+	[ -n "${SUB_MODE}" ] || SUB_MODE=2
+	case "${download_policy}" in
+	proxy)
+		SUB_BY_PROXY=1
+		;;
+	direct)
+		SUB_BY_PROXY=2
+		;;
+	*)
+		SUB_BY_PROXY=0
+		;;
+	esac
+	SUB_ACTIVE_UA_MODE="${ua_mode}"
+	SUB_ACTIVE_UA_PRESET="${ua_preset}"
+	SUB_ACTIVE_UA_CUSTOM="${ua_custom}"
+	[ "${allow_insecure}" = "true" ] && SUB_AI=1 || SUB_AI=0
+	[ "${node_log}" = "true" ] && SUB_TOOL_NODE_LOG=1 || SUB_TOOL_NODE_LOG=0
+	[ "${keep_info_node}" = "true" ] && SUB_KEEP_INFO_NODE=1 || SUB_KEEP_INFO_NODE=0
+	KEY_WORDS_1_RAW="$(printf '%s' "${exclude_raw}" | sed 's/,$//g')"
+	KEY_WORDS_2_RAW="$(printf '%s' "${include_raw}" | sed 's/,$//g')"
+	KEY_WORDS_1="$(printf '%s' "${KEY_WORDS_1_RAW}" | sed 's/,/|/g')"
+	KEY_WORDS_2="$(printf '%s' "${KEY_WORDS_2_RAW}" | sed 's/,/|/g')"
+	HY2_UP_SPEED="${hy2_up}"
+	HY2_DL_SPEED="${hy2_dl}"
+	HY2_TFO_SWITCH="${hy2_tfo_switch}"
+	[ -n "${HY2_TFO_SWITCH}" ] || HY2_TFO_SWITCH=2
+	HY2_CG_OPT="${hy2_cg_opt}"
+	[ -n "${HY2_CG_OPT}" ] || HY2_CG_OPT="bbr"
+}
+
 sub_get_online_url_count(){
 	sub_get_online_urls | wc -l
+}
+
+sub_collect_active_link_hashes_from_profiles_file() {
+	local output_file="$1"
+	local profiles_file="$2"
+	local profile_url=""
+
+	[ -n "${output_file}" ] || return 1
+	[ -f "${profiles_file}" ] || return 1
+	: > "${output_file}"
+	while IFS='	' read -r _profile_id _profile_name profile_url _
+	do
+		[ -n "${profile_url}" ] || continue
+		printf '%s' "${profile_url}" | md5sum | awk '{print $1}' >> "${output_file}"
+		printf '\n' >> "${output_file}"
+	done < "${profiles_file}"
+}
+
+sub_prepare_enabled_profiles_file() {
+	local output_file="$1"
+	local selected_id="${SUB_SELECTED_PROFILE_ID:-$(dbus get ${SUB_PROFILE_TMP_SYNC_ID_KEY})}"
+	local tmp_file=""
+
+	[ -n "${output_file}" ] || return 1
+	subprof_collect_enabled_profiles_tsv "${output_file}" >/dev/null 2>&1 || return 1
+	if [ -n "${selected_id}" ]; then
+		tmp_file="${output_file}.tmp.$$"
+		awk -F '\t' -v selected_id="${selected_id}" '$1 == selected_id {print}' "${output_file}" > "${tmp_file}" 2>/dev/null || true
+		mv -f "${tmp_file}" "${output_file}"
+	fi
+	[ -s "${output_file}" ]
+}
+
+sub_pick_jq() {
+	if [ -x "/koolshare/bin/jq" ]; then
+		printf '%s\n' "/koolshare/bin/jq"
+		return 0
+	fi
+	command -v jq 2>/dev/null
+}
+
+pick_sub_get() {
+	local sub_get_path=""
+	sub_get_path="$(type sub-get 2>/dev/null | awk '{print $NF}' | sed -n '1p')"
+	if [ -n "${sub_get_path}" ]; then
+		if "${sub_get_path}" version >/dev/null 2>&1; then
+			printf '%s\n' "${sub_get_path}"
+			return 0
+		fi
+	fi
+	if [ -x "/koolshare/bin/sub-get" ]; then
+		if /koolshare/bin/sub-get version >/dev/null 2>&1; then
+			printf '%s\n' "/koolshare/bin/sub-get"
+			return 0
+		fi
+	fi
+	return 1
+}
+
+sub_get_supports_command() {
+	local sub_get_bin="$1"
+	local command_name="$2"
+	[ -n "${sub_get_bin}" ] || return 1
+	[ -n "${command_name}" ] || return 1
+	"${sub_get_bin}" --help 2>&1 | grep -Eq "^[[:space:]]*sub-get[[:space:]]+${command_name}([[:space:]]|$)"
+}
+
+sub_reset_download_trace() {
+	SUB_LAST_DOWNLOAD_TOOL=""
+	SUB_LAST_DOWNLOAD_PATH=""
+	SUB_LAST_DOWNLOAD_MODE=""
+	SUB_LAST_DOWNLOAD_UA=""
+	SUB_LAST_DOWNLOAD_ERROR=""
+}
+
+sub_write_sub_get_plan() {
+	local output_file="$1"
+	local url="$2"
+	local ua="$3"
+	local policy="$4"
+	local profile_id="$5"
+	local profile_name="$6"
+	local sub_get_jq=""
+
+	[ -n "${output_file}" ] || return 1
+	sub_get_jq="$(sub_pick_jq)" || return 1
+	"${sub_get_jq}" -cn \
+		--arg url "${url}" \
+		--arg ua "${ua}" \
+		--arg policy "${policy}" \
+		--arg profile_id "${profile_id}" \
+		--arg profile_name "${profile_name}" \
+		'{
+			version: 1,
+			url: $url,
+			policy: $policy,
+			profile: {
+				id: $profile_id,
+				name: $profile_name
+			},
+			ua: {
+				value: $ua
+			}
+		}' > "${output_file}" 2>/dev/null
 }
 
 sub_get_source_domain_from_url(){
@@ -510,7 +768,7 @@ sub_get_filter_signature(){
 		read -r effective_hy2_tfo
 		read -r effective_hy2_cg
 	} <<-EOF
-	$(sub_get_effective_hy2_context "${HY2_UP_SPEED}" "${HY2_DL_SPEED}" "${HY2_TFO_SWITCH}" "$(dbus get ss_basic_hy2_cg_opt)")
+	$(sub_get_effective_hy2_context "${HY2_UP_SPEED}" "${HY2_DL_SPEED}" "${HY2_TFO_SWITCH}" "${HY2_CG_OPT}")
 	EOF
 	printf '%s\n' \
 		"exclude=${KEY_WORDS_1_RAW}" \
@@ -971,51 +1229,60 @@ sub_validate_downloaded_payload_with_tool(){
 		return 0
 		;;
 	empty)
+		SUB_LAST_DOWNLOAD_ERROR="empty payload"
 		echo_date "⚠️下载内容为空！️该订阅链接不包含任何节点信息"
 		echo_date "⚠️请检查你的服务商是否更换了订阅链接！"
 		return 1
 		;;
 	html-login)
+		SUB_LAST_DOWNLOAD_ERROR="html login page"
 		echo_date "⚠️解析错误！原因：该订阅链接返回了登录/验证页面，当前无法直接获取订阅内容！"
 		preview=$(sub_payload_preview "${payload_file}")
 		[ -n "${preview}" ] && echo_date "⚠️返回内容摘要：${preview}"
 		return 1
 		;;
 	html-redirect)
+		SUB_LAST_DOWNLOAD_ERROR="html redirect unresolved"
 		echo_date "⚠️解析错误！原因：该订阅链接返回了HTML跳转页，但自动跟随未成功完成！"
 		preview=$(sub_payload_preview "${payload_file}")
 		[ -n "${preview}" ] && echo_date "⚠️返回内容摘要：${preview}"
 		return 1
 		;;
 	html-page)
+		SUB_LAST_DOWNLOAD_ERROR="html page"
 		echo_date "⚠️解析错误！原因：该订阅链接返回了HTML页面，而不是订阅内容！"
 		preview=$(sub_payload_preview "${payload_file}")
 		[ -n "${preview}" ] && echo_date "⚠️返回内容摘要：${preview}"
 		return 1
 		;;
 	json-error)
+		SUB_LAST_DOWNLOAD_ERROR="json error payload"
 		echo_date "⚠️解析错误！原因：该订阅链接返回了JSON错误响应！"
 		preview=$(sub_payload_preview "${payload_file}")
 		[ -n "${preview}" ] && echo_date "⚠️返回内容摘要：${preview}"
 		return 1
 		;;
 	json)
+		SUB_LAST_DOWNLOAD_ERROR="json payload"
 		echo_date "⚠️解析错误！原因：该订阅链接返回了JSON内容，而不是订阅内容！"
 		preview=$(sub_payload_preview "${payload_file}")
 		[ -n "${preview}" ] && echo_date "⚠️返回内容摘要：${preview}"
 		return 1
 		;;
 	text-error)
+		SUB_LAST_DOWNLOAD_ERROR="text error payload"
 		echo_date "⚠️解析错误！原因：该订阅链接返回了文本错误响应！"
 		preview=$(sub_payload_preview "${payload_file}")
 		[ -n "${preview}" ] && echo_date "⚠️返回内容摘要：${preview}"
 		return 1
 		;;
 	ssep-envelope)
+		SUB_LAST_DOWNLOAD_ERROR="ssep envelope unsupported"
 		echo_date "⚠️解析错误！原因：检测到SSEP加密订阅Envelope，当前版本暂未解密此订阅格式！"
 		return 1
 		;;
 	gzip)
+		SUB_LAST_DOWNLOAD_ERROR="gzip payload unsupported"
 		echo_date "⚠️解析错误！原因：检测到gzip压缩响应，当前订阅链路暂未处理此类返回内容！"
 		return 1
 		;;
@@ -1139,29 +1406,52 @@ sub_validate_downloaded_payload(){
 sub_filter_fancyss_jsonl_file(){
 	local src_file="$1"
 	local out_file="$2"
-	local line=""
-	local meta=""
+	local row=""
+	local row_kind=""
+	local type_b64=""
+	local xray_b64=""
+	local remarks_b64=""
+	local server_b64=""
+	local line_b64=""
 	local type_id=""
 	local xray_prot=""
 	local remarks=""
 	local server=""
 	local type_name=""
+	local line=""
+	local sep="$(printf '\037')"
+	local rows_file="${out_file}.rows.$$"
 
 	[ -f "${src_file}" ] || return 1
 	[ -n "${out_file}" ] || return 1
 	: > "${out_file}"
+	: > "${rows_file}"
 
-	while IFS= read -r line || [ -n "${line}" ]
+	cat "${src_file}" | jq -Rr 'def text($v): if $v == null then "" elif ($v | type) == "string" then $v else ($v | tostring) end; . as $raw | select($raw != "") | (try ($raw | fromjson) catch null) as $obj | if ($obj | type) != "object" then ["raw", "", "", "", "", ($raw | @base64)] else ["json", (text($obj.type) | @base64), (text($obj.xray_prot) | @base64), (text($obj.name) | @base64), (text(($obj.server // $obj.hy2_server // $obj.naive_server)) | @base64), ($raw | @base64)] end | join("\u001f")' 2>/dev/null > "${rows_file}" || {
+		rm -f "${rows_file}"
+		return 1
+	}
+	while IFS= read -r row || [ -n "${row}" ]
 	do
+		[ -n "${row}" ] || continue
+		IFS="${sep}" read -r row_kind type_b64 xray_b64 remarks_b64 server_b64 line_b64 <<-EOF
+		${row}
+		EOF
+		line=""
+		[ -n "${line_b64}" ] && line="$(fss_b64_decode "${line_b64}")"
 		[ -n "${line}" ] || continue
-		meta=$(printf '%s' "${line}" | run jq -r '[.type // "", .xray_prot // "", .name // "", (.server // .hy2_server // .naive_server // "")] | @tsv' 2>/dev/null) || {
+		if [ "${row_kind}" != "json" ];then
 			printf '%s\n' "${line}" >> "${out_file}"
 			continue
-		}
-		type_id=$(printf '%s' "${meta}" | awk -F'\t' '{print $1}')
-		xray_prot=$(printf '%s' "${meta}" | awk -F'\t' '{print $2}')
-		remarks=$(printf '%s' "${meta}" | awk -F'\t' '{print $3}')
-		server=$(printf '%s' "${meta}" | awk -F'\t' '{print $4}')
+		fi
+		type_id=""
+		xray_prot=""
+		remarks=""
+		server=""
+		[ -n "${type_b64}" ] && type_id="$(fss_b64_decode "${type_b64}")"
+		[ -n "${xray_b64}" ] && xray_prot="$(fss_b64_decode "${xray_b64}")"
+		[ -n "${remarks_b64}" ] && remarks="$(fss_b64_decode "${remarks_b64}")"
+		[ -n "${server_b64}" ] && server="$(fss_b64_decode "${server_b64}")"
 		case "${type_id}" in
 		0)
 			type_name="SS"
@@ -1193,7 +1483,8 @@ sub_filter_fancyss_jsonl_file(){
 		esac
 		filter_nodes "${type_name}" "${remarks}" "${server}" || continue
 		printf '%s\n' "${line}" >> "${out_file}"
-	done < "${src_file}"
+	done < "${rows_file}"
+	rm -f "${rows_file}"
 }
 
 sub_keyword_patterns_can_use_tool(){
@@ -1243,7 +1534,7 @@ sub_try_parse_uri_lines_with_tool(){
 		read -r effective_hy2_tfo
 		read -r effective_hy2_cg
 	} <<-EOF
-	$(sub_get_effective_hy2_context "${HY2_UP_SPEED}" "${HY2_DL_SPEED}" "${HY2_TFO_SWITCH}" "$(dbus get ss_basic_hy2_cg_opt)")
+	$(sub_get_effective_hy2_context "${HY2_UP_SPEED}" "${HY2_DL_SPEED}" "${HY2_TFO_SWITCH}" "${HY2_CG_OPT}")
 	EOF
 
 	[ "${SUB_TOOL_NODE_LOG}" = "1" ] && subtool_log_level="verbose"
@@ -1265,6 +1556,7 @@ sub_try_parse_uri_lines_with_tool(){
 	[ -n "${SUB_SOURCE_URL_HASH}" ] && set -- "$@" --source-url-hash "${SUB_SOURCE_URL_HASH}"
 	[ -n "${SUB_AIRPORT_IDENTITY}" ] && set -- "$@" --airport-identity "${SUB_AIRPORT_IDENTITY}"
 	[ -n "${SUB_SOURCE_SCOPE}" ] && set -- "$@" --source-scope "${SUB_SOURCE_SCOPE}"
+	[ -n "${SUB_ACTIVE_PROFILE_ID}" ] && set -- "$@" --profile-id "${SUB_ACTIVE_PROFILE_ID}"
 	[ -n "${reuse_ids_from}" ] && set -- "$@" --reuse-ids-from "${reuse_ids_from}"
 	[ "${tool_can_filter}" = "1" ] && [ -n "${KEY_WORDS_1}" ] && set -- "$@" --exclude-pattern "${KEY_WORDS_1}"
 	[ "${tool_can_filter}" = "1" ] && [ -n "${KEY_WORDS_2}" ] && set -- "$@" --include-pattern "${KEY_WORDS_2}"
@@ -1334,7 +1626,7 @@ sub_update_parsed_cache_meta(){
 		read -r effective_hy2_tfo
 		read -r effective_hy2_cg
 	} <<-EOF
-	$(sub_get_effective_hy2_context "${HY2_UP_SPEED}" "${HY2_DL_SPEED}" "${HY2_TFO_SWITCH}" "$(dbus get ss_basic_hy2_cg_opt)")
+	$(sub_get_effective_hy2_context "${HY2_UP_SPEED}" "${HY2_DL_SPEED}" "${HY2_TFO_SWITCH}" "${HY2_CG_OPT}")
 	EOF
 	mapping_sig=$(sub_get_airport_mapping_signature)
 	has_ai_sensitive="0"
@@ -1393,7 +1685,7 @@ sub_parsed_cache_meta_matches(){
 		read -r current_hy2_tfo
 		read -r current_hy2_cg
 	} <<-EOF
-	$(sub_get_effective_hy2_context "${HY2_UP_SPEED}" "${HY2_DL_SPEED}" "${HY2_TFO_SWITCH}" "$(dbus get ss_basic_hy2_cg_opt)")
+	$(sub_get_effective_hy2_context "${HY2_UP_SPEED}" "${HY2_DL_SPEED}" "${HY2_TFO_SWITCH}" "${HY2_CG_OPT}")
 	EOF
 	current_mapping_sig=$(sub_get_airport_mapping_signature)
 	[ "${cached_schema}" = "${SUB_PARSED_CACHE_META_SCHEMA}" ] || return 1
@@ -1574,7 +1866,7 @@ sub_get_parse_summary_value(){
 	local file="$1"
 	local key="$2"
 	[ -f "${file}" ] || return 1
-	jq -r --arg key "${key}" '.[$key] // 0' "${file}" 2>/dev/null | sed -n '1p'
+	"$(sub_pick_jq)" -r --arg key "${key}" '.[$key] // 0' "${file}" 2>/dev/null | sed -n '1p'
 }
 
 sub_get_parse_summary_scheme_count(){
@@ -1582,7 +1874,7 @@ sub_get_parse_summary_scheme_count(){
 	local bucket="$2"
 	local key="$3"
 	[ -f "${file}" ] || return 1
-	jq -r --arg bucket "${bucket}" --arg key "${key}" '.[$bucket][$key] // 0' "${file}" 2>/dev/null | sed -n '1p'
+	"$(sub_pick_jq)" -r --arg bucket "${bucket}" --arg key "${key}" '.[$bucket][$key] // 0' "${file}" 2>/dev/null | sed -n '1p'
 }
 
 sub_log_fancyss_parse_summary_json(){
@@ -1989,6 +2281,20 @@ sub_extract_groups_from_file(){
 	jq -r '.group // "null"' "${file_path}" 2>/dev/null
 }
 
+sub_first_line_meta_tsv(){
+	local file_path="$1"
+	local first_line=""
+	[ -f "${file_path}" ] || return 0
+	first_line="$(sed -n '1p' "${file_path}" 2>/dev/null)"
+	[ -n "${first_line}" ] || return 0
+	printf '%s' "${first_line}" | jq -r '[
+		(._airport_identity // ""),
+		(._source_scope // ""),
+		(._source_url_hash // ""),
+		(.group // "")
+	] | join("\u001f")' 2>/dev/null
+}
+
 sub_refresh_node_state(){
 	NODES_SEQ=$(sub_list_node_ids | tr '\n' ' ' | sed 's/[[:space:]]$//')
 	NODE_INDEX=$(sub_list_node_ids | sed -n '$p')
@@ -2013,22 +2319,10 @@ sub_resolve_field_name(){
 sub_get_node_field_plain(){
 	local node_id="$1"
 	local field="$2"
-	local store_field value=""
 
 	[ -z "${node_id}" ] && return 1
 	[ -z "${field}" ] && return 1
-	store_field=$(sub_resolve_field_name "${field}")
-
-	if [ "${SUB_STORAGE_SCHEMA}" = "2" ];then
-		value=$(fss_v2_get_node_json_by_id "${node_id}" 2>/dev/null | jq -r --arg k "${store_field}" '.[$k] // empty')
-	else
-		value=$(dbus get ssconf_basic_${store_field}_${node_id})
-		if [ -n "${value}" ] && fss_is_b64_field "${store_field}"; then
-			value=$(fss_b64_decode "${value}")
-		fi
-	fi
-
-	printf '%s' "${value}"
+	fss_get_node_field_plain "${node_id}" "${field}"
 }
 
 sub_get_node_server_plain(){
@@ -2053,14 +2347,16 @@ sub_get_node_identity_plain(){
 	local node_json=""
 	[ -z "${node_id}" ] && return 1
 	if [ "${SUB_STORAGE_SCHEMA}" = "2" ];then
-		value=$(fss_v2_get_node_json_by_id "${node_id}" 2>/dev/null | jq -r '._identity // empty')
+		value=$(fss_get_node_identity_by_id "${node_id}" 2>/dev/null)
 		[ -n "${value}" ] && {
 			printf '%s' "${value}"
 			return 0
 		}
 	fi
 	node_json=$(sub_export_local_node_json "${node_id}" 2>/dev/null) || return 1
-	value=$(fss_enrich_node_identity_json "${node_json}" "" "" "" "" 2>/dev/null | jq -r '._identity // empty') || return 1
+	node_json=$(fss_enrich_node_identity_json "${node_json}" "" "" "" "" 2>/dev/null) || return 1
+	fss_unpack_node_meta "${node_json}" || return 1
+	value="${FSS_NODE_META_IDENTITY}"
 	printf '%s' "${value}"
 }
 
@@ -2071,23 +2367,12 @@ sub_get_node_snapshot_plain(){
 	if [ "${SUB_STORAGE_SCHEMA}" = "2" ];then
 		node_json=$(fss_v2_get_node_json_by_id "${node_id}" 2>/dev/null) || return 1
 		[ -n "${node_json}" ] || return 1
-		printf '%s' "${node_json}" | jq -r '
-			[
-				(.name // ""),
-				(.type // ""),
-				(.server // .hy2_server // ""),
-				((.port // .hy2_port // "") | tostring),
-				(._identity // "")
-			] | @tsv
-		' 2>/dev/null
+		fss_node_json_snapshot_tsv "${node_json}"
 		return 0
 	fi
-	printf '%s\t%s\t%s\t%s\t%s\n' \
-		"$(sub_get_node_field_plain "${node_id}" name)" \
-		"$(sub_get_node_field_plain "${node_id}" type)" \
-		"$(sub_get_node_server_plain "${node_id}")" \
-		"$(sub_get_node_port_plain "${node_id}")" \
-		"$(sub_get_node_identity_plain "${node_id}")"
+	node_json=$(sub_export_local_node_json "${node_id}" 2>/dev/null) || return 1
+	[ -n "${node_json}" ] || return 1
+	fss_node_json_snapshot_tsv "${node_json}"
 }
 
 sub_node_exists_in_order(){
@@ -2099,20 +2384,17 @@ sub_node_exists_in_order(){
 sub_capture_active_nodes(){
 	local current_snapshot=""
 	local failover_snapshot=""
+	local sep="$(printf '\037')"
 	sub_refresh_node_state
 	current_snapshot=$(sub_get_node_snapshot_plain "${CURR_NODE}" 2>/dev/null)
-	CURR_NODE_NAME=$(printf '%s' "${current_snapshot}" | awk -F '\t' '{print $1}')
-	CURR_NODE_TYPE=$(printf '%s' "${current_snapshot}" | awk -F '\t' '{print $2}')
-	CURR_NODE_SERVER=$(printf '%s' "${current_snapshot}" | awk -F '\t' '{print $3}')
-	CURR_NODE_PORT=$(printf '%s' "${current_snapshot}" | awk -F '\t' '{print $4}')
-	CURR_NODE_IDENTITY=$(printf '%s' "${current_snapshot}" | awk -F '\t' '{print $5}')
+	IFS="${sep}" read -r CURR_NODE_NAME CURR_NODE_TYPE CURR_NODE_SERVER CURR_NODE_PORT CURR_NODE_IDENTITY <<-EOF
+	${current_snapshot}
+	EOF
 	[ -n "${CURR_NODE_IDENTITY}" ] || CURR_NODE_IDENTITY=$(sub_get_node_identity_plain "${CURR_NODE}")
 	failover_snapshot=$(sub_get_node_snapshot_plain "${FAILOVER_NODE}" 2>/dev/null)
-	FAILOVER_NODE_NAME=$(printf '%s' "${failover_snapshot}" | awk -F '\t' '{print $1}')
-	FAILOVER_NODE_TYPE=$(printf '%s' "${failover_snapshot}" | awk -F '\t' '{print $2}')
-	FAILOVER_NODE_SERVER=$(printf '%s' "${failover_snapshot}" | awk -F '\t' '{print $3}')
-	FAILOVER_NODE_PORT=$(printf '%s' "${failover_snapshot}" | awk -F '\t' '{print $4}')
-	FAILOVER_NODE_IDENTITY=$(printf '%s' "${failover_snapshot}" | awk -F '\t' '{print $5}')
+	IFS="${sep}" read -r FAILOVER_NODE_NAME FAILOVER_NODE_TYPE FAILOVER_NODE_SERVER FAILOVER_NODE_PORT FAILOVER_NODE_IDENTITY <<-EOF
+	${failover_snapshot}
+	EOF
 	[ -n "${FAILOVER_NODE_IDENTITY}" ] || FAILOVER_NODE_IDENTITY=$(sub_get_node_identity_plain "${FAILOVER_NODE}")
 }
 
@@ -2487,11 +2769,15 @@ sub_file_identity_scope_matches(){
 	local first_airport=""
 	local first_scope=""
 	local first_hash=""
+	local first_group=""
+	local first_meta=""
+	local sep="$(printf '\037')"
 
 	[ -s "${file}" ] || return 1
-	first_airport=$(jq -r '."_airport_identity" // empty' "${file}" 2>/dev/null | sed -n '1p')
-	first_scope=$(jq -r '."_source_scope" // empty' "${file}" 2>/dev/null | sed -n '1p')
-	first_hash=$(jq -r '."_source_url_hash" // empty' "${file}" 2>/dev/null | sed -n '1p')
+	first_meta="$(sub_first_line_meta_tsv "${file}")" || first_meta=""
+	IFS="${sep}" read -r first_airport first_scope first_hash first_group <<-EOF
+	${first_meta}
+	EOF
 	[ "${first_airport}" = "${airport_identity}" ] || return 1
 	[ "${first_scope}" = "${source_scope}" ] || return 1
 	[ "${first_hash}" = "${source_url_hash}" ]
@@ -2837,10 +3123,9 @@ sub_log_nodes_diff_tsv_file(){
 		esac
 	done < "${diff_file}"
 	if [ -f "${summary_file}" ];then
-		param_changed=$(jq -r '.param // 0' "${summary_file}" 2>/dev/null)
-		renamed=$(jq -r '.rename // 0' "${summary_file}" 2>/dev/null)
-		added=$(jq -r '.new // 0' "${summary_file}" 2>/dev/null)
-		deleted=$(jq -r '.deleted // 0' "${summary_file}" 2>/dev/null)
+		IFS="$(printf '\037')" read -r param_changed renamed added deleted <<-EOF
+		$(jq -r '[.param // 0, .rename // 0, .new // 0, .deleted // 0] | join("\u001f")' "${summary_file}" 2>/dev/null)
+		EOF
 	fi
 	if [ "$((param_changed + renamed + deleted + added))" -gt "0" ];then
 		echo_date "ℹ️节点变更分类：参数改变${param_changed}个，名称改变${renamed}个，新增${added}个，删除${deleted}个。"
@@ -2912,6 +3197,28 @@ sub_reference_notice_add(){
 		}' 2>/dev/null)
 	[ -n "${payload}" ] || return 0
 	printf '%s\n' "${payload}" >> "${SCHEMA2_REFERENCE_NOTICE_FILE}"
+}
+
+sub_parse_shunt_rule_fields(){
+	local rule_json="$1"
+	[ -n "${rule_json}" ] || return 0
+	printf '%s' "${rule_json}" | jq -r '
+		def text($v):
+			if $v == null then
+				""
+			elif ($v | type) == "string" then
+				$v
+			else
+				($v | tostring)
+			end;
+		[
+			(text(.target_node_id) | @base64),
+			(text(.target_node_identity) | @base64),
+			(text(.id) | @base64),
+			(text(.remark) | @base64),
+			(text(.preset) | @base64)
+		] | join("\u001f")
+	' 2>/dev/null
 }
 
 sub_reference_notice_commit(){
@@ -3107,6 +3414,42 @@ sub_should_refresh_runtime_caches(){
 	sub_node_tool_plan_needs_runtime_cache_refresh
 }
 
+sub_run_reference_postwrite_steps(){
+	local input_file="$1"
+	local step_start=""
+
+	if [ "${SUB_FAST_APPEND_USED}" = "1" ];then
+		echo_date "🧭本次为快速追加写入，跳过运行节点/分流引用改写。"
+		return 0
+	fi
+	if ! sub_should_run_reference_postwrite;then
+		echo_date "🧭运行节点和分流引用未受影响，跳过引用改写。"
+		return 0
+	fi
+
+	echo_date "🧭开始同步运行节点/分流引用；分流规则较多时此步骤可能需要数秒..."
+	step_start=$(sub_now_epoch)
+	sub_reference_notice_reset
+	sub_apply_shunt_reference_rewrite
+	sub_collect_runtime_reference_notice_after_rewrite "${input_file}"
+	sub_reference_notice_commit
+	echo_date "🧭运行节点/分流引用同步完成，用时 $(sub_elapsed_text "${step_start}")。"
+}
+
+sub_run_cache_postwrite_steps(){
+	if sub_should_refresh_runtime_caches;then
+		sub_refresh_runtime_caches_async
+	else
+		echo_date "⚙️本次变更不影响运行缓存，跳过缓存刷新。"
+	fi
+}
+
+sub_after_nodes_written(){
+	local input_file="$1"
+	sub_run_reference_postwrite_steps "${input_file}"
+	sub_run_cache_postwrite_steps
+}
+
 sub_resolve_reference_from_plan(){
 	local current_id="$1"
 	local current_identity="$2"
@@ -3181,6 +3524,16 @@ sub_apply_shunt_reference_rewrite(){
 	local rules_file="${DIR}/shunt_apply_rules.$$"
 	local updated_rules_file="${DIR}/shunt_apply_rules_new.$$"
 	local new_json=""
+	local rule_fields=""
+	local target_id_b64=""
+	local target_identity_b64=""
+	local rule_id_b64=""
+	local remark_b64=""
+	local preset_b64=""
+	local desired_target=""
+	local desired_identity=""
+	local target_changed="0"
+	local identity_changed="0"
 
 	default_target="$(dbus get ss_basic_shunt_default_node)"
 	default_identity="$(dbus get ss_basic_shunt_default_node_identity)"
@@ -3235,19 +3588,32 @@ sub_apply_shunt_reference_rewrite(){
 	do
 		[ -n "${line}" ] || continue
 		new_line="${line}"
-		target_id="$(printf '%s' "${line}" | jq -r '.target_node_id // empty' 2>/dev/null)"
-		target_identity="$(printf '%s' "${line}" | jq -r '.target_node_identity // empty' 2>/dev/null)"
-		rule_id="$(printf '%s' "${line}" | jq -r '.id // empty' 2>/dev/null)"
-		remark="$(printf '%s' "${line}" | jq -r '.remark // empty' 2>/dev/null)"
-		preset="$(printf '%s' "${line}" | jq -r '.preset // empty' 2>/dev/null)"
+		rule_fields="$(sub_parse_shunt_rule_fields "${line}")" || rule_fields=""
+		IFS="${sep}" read -r target_id_b64 target_identity_b64 rule_id_b64 remark_b64 preset_b64 <<-EOF
+		${rule_fields}
+		EOF
+		target_id=""
+		target_identity=""
+		rule_id=""
+		remark=""
+		preset=""
+		[ -n "${target_id_b64}" ] && target_id="$(fss_b64_decode "${target_id_b64}")"
+		[ -n "${target_identity_b64}" ] && target_identity="$(fss_b64_decode "${target_identity_b64}")"
+		[ -n "${rule_id_b64}" ] && rule_id="$(fss_b64_decode "${rule_id_b64}")"
+		[ -n "${remark_b64}" ] && remark="$(fss_b64_decode "${remark_b64}")"
+		[ -n "${preset_b64}" ] && preset="$(fss_b64_decode "${preset_b64}")"
 		label="${remark}"
 		[ -n "${label}" ] || label="${preset}"
 		[ -n "${label}" ] || label="${rule_id}"
+		desired_target="${target_id}"
+		desired_identity="${target_identity}"
+		target_changed="0"
+		identity_changed="0"
 		case "${target_id}" in
 		DIRECT|REJECT)
 			if [ -n "${target_identity}" ];then
-				new_line="$(printf '%s' "${new_line}" | jq -c '.target_node_identity = ""' 2>/dev/null)"
-				synced_identities=$((synced_identities + 1))
+				desired_identity=""
+				identity_changed="1"
 			fi
 			;;
 		*)
@@ -3256,12 +3622,12 @@ sub_apply_shunt_reference_rewrite(){
 				mapped_identity="${SUB_REFERENCE_RESOLVED_IDENTITY}"
 				[ -n "${mapped_identity}" ] || mapped_identity="$(fss_get_node_identity_by_id "${mapped_target}" 2>/dev/null)"
 				if [ "${mapped_target}" != "${target_id}" ];then
-					new_line="$(printf '%s' "${new_line}" | jq -c --arg target "${mapped_target}" '.target_node_id = $target' 2>/dev/null)"
-					changed_rules=$((changed_rules + 1))
+					desired_target="${mapped_target}"
+					target_changed="1"
 				fi
 				if [ -n "${mapped_identity}" ] && [ "${mapped_identity}" != "${target_identity}" ];then
-					new_line="$(printf '%s' "${new_line}" | jq -c --arg identity "${mapped_identity}" '.target_node_identity = $identity' 2>/dev/null)"
-					synced_identities=$((synced_identities + 1))
+					desired_identity="${mapped_identity}"
+					identity_changed="1"
 				fi
 			elif [ -n "${target_id}${target_identity}" ];then
 				echo_date "🧭分流规则保持原值：【${label}】未能解析新目标节点。"
@@ -3276,6 +3642,11 @@ sub_apply_shunt_reference_rewrite(){
 			fi
 			;;
 		esac
+		if [ "${target_changed}" = "1" -o "${identity_changed}" = "1" ];then
+			new_line="$(printf '%s' "${new_line}" | jq -c --arg target "${desired_target}" --arg identity "${desired_identity}" '.target_node_id = $target | .target_node_identity = $identity' 2>/dev/null)"
+			[ "${target_changed}" = "1" ] && changed_rules=$((changed_rules + 1))
+			[ "${identity_changed}" = "1" ] && synced_identities=$((synced_identities + 1))
+		fi
 		printf '%s\n' "${new_line}" >> "${updated_rules_file}"
 	done < "${rules_file}"
 	new_json="$(jq -s -c '.' "${updated_rules_file}" 2>/dev/null)"
@@ -3408,6 +3779,7 @@ sub_write_nodes_schema2(){
 				rm -f "${normalized_tmp}" >/dev/null 2>&1
 			fi
 			[ -f "${plan_tmp}" ] && SUB_NODE_TOOL_PLAN_FILE_CURRENT="${plan_tmp}"
+			fss_mark_native_schema2_storage >/dev/null 2>&1 || true
 			fss_clear_webtest_runtime_results
 			return 0
 		fi
@@ -3553,7 +3925,9 @@ sub_write_nodes_schema2(){
 	fi
 	dbus set fss_node_order="${imported_order}"
 	dbus set fss_data_schema=2
+	fss_set_storage_schema_cache 2 >/dev/null 2>&1 || true
 	dbus set fss_node_next_id="$((max_id + 1))"
+	fss_mark_native_schema2_storage >/dev/null 2>&1 || true
 	[ "${touched_any}" = "1" ] && fss_clear_webtest_runtime_results
 	fss_touch_node_catalog_ts >/dev/null 2>&1
 	fss_touch_node_config_ts >/dev/null 2>&1
@@ -3614,6 +3988,7 @@ sub_append_nodes_schema2(){
 					rm -f "${normalized_tmp}" >/dev/null 2>&1
 				fi
 				[ -f "${plan_tmp}" ] && SUB_NODE_TOOL_PLAN_FILE_CURRENT="${plan_tmp}"
+				fss_mark_native_schema2_storage >/dev/null 2>&1 || true
 				fss_clear_webtest_runtime_results
 				return 0
 			fi
@@ -3625,6 +4000,7 @@ sub_append_nodes_schema2(){
 					rm -f "${normalized_tmp}" >/dev/null 2>&1
 				fi
 				[ -f "${plan_tmp}" ] && SUB_NODE_TOOL_PLAN_FILE_CURRENT="${plan_tmp}"
+				fss_mark_native_schema2_storage >/dev/null 2>&1 || true
 				fss_clear_webtest_runtime_results
 				return 0
 			fi
@@ -3794,7 +4170,9 @@ sub_append_nodes_schema2(){
 
 	[ -n "${imported_order}" ] && dbus set fss_node_order="${imported_order}" || dbus remove fss_node_order
 	dbus set fss_data_schema=2
+	fss_set_storage_schema_cache 2 >/dev/null 2>&1 || true
 	dbus set fss_node_next_id="$((max_id + 1))"
+	fss_mark_native_schema2_storage >/dev/null 2>&1 || true
 	[ "${touched_any}" = "1" ] && fss_clear_webtest_runtime_results
 	fss_touch_node_catalog_ts >/dev/null 2>&1
 	fss_touch_node_config_ts >/dev/null 2>&1
@@ -3824,6 +4202,7 @@ sub_sync_single_source_schema2(){
 			rm -f "${normalized_tmp}" >/dev/null 2>&1
 		fi
 		[ -f "${plan_tmp}" ] && SUB_NODE_TOOL_PLAN_FILE_CURRENT="${plan_tmp}"
+		fss_mark_native_schema2_storage >/dev/null 2>&1 || true
 		sub_refresh_node_state
 		return 0
 	fi
@@ -3857,17 +4236,8 @@ sub_try_sync_single_source_fast_path(){
 		return 1
 	fi
 	echo_date "😀节点信息写入成功！"
-	sync
-	if [ "${SUB_FAST_APPEND_USED}" != "1" ] && sub_should_run_reference_postwrite;then
-		sub_reference_notice_reset
-		sub_apply_shunt_reference_rewrite
-		sub_collect_runtime_reference_notice_after_rewrite "${input_file}"
-		sub_reference_notice_commit
-	fi
-	if sub_should_refresh_runtime_caches;then
-		fss_refresh_node_direct_cache >/dev/null 2>&1
-		fss_schedule_webtest_cache_warm "" "${SUB_WEBTEST_WARM_LOG}" >/dev/null 2>&1
-	fi
+	sub_schedule_background_sync
+	sub_after_nodes_written "${input_file}"
 	find $DIR -name "local_*.txt" | sort -n | xargs cat >$DIR/ss_nodes_new.txt
 	cp -f "$DIR/ss_nodes_new.txt" "${LOCAL_NODES_BAK}"
 	echo_date "🧹一点点清理工作..."
@@ -3924,6 +4294,14 @@ sub_refresh_node_state
 
 set_lock(){
 	exec 233>"${LOCK_FILE}"
+	if [ "${FSS_SUBSCRIBE_LOCK_WAIT}" = "1" ]; then
+		if ! flock -n 233; then
+			echo_date "检测到订阅脚本已经在运行，等待当前任务完成..."
+			flock 233
+			echo_date "订阅锁已释放，继续执行当前订阅任务。"
+		fi
+		return 0
+	fi
 	flock -n 233 || {
 		local PID1=$$
 		local PID2=$(ps|grep -w "ss_node_subscribe.sh"|grep -vw "grep"|grep -vw ${PID1})
@@ -4088,6 +4466,7 @@ json_write_object(){
 	local airport_identity="local"
 	local source_scope="local"
 	local source_url_hash=""
+	local profile_id=""
 	object_json=$(echo $NODE_DATA | sed '$ s/,$/}/g')
 	case "${output_file}" in
 	*/online_*|*/local_*)
@@ -4095,10 +4474,11 @@ json_write_object(){
 		airport_identity="${SUB_AIRPORT_IDENTITY}"
 		source_scope="${SUB_SOURCE_SCOPE}"
 		source_url_hash="${SUB_SOURCE_URL_HASH}"
+		profile_id="${SUB_ACTIVE_PROFILE_ID}"
 		;;
 	esac
 	if type fss_enrich_node_identity_json >/dev/null 2>&1;then
-		object_json=$(fss_enrich_node_identity_json "${object_json}" "${airport_identity}" "${source_scope}" "${source_url_hash}" "${source_type}") || return 1
+		object_json=$(fss_enrich_node_identity_json "${object_json}" "${airport_identity}" "${source_scope}" "${source_url_hash}" "${source_type}" "${profile_id}") || return 1
 	fi
 	printf '%s\n' "${object_json}" >> "${output_file}"
 }
@@ -4141,7 +4521,7 @@ decode_urllink(){
 json2skipd(){
 	local file_name=$1
 	if [ "${SUB_STORAGE_SCHEMA}" = "2" ];then
-	if [ "${SUB_FAST_APPEND}" = "1" ];then
+		if [ "${SUB_FAST_APPEND}" = "1" ];then
 			sub_append_nodes_schema2 "${DIR}/${file_name}.txt" "${SUB_FAST_APPEND_REUSE}" || {
 				SUB_FAST_APPEND=0
 				SUB_FAST_APPEND_REUSE=1
@@ -4155,7 +4535,7 @@ json2skipd(){
 				[ -n "${first_id}" ] && fss_set_current_node_id "${first_id}"
 			fi
 			echo_date "😀节点信息写入成功！"
-			sync
+			sub_schedule_background_sync
 			sub_refresh_node_state
 			return 0
 		fi
@@ -4169,7 +4549,7 @@ json2skipd(){
 		fi
 		fss_clear_webtest_runtime_results
 		echo_date "😀节点信息写入成功！"
-		sync
+		sub_schedule_background_sync
 		sub_refresh_node_state
 		return 0
 	fi
@@ -4189,7 +4569,7 @@ json2skipd(){
 	chmod +x $DIR/${file_name}.sh
 	sh $DIR/${file_name}.sh
 	echo_date "😀节点信息写入成功！"
-	sync
+	sub_schedule_background_sync
 }
 
 normalize_group_name(){
@@ -4283,8 +4663,13 @@ get_group_label_from_file(){
 	local fallback_name="$2"
 	local first_group=""
 	local real_group=""
+	local first_meta=""
+	local sep="$(printf '\037')"
 	[ -z "${file_path}" -o ! -f "${file_path}" ] && echo -n "${fallback_name}" && return 0
-	first_group=$(sed -n '1p' "${file_path}" 2>/dev/null | jq -r '.group // empty' 2>/dev/null | sed -n '1p')
+	first_meta="$(sub_first_line_meta_tsv "${file_path}")" || first_meta=""
+	IFS="${sep}" read -r _first_airport _first_scope _first_hash first_group <<-EOF
+	${first_meta}
+	EOF
 	real_group=$(normalize_group_name "${first_group}")
 	if [ -n "${real_group}" ];then
 		echo -n "${real_group}"
@@ -4444,104 +4829,64 @@ nodes2files(){
 	[ -f "${LOCAL_NODES_SPL}" ] || return 0
 	local split_total
 	: > "${LOCAL_SPLIT_META}"
-	if [ "${SUB_STORAGE_SCHEMA}" = "2" ];then
-		jq -r '
-			def raw_group: (.group // "null");
-			def trimmed_group:
-				(raw_group | sub("^\\s+"; "") | sub("\\s+$"; ""));
-			def group_label:
-				if (trimmed_group == "" or trimmed_group == "null" or trimmed_group == "_") then
-					""
-				else
-					(trimmed_group | sub("_[^_]+$"; ""))
-				end;
-			def group_hash:
-				raw_group as $raw
-				| if (group_label == "") then
-					"user"
-				elif ($raw | contains("_")) then
-					($raw | sub("^.*_"; ""))
-				else
-					$raw
-				end;
-			"\(group_hash)\u001f\(group_label)\u001f\(.)"
-		' "${LOCAL_NODES_SPL}" 2>/dev/null | awk -F '\037' -v dir="${DIR}" -v meta="${LOCAL_SPLIT_META}" '
-			BEGIN {
-				next_idx = 0
-			}
-			{
-				hash = $1
-				label = $2
-				json = $3
-				if (hash == "" || hash == "null") {
-					hash = "user"
-				}
-				if (!(hash in file_path)) {
-					if (hash == "user") {
-						file_path[hash] = dir "/local_0_user.txt"
-						order[++order_count] = hash
-						group_value[hash] = "user"
-						group_label[hash] = ""
-					} else {
-						next_idx++
-						file_path[hash] = dir "/local_" next_idx "_" hash ".txt"
-						order[++order_count] = hash
-						group_value[hash] = hash
-						group_label[hash] = label
-					}
-				}
-				print json >> file_path[hash]
-				count[hash]++
-			}
-			END {
-				for (i = 1; i <= order_count; i++) {
-					hash = order[i]
-					printf "%s\t%s\t%s\t%s\n", file_path[hash], count[hash] + 0, group_value[hash], group_label[hash] >> meta
-				}
-			}
-		' || {
-			echo_date "⚠节点文件处理失败！请重启路由器后重试！"
-			exit 1
-		}
-	else
-		local map_file="${DIR}/local_split_map.tsv"
-		local next_idx=0
-		local raw_group group_hash group_label file_path key map_line
-		: > "${map_file}"
-		while IFS= read -r node_json
-		do
-			[ -n "${node_json}" ] || continue
-			raw_group=$(printf '%s\n' "${node_json}" | jq -r '.group // "null"' 2>/dev/null)
-			group_hash=$(get_group_hash_value "${raw_group}" 2>/dev/null)
-			group_label=$(normalize_group_name "${raw_group}" 2>/dev/null)
-			if [ -z "${group_hash}" ] || [ "${group_hash}" = "null" ];then
-				key="user"
-				file_path="${DIR}/local_0_user.txt"
-				map_line=$(grep -F "user	" "${map_file}" 2>/dev/null | sed -n '1p')
-				if [ -z "${map_line}" ];then
-					printf '%s\t%s\t%s\n' "user" "${file_path}" "" >> "${map_file}"
-				fi
+	jq -r '
+		def raw_group: (.group // "null");
+		def trimmed_group:
+			(raw_group | sub("^\\s+"; "") | sub("\\s+$"; ""));
+		def group_label:
+			if (trimmed_group == "" or trimmed_group == "null" or trimmed_group == "_") then
+				""
 			else
-				key="${group_hash}"
-				map_line=$(grep -F "${key}	" "${map_file}" 2>/dev/null | sed -n '1p')
-				if [ -n "${map_line}" ];then
-					file_path=$(printf '%s' "${map_line}" | awk -F '\t' '{print $2}')
-				else
-					next_idx=$((next_idx + 1))
-					file_path="${DIR}/local_${next_idx}_${group_hash}.txt"
-					printf '%s\t%s\t%s\n' "${group_hash}" "${file_path}" "${group_label}" >> "${map_file}"
-				fi
-			fi
-			printf '%s\n' "${node_json}" >> "${file_path}"
-		done < "${LOCAL_NODES_SPL}"
-
-		while IFS='	' read -r group_hash file_path group_label
-		do
-			[ -n "${file_path}" ] || continue
-			printf '%s\t%s\t%s\t%s\n' "${file_path}" "$(wc -l < "${file_path}")" "${group_hash}" "${group_label}" >> "${LOCAL_SPLIT_META}"
-		done < "${map_file}"
-		rm -f "${map_file}"
-	fi
+				(trimmed_group | sub("_[^_]+$"; ""))
+			end;
+		def group_hash:
+			raw_group as $raw
+			| if (group_label == "") then
+				"user"
+			elif ($raw | contains("_")) then
+				($raw | sub("^.*_"; ""))
+			else
+				$raw
+			end;
+		"\(group_hash)\u001f\(group_label)\u001f\(.)"
+	' "${LOCAL_NODES_SPL}" 2>/dev/null | awk -F '\037' -v dir="${DIR}" -v meta="${LOCAL_SPLIT_META}" '
+		BEGIN {
+			next_idx = 0
+		}
+		{
+			hash = $1
+			label = $2
+			json = $3
+			if (hash == "" || hash == "null") {
+				hash = "user"
+			}
+			if (!(hash in file_path)) {
+				if (hash == "user") {
+					file_path[hash] = dir "/local_0_user.txt"
+					order[++order_count] = hash
+					group_value[hash] = "user"
+					group_label[hash] = ""
+				} else {
+					next_idx++
+					file_path[hash] = dir "/local_" next_idx "_" hash ".txt"
+					order[++order_count] = hash
+					group_value[hash] = hash
+					group_label[hash] = label
+				}
+			}
+			print json >> file_path[hash]
+			count[hash]++
+		}
+		END {
+			for (i = 1; i <= order_count; i++) {
+				hash = order[i]
+				printf "%s\t%s\t%s\t%s\n", file_path[hash], count[hash] + 0, group_value[hash], group_label[hash] >> meta
+			}
+		}
+	' || {
+		echo_date "⚠节点文件处理失败！请重启路由器后重试！"
+		exit 1
+	}
 
 	split_total=$(awk -F '\t' '{total += $2} END {print total + 0}' "${LOCAL_SPLIT_META}" 2>/dev/null)
 	if [ "${split_total}" != "$(wc -l < "${LOCAL_NODES_SPL}")" ];then
@@ -4716,9 +5061,9 @@ remove_all_node(){
 			"${node_tool}" delete-nodes --all >/dev/null 2>&1 || return 1
 		else
 			fss_clear_v2_nodes
-			dbus set fss_data_schema=2
 			dbus set fss_node_next_id=1
 		fi
+		fss_mark_native_schema2_storage >/dev/null 2>&1 || true
 	else
 	confs=$(dbus list ssconf_basic_ | cut -d "=" -f1 | awk '{print $NF}')
 	for conf in ${confs}
@@ -4783,9 +5128,20 @@ remove_sub_node(){
 		sub_capture_active_nodes
 		for remove_nu in $(sub_list_node_ids)
 		do
-			local group_value=$(sub_get_node_field_plain "${remove_nu}" group)
+			local group_value=""
+			local node_name=""
+			local node_json=""
+			node_json="$(fss_v2_get_node_json_by_id "${remove_nu}" 2>/dev/null)" || node_json=""
+			if [ -n "${node_json}" ];then
+				fss_unpack_node_meta "${node_json}" || return 1
+				group_value="${FSS_NODE_META_GROUP}"
+				node_name="${FSS_NODE_META_NAME}"
+			else
+				group_value="$(sub_get_node_field_plain "${remove_nu}" group)"
+				node_name="$(sub_get_node_field_plain "${remove_nu}" name)"
+			fi
 			if [ -n "$(normalize_group_name "${group_value}")" ];then
-				echo_date "移除第$remove_nu节点：【$(sub_get_node_field_plain "${remove_nu}" name)】"
+				echo_date "移除第$remove_nu节点：【${node_name}】"
 				fss_clear_webtest_cache_node "${remove_nu}"
 				dbus remove fss_node_${remove_nu}
 				remove_flag=1
@@ -4812,8 +5168,8 @@ remove_sub_node(){
 		fi
 		fss_set_current_node_id "${restore_current}"
 		fss_set_failover_node_id "${restore_failover}"
-		dbus set fss_data_schema=2
 		dbus set fss_node_next_id="$((max_keep + 1))"
+		fss_mark_native_schema2_storage >/dev/null 2>&1 || true
 		fss_clear_webtest_runtime_results
 		fss_touch_node_catalog_ts >/dev/null 2>&1
 		fss_touch_node_config_ts >/dev/null 2>&1
@@ -6265,7 +6621,7 @@ add_hy2_node(){
 		HY2_CG_OPT="bbr"
 	elif [ -n "${HY2_UP_SPEED}" -a -n "${HY2_DL_SPEED}" ];then
 		# echo_date "🔴hysteria2节点：congestion（拥塞算法）采用你设置的：${HY2_CG_OPT}！"
-		HY2_CG_OPT=$(dbus get ss_basic_hy2_cg_opt)
+		HY2_CG_OPT="${HY2_CG_OPT:-$(dbus get ss_basic_hy2_cg_opt)}"
 	fi
 
 	local hy2_main="${decode_link%%#*}"
@@ -6510,25 +6866,46 @@ get_ua(){
 	[ -n "${pkg_arch}" ] || pkg_arch=$(cat /koolshare/webs/Module_shadowsocks.asp | tr -d '\r' | grep -Eo "PKG_ARCH=.+"|awk -F "=" '{print $2}'|sed 's/"//g')
 	[ -n "${pkg_type}" ] || pkg_type=$(cat /koolshare/webs/Module_shadowsocks.asp | tr -d '\r' | grep -Eo "PKG_TYPE=.+"|awk -F "=" '{print $2}'|sed 's/"//g')
 	local pkg_vers=$(dbus get ss_basic_version_local)
-	# echo -n "${FW_TYPE}|${FW_MOD}|${MODEL}|${fw_version}|${pkg_name}|${pkg_arch}|${pkg_type}|${pkg_vers}|curl|v2rayN|Shadowrocket"
-	# echo -n "${FW_TYPE}|${FW_MOD}|${MODEL}|${fw_version}|${pkg_name}|${pkg_arch}|${pkg_type}|${pkg_vers}|curl|v2rayN"
+	local ua_mode="${SUB_ACTIVE_UA_MODE}"
+	local ua_preset="${SUB_ACTIVE_UA_PRESET}"
+	local ua_custom="${SUB_ACTIVE_UA_CUSTOM}"
 
-	_UA=$(dbus get ss_basic_online_ua)
-	case ${_UA} in
-	0)
+	[ -n "${ua_mode}" ] || ua_mode="fixed"
+	case "${ua_mode}" in
+	custom)
+		printf '%s' "${ua_custom}"
+		return 0
+		;;
+	auto)
+		ua_preset="${ua_preset:-default}"
+		;;
+	inherit|"")
+		_UA=$(dbus get ss_basic_online_ua)
+		ua_preset="$(subprof_ua_preset_from_legacy_value "${_UA}")"
+		;;
+	fixed|*)
+		ua_preset="${ua_preset:-default}"
+		;;
+	esac
+
+	case "${ua_preset}" in
+	default)
 		echo -n "${FW_TYPE}|${FW_MOD}|${MODEL}|${fw_version}|${pkg_name}|${pkg_arch}|${pkg_type}|${pkg_vers}|curl|v2rayN"
 		;;
-	1)
+	curl)
 		echo -n ""
 		;;
-	2)
+	v2rayn)
 		echo -n "v2rayn"
 		;;
-	3)
+	v2rayng)
 		echo -n "v2rayng"
 		;;
-	4)
+	shadowrocket)
 		echo -n "shadowrocket"
+		;;
+	*)
+		echo -n "${FW_TYPE}|${FW_MOD}|${MODEL}|${fw_version}|${pkg_name}|${pkg_arch}|${pkg_type}|${pkg_vers}|curl|v2rayN"
 		;;
 	esac
 	#&flag=shadowrocket
@@ -6541,6 +6918,9 @@ download_by_curl(){
 	
 	echo_date "⬇️使用curl下载订阅..."
 	local UA=$(get_ua)
+	SUB_LAST_DOWNLOAD_TOOL="curl"
+	SUB_LAST_DOWNLOAD_PATH="shell"
+	SUB_LAST_DOWNLOAD_UA="${UA}"
 	if [ -n "${UA}" ];then
 		echo_date "🪧使用UA：$UA"
 		local UA_ARG="--user-agent ${UA}"
@@ -6555,6 +6935,7 @@ download_by_curl(){
 	
 	if [ "${SUB_BY_PROXY}" == "0" ]; then
 		# 先直连下载
+		SUB_LAST_DOWNLOAD_MODE="direct"
 		echo_date "➡️通过本地网络直连下载订阅..."
 		rm -f "${header_file}" >/dev/null 2>&1
 		run /tmp/curl-subscribe -sSk -L ${UA_ARG} -D "${header_file}" --connect-timeout 5 -m 5 --retry 3 --retry-delay 1 "${url_encode}" 2>/dev/null >${DIR}/sub_file_encode_${SUB_LINK_HASH:0:4}.txt
@@ -6566,6 +6947,7 @@ download_by_curl(){
 		echo_date "❌️直连下载订阅失败！尝试使用当前节点代理下载订阅！"
 		SOCKS5_OPEN=$(netstat -nlp 2>/dev/null|grep -w "23456"|grep -Eo "v2ray|xray|naive|tuic")
 		if [ -n "${SOCKS5_OPEN}" ];then
+			SUB_LAST_DOWNLOAD_MODE="proxy"
 			echo_date "✈️使用当前$(get_type_name "$(sub_get_node_field_plain "${CURR_NODE}" type)")节点：[$(sub_get_node_field_plain "${CURR_NODE}" name)]提供的网络下载..."
 			rm -f "${header_file}" >/dev/null 2>&1
 			run /tmp/curl-subscribe -sSk -L ${UA_ARG} -D "${header_file}" --connect-timeout 5 -m 5 -x socks5h://127.0.0.1:23456 --retry 3 --retry-delay 1 "${url_encode}" 2>/dev/null >${DIR}/sub_file_encode_${SUB_LINK_HASH:0:4}.txt
@@ -6579,6 +6961,7 @@ download_by_curl(){
 		SOCKS5_OPEN=$(netstat -nlp 2>/dev/null|grep -w "23456"|grep -Eo "v2ray|xray|naive|tuic")
 		if [ -n "${SOCKS5_OPEN}" ];then
 			local EXT_ARG="-x socks5h://127.0.0.1:23456"
+			SUB_LAST_DOWNLOAD_MODE="proxy"
 			echo_date "✈️使用当前$(get_type_name "$(sub_get_node_field_plain "${CURR_NODE}" type)")节点：[$(sub_get_node_field_plain "${CURR_NODE}" name)]提供的网络下载..."
 			rm -f "${header_file}" >/dev/null 2>&1
 			run /tmp/curl-subscribe -sSk -L ${UA_ARG} -D "${header_file}" --connect-timeout 5 -m 5 -x socks5h://127.0.0.1:23456 --retry 3 --retry-delay 1 "${url_encode}" 2>/dev/null >${DIR}/sub_file_encode_${SUB_LINK_HASH:0:4}.txt
@@ -6590,6 +6973,7 @@ download_by_curl(){
 		fi
 	elif [ "${SUB_BY_PROXY}" == "2" ]; then
 		# 直连下载
+		SUB_LAST_DOWNLOAD_MODE="direct"
 		echo_date "⬇️使用常规网络下载..."
 		rm -f "${header_file}" >/dev/null 2>&1
 		run /tmp/curl-subscribe -sSk -L ${UA_ARG} -D "${header_file}" --connect-timeout 5 -m 5 --retry 3 --retry-delay 1 "${url_encode}" 2>/dev/null >${DIR}/sub_file_encode_${SUB_LINK_HASH:0:4}.txt
@@ -6603,6 +6987,9 @@ download_by_wget(){
 	#local url_encode="${url_encode}&flag=shadowrocket"
 	echo_date "⬇️使用wget下载订阅..."
 	local UA=$(get_ua)
+	SUB_LAST_DOWNLOAD_TOOL="wget"
+	SUB_LAST_DOWNLOAD_PATH="shell"
+	SUB_LAST_DOWNLOAD_UA="${UA}"
 	if [ -n "${UA}" ];then
 		echo_date "🪧使用UA：$UA"
 		local UA_ARG="--user-agent ${UA}"
@@ -6624,6 +7011,7 @@ download_by_wget(){
 	
 	if [ "${SUB_BY_PROXY}" == "0" ]; then
 		# 先直连下载
+		SUB_LAST_DOWNLOAD_MODE="direct"
 		echo_date "➡️通过本地网络直连下载订阅..."
 		rm -f "${header_file}" >/dev/null 2>&1
 		run5 wget -S -t 3 ${UA_ARG} -q ${EXT_OPT} "${url_encode}" -O ${DIR}/sub_file_encode_${SUB_LINK_HASH:0:4}.txt 2>"${header_file}"
@@ -6635,6 +7023,7 @@ download_by_wget(){
 		echo_date "❌️直连下载订阅失败！尝试使用当前节点代理下载订阅！"
 		proxy_rule add "${DOMAIN_NAME}"
 		if [ "$?" == "0" ];then
+			SUB_LAST_DOWNLOAD_MODE="proxy"
 			echo_date "✈️使用当前$(get_type_name "$(sub_get_node_field_plain "${CURR_NODE}" type)")节点：[$(sub_get_node_field_plain "${CURR_NODE}" name)]提供的网络下载..."
 			rm -f "${header_file}" >/dev/null 2>&1
 			run5 wget -S -t 3 ${UA_ARG} -q ${EXT_OPT} "${url_encode}" -O ${DIR}/sub_file_encode_${SUB_LINK_HASH:0:4}.txt 2>"${header_file}"
@@ -6647,6 +7036,7 @@ download_by_wget(){
 		# 代理下载
 		proxy_rule add "${DOMAIN_NAME}"
 		if [ "$?" == "0" ];then
+			SUB_LAST_DOWNLOAD_MODE="proxy"
 			echo_date "✈️使用当前$(get_type_name "$(sub_get_node_field_plain "${CURR_NODE}" type)")节点：[$(sub_get_node_field_plain "${CURR_NODE}" name)]提供的网络下载..."
 			rm -f "${header_file}" >/dev/null 2>&1
 			run5 wget -S -t 3 ${UA_ARG} -q ${EXT_OPT} "${url_encode}" -O ${DIR}/sub_file_encode_${SUB_LINK_HASH:0:4}.txt 2>"${header_file}"
@@ -6657,11 +7047,75 @@ download_by_wget(){
 		proxy_rule del "${DOMAIN_NAME}"
 	elif [ "${SUB_BY_PROXY}" == "2" ]; then
 		# 直连下载
+		SUB_LAST_DOWNLOAD_MODE="direct"
 		echo_date "⬇️使用常规网络下载..."
 		rm -f "${header_file}" >/dev/null 2>&1
 		run5 wget -S -t 3 ${UA_ARG} -q ${EXT_OPT} "${url_encode}" -O ${DIR}/sub_file_encode_${SUB_LINK_HASH:0:4}.txt 2>"${header_file}"
 		return $?
 	fi
+}
+
+download_by_sub_get(){
+	local url_encode="$1"
+	local header_file="$(sub_header_file_path "${SUB_LINK_HASH:0:4}")"
+	local plan_file="${DIR}/sub_get_plan_${SUB_LINK_HASH:0:4}.json"
+	local sub_get_bin=""
+	local ua_value=""
+	local policy_value=""
+
+	sub_get_bin="$(pick_sub_get 2>/dev/null)" || return 2
+	sub_get_supports_command "${sub_get_bin}" "fetch" || return 2
+	ua_value="$(get_ua)"
+	case "${SUB_BY_PROXY}" in
+	1)
+		policy_value="proxy"
+		;;
+	2)
+		policy_value="direct"
+		;;
+	*)
+		policy_value="auto"
+		;;
+	esac
+	SUB_LAST_DOWNLOAD_TOOL="sub-get"
+	SUB_LAST_DOWNLOAD_PATH="sub-get"
+	SUB_LAST_DOWNLOAD_MODE="${policy_value}"
+	SUB_LAST_DOWNLOAD_UA="${ua_value}"
+	echo_date "🧩检测到sub-get，优先尝试使用独立下载器..."
+	sub_write_sub_get_plan "${plan_file}" "${url_encode}" "${ua_value}" "${policy_value}" "${SUB_ACTIVE_PROFILE_ID}" "${SUB_ACTIVE_PROFILE_NAME}" >/dev/null 2>&1 || true
+	rm -f "${header_file}" >/dev/null 2>&1
+	set -- fetch \
+		--url "${url_encode}" \
+		--output "${DIR}/sub_file_encode_${SUB_LINK_HASH:0:4}.txt" \
+		--header-output "${header_file}" \
+		--policy "${policy_value}"
+	[ -n "${ua_value}" ] && set -- "$@" --user-agent "${ua_value}"
+	"${sub_get_bin}" "$@" >/dev/null 2>&1
+	return $?
+}
+
+download_subscription_payload(){
+	local url="$1"
+	sub_reset_download_trace
+	download_by_sub_get "${url}"
+	case "$?" in
+	0)
+		return 0
+		;;
+	2)
+		;;
+	*)
+		SUB_LAST_DOWNLOAD_ERROR="sub-get failed"
+		return 1
+		;;
+	esac
+	download_by_curl "${url}" && return 0
+	echo_date "⚠️使用curl下载订阅失败！"
+	rm -f "${DIR}/sub_file_encode_${SUB_LINK_HASH:0:4}.txt" >/dev/null 2>&1
+	download_by_wget "${url}" && return 0
+	SUB_LAST_DOWNLOAD_ERROR="curl/wget failed"
+	echo_date "⚠️wget下载订阅失败！"
+	return 1
 }
 
 get_online_rule_now(){
@@ -6687,6 +7141,7 @@ get_online_rule_now(){
 
 	# 2. detect duplitcate sub
 	local SUB_LINK_HASH=$(echo "${SUB_LINK}" | md5sum | awk '{print $1}')
+	SUB_LAST_URL_HASH="${SUB_LINK_HASH:0:4}"
 	RAW_SOURCE_TAG=$(sub_get_source_tag_from_domain "${DOMAIN_NAME}")
 	SUB_SOURCE_TAG=$(sub_get_source_alias_tag "${RAW_SOURCE_TAG}")
 	if [ -z "${SUB_SOURCE_TAG}" ];then
@@ -6722,22 +7177,12 @@ get_online_rule_now(){
 	
 	# 7. download sublink
 	echo_date "📁准备下载订阅链接到本地临时文件，请稍等..."
-	download_by_curl "${SUB_LINK}"
-	if [ "$?" == "0" ]; then
-		echo_date "😀下载成功，继续检测下载内容..."
-		sub_validate_downloaded_payload "${SUB_LINK}" "${SUB_LINK_HASH:0:4}" "curl" || return 1
-	else
-		echo_date "⚠️使用curl下载订阅失败！"
-		rm ${DIR}/sub_file_encode_${SUB_LINK_HASH:0:4}.txt
-		download_by_wget "${SUB_LINK}"
-
-		#返回错误
-		if [ "$?" != "0" ]; then
-			echo_date "⚠️wget下载订阅失败！"
-			return 1
-		fi
-		sub_validate_downloaded_payload "${SUB_LINK}" "${SUB_LINK_HASH:0:4}" "wget" || return 1
-	fi
+	download_subscription_payload "${SUB_LINK}" || return 1
+	echo_date "😀下载成功，继续检测下载内容..."
+	sub_validate_downloaded_payload "${SUB_LINK}" "${SUB_LINK_HASH:0:4}" "${SUB_LAST_DOWNLOAD_TOOL:-curl}" || {
+		[ -n "${SUB_LAST_DOWNLOAD_ERROR}" ] || SUB_LAST_DOWNLOAD_ERROR="payload validation failed"
+		return 1
+	}
 	
 	echo_date "😀下载内容检测完成！"
 	SUB_DOWNLOAD_FILENAME="$(sub_extract_filename_from_header_file "${SUB_LINK_HASH:0:4}" 2>/dev/null)" || SUB_DOWNLOAD_FILENAME=""
@@ -6858,6 +7303,7 @@ get_online_rule_now(){
 	fi
 	echo_date "-------------------------------------------------------------------"
 	local ONLINE_GROUP=$(sub_resolve_online_group_label "${DIR}/online_${sub_count}_${SUB_SOURCE_TAG}.txt" "${DOMAIN_NAME}" "${SUB_PAYLOAD_KIND}" "${SUB_DOWNLOAD_FILENAME}")
+	SUB_LAST_ONLINE_GROUP="${ONLINE_GROUP}"
 	local RAW_ONLINE_GROUP=$(get_group_label_from_file "${DIR}/online_${sub_count}_${SUB_SOURCE_TAG}.txt" "${DOMAIN_NAME}")
 	if [ -n "${ONLINE_GROUP}" ] && [ "${ONLINE_GROUP}" != "${RAW_ONLINE_GROUP}" ];then
 		sub_rewrite_group_label_for_file "${DIR}/online_${sub_count}_${SUB_SOURCE_TAG}.txt" "${ONLINE_GROUP}" "${SUB_SOURCE_TAG}" >/dev/null 2>&1 || true
@@ -6947,19 +7393,39 @@ exit_sub(){
 }
 
 start_node_subscribe(){
-	local online_url_nu online_urls active_hash_file
+	local online_url_nu online_urls active_hash_file profiles_file use_profiles=0 selected_profile_id="" enabled_profile_count=0
 	echo_date "==================================================================="
 	echo_date "                服务器订阅程序(Shell by stones & sadog)"
 	echo_date "==================================================================="
+	if [ "${SUB_SCHEMA2_NATIVE_INITIALIZED}" = "1" ];then
+		echo_date "ℹ️未检测到旧版节点数据，已启用 schema 2 原生节点存储。"
+	fi
 
 	# run some test before anything start
 	# echo_date "⚙️test: 脚本环境变量：$(env | wc -l)个"
 	
 	# 0. var define
 	sub_refresh_node_state
+	sub_reset_active_profile_context
+	selected_profile_id="${SUB_SELECTED_PROFILE_ID:-$(dbus get ${SUB_PROFILE_TMP_SYNC_ID_KEY})}"
+	SUB_SINGLE_PROFILE_SYNC=0
+	profiles_file="${DIR}/active_profiles.tsv"
+	enabled_profile_count="$(subprof_enabled_profile_count 2>/dev/null)"
+	if [ -n "${enabled_profile_count}" ] && [ "${enabled_profile_count}" -gt "0" ] 2>/dev/null; then
+		use_profiles=1
+		online_url_nu="${enabled_profile_count}"
+	else
+		online_urls=$(sub_get_online_urls)
+		online_url_nu=$(printf '%s\n' "${online_urls}" | sed '/^$/d' | wc -l)
+	fi
 
 	# 1. 检查订阅链接是否有效
-	if [ -z "$(dbus get ss_online_links)" ];then
+	if [ "${use_profiles}" = "0" ] && [ -n "${selected_profile_id}" ]; then
+		echo_date "⚠️未找到可同步的订阅配置：${selected_profile_id}"
+		echo_date "==================================================================="
+		return 1
+	fi
+	if [ "${use_profiles}" = "0" ] && [ -z "$(dbus get ss_online_links)" ];then
 		echo_date "🈳订阅地址输入框为空，准备清理现有订阅节点..."
 		remove_sub_node
 		fss_refresh_node_direct_cache >/dev/null 2>&1
@@ -6968,14 +7434,20 @@ start_node_subscribe(){
 		echo_date "==================================================================="
 		return 0
 	fi
-	online_urls=$(sub_get_online_urls)
-	online_url_nu=$(printf '%s\n' "${online_urls}" | sed '/^$/d' | wc -l)
+	if [ "${use_profiles}" = "0" ]; then
+		online_urls=$(sub_get_online_urls)
+		online_url_nu=$(printf '%s\n' "${online_urls}" | sed '/^$/d' | wc -l)
+	fi
 	if [ "${online_url_nu}" == "0" ];then
-		echo_date "🈳未发现任何有效的订阅地址，准备清理现有订阅节点..."
-		remove_sub_node
-		fss_refresh_node_direct_cache >/dev/null 2>&1
-		sub_clear_subscribe_cache
-		echo_date "🎉订阅节点清理完成！"
+		if [ "${use_profiles}" = "1" ]; then
+			echo_date "🈳未发现任何启用中的订阅配置，跳过本次订阅。"
+		else
+			echo_date "🈳未发现任何有效的订阅地址，准备清理现有订阅节点..."
+			remove_sub_node
+			fss_refresh_node_direct_cache >/dev/null 2>&1
+			sub_clear_subscribe_cache
+			echo_date "🎉订阅节点清理完成！"
+		fi
 		echo_date "==================================================================="
 		return 0
 	fi
@@ -6989,8 +7461,20 @@ start_node_subscribe(){
 	sub_reset_schema2_cache
 	: > "${ACTIVE_SOURCE_TAGS}"
 	active_hash_file="${DIR}/active_link_hashes.txt"
-	sub_collect_active_link_hashes "${active_hash_file}" "${online_urls}"
-	sub_prune_subscribe_cache "${active_hash_file}"
+	if [ "${use_profiles}" = "1" ]; then
+		sub_prepare_enabled_profiles_file "${profiles_file}" || {
+			echo_date "⚠️生成订阅配置执行清单失败，终止本次订阅。"
+			return 1
+		}
+		online_url_nu=$(awk 'NF{c++} END{print c+0}' "${profiles_file}")
+		[ -n "${selected_profile_id}" ] && SUB_SINGLE_PROFILE_SYNC=1
+		sub_collect_active_link_hashes_from_profiles_file "${active_hash_file}" "${profiles_file}"
+	else
+		sub_collect_active_link_hashes "${active_hash_file}" "${online_urls}"
+	fi
+	if [ "${SUB_SINGLE_PROFILE_SYNC}" != "1" ]; then
+		sub_prune_subscribe_cache "${active_hash_file}"
+	fi
 
 	# 3.订阅前检查节点是否储存正常，不需要了
 	# check_nodes
@@ -7006,33 +7490,85 @@ start_node_subscribe(){
 	
 	# 6. 下载/解析订阅节点
 	sub_count=0
-	until [ "${sub_count}" == "${online_url_nu}" ]; do
-		let sub_count+=1
-		url=$(printf '%s\n' "${online_urls}" | sed -n "${sub_count}p")
-		[ -z "${url}" ] && continue
-		echo_date "➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖"
-		[ "${online_url_nu}" -gt "1" ] && echo_date "📢开始第【${sub_count}】个订阅！订阅链接如下："
-		[ "${online_url_nu}" -eq "1" ] && echo_date "📢开始订阅！订阅链接如下："
-		echo_date "🌎${url}"
-		exclude=0
-		get_online_rule_now "${url}"
-		case $? in
-		0)
-			continue
-			;;
-		*)
-			SUB_HAS_FAILURE=1
-			subscribe_failed
-			;;
-		esac
-	done
+	if [ "${use_profiles}" = "1" ]; then
+		local profile_line=""
+		while IFS= read -r profile_line
+		do
+			[ -n "${profile_line}" ] || continue
+			profile_id="$(printf '%s\n' "${profile_line}" | awk -F '\t' '{print $1}')"
+			profile_name="$(printf '%s\n' "${profile_line}" | awk -F '\t' '{print $2}')"
+			url="$(printf '%s\n' "${profile_line}" | awk -F '\t' '{print $3}')"
+			subscribe_mode="$(printf '%s\n' "${profile_line}" | awk -F '\t' '{print $4}')"
+			download_policy="$(printf '%s\n' "${profile_line}" | awk -F '\t' '{print $5}')"
+			ua_mode="$(printf '%s\n' "${profile_line}" | awk -F '\t' '{print $6}')"
+			ua_preset="$(printf '%s\n' "${profile_line}" | awk -F '\t' '{print $7}')"
+			ua_custom="$(printf '%s\n' "${profile_line}" | awk -F '\t' '{print $8}')"
+			exclude_raw="$(printf '%s\n' "${profile_line}" | awk -F '\t' '{print $9}')"
+			include_raw="$(printf '%s\n' "${profile_line}" | awk -F '\t' '{print $10}')"
+			allow_insecure="$(printf '%s\n' "${profile_line}" | awk -F '\t' '{print $11}')"
+			node_log="$(printf '%s\n' "${profile_line}" | awk -F '\t' '{print $12}')"
+			keep_info_node="$(printf '%s\n' "${profile_line}" | awk -F '\t' '{print $13}')"
+			hy2_up="$(printf '%s\n' "${profile_line}" | awk -F '\t' '{print $14}')"
+			hy2_dl="$(printf '%s\n' "${profile_line}" | awk -F '\t' '{print $15}')"
+			hy2_tfo_switch="$(printf '%s\n' "${profile_line}" | awk -F '\t' '{print $16}')"
+			hy2_cg_opt="$(printf '%s\n' "${profile_line}" | awk -F '\t' '{print $17}')"
+			[ -n "${url}" ] || continue
+			let sub_count+=1
+			sub_reset_active_profile_context
+			sub_apply_active_profile_context "${profile_id}" "${profile_name}" "${subscribe_mode}" "${download_policy}" "${ua_mode}" "${ua_preset}" "${ua_custom}" "${exclude_raw}" "${include_raw}" "${allow_insecure}" "${node_log}" "${keep_info_node}" "${hy2_up}" "${hy2_dl}" "${hy2_tfo_switch}" "${hy2_cg_opt}"
+			SUB_LAST_ONLINE_GROUP=""
+			SUB_LAST_URL_HASH=""
+			echo_date "➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖"
+			[ "${online_url_nu}" -gt "1" ] && echo_date "📢开始第【${sub_count}】个订阅配置：【${profile_name}】"
+			[ "${online_url_nu}" -eq "1" ] && echo_date "📢开始同步订阅配置：【${profile_name}】"
+			echo_date "🌎${url}"
+			exclude=0
+			get_online_rule_now "${url}"
+			case $? in
+			0)
+				subprof_mark_state_success "${profile_id}" "${SUB_LAST_URL_HASH}" "${SUB_LAST_ONLINE_GROUP}" "${SUB_LAST_DOWNLOAD_TOOL}" "${SUB_LAST_DOWNLOAD_PATH}" "${SUB_ACTIVE_UA_MODE}" "${SUB_ACTIVE_UA_PRESET}" >/dev/null 2>&1 || true
+				continue
+				;;
+			*)
+				SUB_HAS_FAILURE=1
+				subprof_mark_state_failure "${profile_id}" "${SUB_LAST_DOWNLOAD_ERROR:-订阅处理失败}" "${SUB_LAST_URL_HASH}" "${SUB_LAST_ONLINE_GROUP}" "${SUB_LAST_DOWNLOAD_TOOL}" "${SUB_LAST_DOWNLOAD_PATH}" "${SUB_ACTIVE_UA_MODE}" "${SUB_ACTIVE_UA_PRESET}" >/dev/null 2>&1 || true
+				subscribe_failed
+				;;
+			esac
+		done < "${profiles_file}"
+	else
+		until [ "${sub_count}" == "${online_url_nu}" ]; do
+			let sub_count+=1
+			url=$(printf '%s\n' "${online_urls}" | sed -n "${sub_count}p")
+			[ -z "${url}" ] && continue
+			echo_date "➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖"
+			[ "${online_url_nu}" -gt "1" ] && echo_date "📢开始第【${sub_count}】个订阅！订阅链接如下："
+			[ "${online_url_nu}" -eq "1" ] && echo_date "📢开始订阅！订阅链接如下："
+			echo_date "🌎${url}"
+			exclude=0
+			get_online_rule_now "${url}"
+			case $? in
+			0)
+				continue
+				;;
+			*)
+				SUB_HAS_FAILURE=1
+				subscribe_failed
+				;;
+			esac
+		done
+	fi
 	echo_date "➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖"
 	if [ "${SUB_HAS_FAILURE}" = "1" ];then
 		echo_date "⚠️本次订阅存在失败任务，跳过过期订阅来源清理，保留现有本地订阅节点。"
 	else
-		echo_date "ℹ️订阅来源处理完毕，开始整理本次变更并清理失效来源..."
-		remove_null
-		sub_prune_source_identity "${ACTIVE_SOURCE_TAGS}"
+		if [ "${SUB_SINGLE_PROFILE_SYNC}" = "1" ]; then
+			echo_date "ℹ️当前为单订阅配置同步，跳过其它订阅来源的清理与缓存裁剪。"
+		else
+			echo_date "ℹ️订阅来源处理完毕，开始整理本次变更并清理失效来源..."
+			remove_null
+			sub_prune_source_identity "${ACTIVE_SOURCE_TAGS}"
+		fi
 	fi
 
 	# 5. 写入所有节点
@@ -7072,16 +7608,7 @@ start_node_subscribe(){
 				echo_date "❌节点信息写入失败！"
 				exit_sub
 			fi
-			if [ "${SUB_FAST_APPEND_USED}" != "1" ] && sub_should_run_reference_postwrite;then
-				sub_reference_notice_reset
-				sub_apply_shunt_reference_rewrite
-				sub_collect_runtime_reference_notice_after_rewrite "$DIR/ss_nodes_new.txt"
-				sub_reference_notice_commit
-			fi
-			if sub_should_refresh_runtime_caches;then
-				fss_refresh_node_direct_cache >/dev/null 2>&1
-				fss_schedule_webtest_cache_warm "" "${SUB_WEBTEST_WARM_LOG}" >/dev/null 2>&1
-			fi
+			sub_after_nodes_written "$DIR/ss_nodes_new.txt"
 		else
 			echo_date "ℹ️本次订阅没有任何节点发生变化，不进行写入，继续！"
 		fi
@@ -7169,8 +7696,7 @@ start_offline_update() {
 		SUB_FAST_APPEND=1
 		SUB_FAST_APPEND_REUSE=0
 		if [ -f "${DIR}/offline_node_new.txt" ] && json2skipd "offline_node_new"; then
-			fss_refresh_node_direct_cache >/dev/null 2>&1
-			fss_schedule_webtest_cache_warm "" "${SUB_WEBTEST_WARM_LOG}" >/dev/null 2>&1
+			sub_after_nodes_written "${DIR}/offline_node_new.txt"
 		fi
 	else
 		echo_date "ℹ️离线节点解析失败！跳过！"
@@ -7180,11 +7706,17 @@ start_offline_update() {
 	echo_date "==================================================================="
 }
 
-if [ -z "$2" -a -n "$1" ];then
+SUB_SELECTED_PROFILE_ID=""
+if [ "$1" = "3" ] && [ -n "$2" ]; then
+	SUB_SELECTED_PROFILE_ID="$2"
+	SH_ARG="$1"
+	WEB_ACTION=0
+elif [ -z "$2" -a -n "$1" ];then
 	SH_ARG=$1
 	WEB_ACTION=0
 elif [ -n "$2" -a -n "$1" ];then
 	SH_ARG=$2
+	[ "$2" = "3" ] && [ -n "$3" ] && SUB_SELECTED_PROFILE_ID="$3"
 	WEB_ACTION=1
 fi
 
@@ -7239,6 +7771,7 @@ case $SH_ARG in
 	true > $LOG_FILE
 	[ "${WEB_ACTION}" == "1" ] && http_response "$1"
 	start_node_subscribe | tee -a $LOG_FILE
+	[ -z "${SUB_SELECTED_PROFILE_ID}" ] && dbus remove ${SUB_PROFILE_TMP_SYNC_ID_KEY} >/dev/null 2>&1 || true
 	echo XU6J03M6 | tee -a $LOG_FILE
 	unset_lock
 	;;

@@ -10,6 +10,7 @@ MODEL=
 FW_TYPE_NAME=
 DIR=$(cd $(dirname $0); pwd)
 [ -f "${DIR}/scripts/ss_node_common.sh" ] && source "${DIR}/scripts/ss_node_common.sh"
+[ -f "${DIR}/scripts/ss_subscribe_profile_lib.sh" ] && source "${DIR}/scripts/ss_subscribe_profile_lib.sh"
 module=${DIR##*/}
 LINUX_VER=$(uname -r|awk -F"." '{print $1$2}')
 
@@ -37,15 +38,49 @@ restart_websocketd_async() {
 	local helper="/tmp/fancyss_restart_websocketd.sh"
 	cat > "${helper}" <<-'EOF'
 		#!/bin/sh
+		WS_PIDFILE="/var/run/fancyss-websocketd.pid"
+		SSD=""
+		for candidate in /sbin/start-stop-daemon /usr/sbin/start-stop-daemon /bin/start-stop-daemon /usr/bin/start-stop-daemon
+		do
+			[ -x "${candidate}" ] || continue
+			SSD="${candidate}"
+			break
+		done
 		sleep 2
+		if [ -f "${WS_PIDFILE}" ]; then
+			if [ -n "${SSD}" ]; then
+				"${SSD}" -K -q -p "${WS_PIDFILE}" >/dev/null 2>&1 || true
+			fi
+			pid="$(cat "${WS_PIDFILE}" 2>/dev/null)"
+			if [ -n "${pid}" ]; then
+				kill "${pid}" >/dev/null 2>&1 || true
+				sleep 1
+				kill -9 "${pid}" >/dev/null 2>&1 || true
+			fi
+		fi
 		killall websocketd >/dev/null 2>&1 || true
+		ps w | grep -F "/koolshare/bin/websocketd --port=803 /koolshare/ss/websocket" | grep -v grep | awk '{print $1}' | while read -r pid
+		do
+			[ -n "${pid}" ] || continue
+			kill "${pid}" >/dev/null 2>&1 || true
+			sleep 1
+			kill -9 "${pid}" >/dev/null 2>&1 || true
+		done
 		ps w | grep -F "/koolshare/ss/websocket" | grep -v grep | awk '{print $1}' | while read -r pid
 		do
 			[ -n "${pid}" ] || continue
 			kill "${pid}" >/dev/null 2>&1 || true
+			sleep 1
+			kill -9 "${pid}" >/dev/null 2>&1 || true
 		done
+		rm -f "${WS_PIDFILE}" >/dev/null 2>&1 || true
 		if [ -x "/koolshare/bin/websocketd" ] && [ -f "/koolshare/ss/websocket" ]; then
-			/koolshare/bin/websocketd --port=803 /koolshare/ss/websocket >/tmp/upload/websocketd.log 2>&1 &
+			if [ -n "${SSD}" ]; then
+				"${SSD}" -S -q -b -m -p "${WS_PIDFILE}" -x /koolshare/bin/websocketd -- --port=803 /koolshare/ss/websocket >/tmp/upload/websocketd.log 2>&1
+			else
+				/koolshare/bin/websocketd --port=803 /koolshare/ss/websocket >/tmp/upload/websocketd.log 2>&1 &
+				echo $! > "${WS_PIDFILE}"
+			fi
 		fi
 		rm -f "$0" >/dev/null 2>&1
 	EOF
@@ -1405,6 +1440,7 @@ install_now(){
 	[ -z "${ss_basic_nofdnscheck}" ] && dbus set ss_basic_nofdnscheck=1
 	[ -z "${ss_basic_noruncheck}" ] && dbus set ss_basic_noruncheck=1
 	[ -z "${ss_basic_qrcode}" ] && dbus set ss_basic_qrcode=1
+	[ -z "${ss_basic_node_cards}" ] && dbus set ss_basic_node_cards=1
 
 	[ -z "${ss_basic_chng_xact}" ] && dbus set ss_basic_chng_xact=0
 	[ -z "${ss_basic_chng_xgt}" ] && dbus set ss_basic_chng_xgt=1
@@ -1421,38 +1457,9 @@ install_now(){
 	[ -z "$(dbus get ss_basic_furl)" ] && dbus set ss_basic_furl="http://www.google.com/generate_204"
 	[ -z "$(dbus get ss_basic_curl)" ] && dbus set ss_basic_curl="http://connectivitycheck.platform.hicloud.com/generate_204"
 
-	# 延迟测试列默认开启（批量测速由独立开关控制）
-	if [ -z "${ss_basic_latency_val}" ]; then
-		case "${PKG_ARCH}" in
-		arm|hnd|ipq32)
-			dbus set ss_basic_latency_val="0"
-			;;
-		*)
-			dbus set ss_basic_latency_val="2"
-			;;
-		esac
-	fi
-
-	# 批量测速开关：低端设备默认关闭，高端设备默认开启
-	if [ -z "${ss_basic_latency_batch}" ]; then
-		if [ "${PKG_ARCH}" = "arm" -o "${PKG_ARCH}" = "hnd" -o "${PKG_ARCH}" = "ipq32" ]; then
-			dbus set ss_basic_latency_batch="0"
-		else
-			local CPU_CORES=$(grep -c '^processor' /proc/cpuinfo 2>/dev/null)
-			local MEM_MB=$(awk '/MemTotal/ {printf "%d", $2/1024}' /proc/meminfo 2>/dev/null)
-			if [ "${ROT_ARCH}" == "armv7l" ]; then
-				dbus set ss_basic_latency_batch="0"
-			elif [ "${ROT_ARCH}" == "aarch64" ]; then
-				if [ "${CPU_CORES}" -le 2 -o "${MEM_MB}" -lt 768 ]; then
-					dbus set ss_basic_latency_batch="0"
-				else
-					dbus set ss_basic_latency_batch="1"
-				fi
-			else
-				dbus set ss_basic_latency_batch="0"
-			fi
-		fi
-	fi
+	# 延迟测试默认开启，所有平台默认显示 web 落地延迟列
+	dbus set ss_basic_latency_val="2"
+	dbus set ss_basic_latency_batch="1"
 
 	# 因版本变化导致一些值没有了，更改一下
 	if [ "${ss_basic_chng_china_2_tcp}" == "5" ];then
@@ -1466,6 +1473,52 @@ install_now(){
 	else
 		dbus set ss_basic_score=0
 		ss_basic_score=0
+	fi
+
+	# 节点存储自动迁移：升级到支持 schema 2 的版本后，直接切换到新结构。
+	export PATH=/koolshare/bin:${PATH}
+	local STORAGE_SCHEMA_BEFORE="$(fss_detect_storage_schema 2>/dev/null)"
+	fss_auto_migrate_if_needed 1 report_install_migration_progress
+	case "$?" in
+	0)
+		if [ "$(dbus get fss_data_schema)" = "2" ];then
+			echo_date "节点数据已经升级到 schema 2 存储。"
+		fi
+		;;
+	2)
+		if [ "$(fss_detect_storage_schema 2>/dev/null)" != "2" ];then
+			fss_mark_native_schema2_storage >/dev/null 2>&1 || true
+		fi
+		;;
+	*)
+		echo_date "节点数据升级到 schema 2 失败，保留旧版节点结构。"
+		;;
+	esac
+
+	if [ "$(fss_detect_storage_schema 2>/dev/null)" = "2" ];then
+		if [ "${STORAGE_SCHEMA_BEFORE}" != "2" ];then
+			normalize_schema2_secret_fields_after_install "schema1 -> schema2 升级"
+		elif [ "${FORCE_SCHEMA2_SECRET_NORMALIZE}" = "1" ]; then
+			normalize_schema2_secret_fields_after_install "旧版 schema2 数据纠偏"
+		fi
+	fi
+
+	if subprof_migrate_legacy_profiles_if_needed >/tmp/sub_profile_migrate.count 2>/dev/null; then
+		local migrated_profiles="$(cat /tmp/sub_profile_migrate.count 2>/dev/null)"
+		[ -n "${migrated_profiles}" ] && echo_date "旧版订阅地址已迁移为 ${migrated_profiles} 个独立订阅配置。"
+		subprof_rebuild_cron_jobs >/dev/null 2>&1 || true
+		rm -f /tmp/sub_profile_migrate.count >/dev/null 2>&1
+	fi
+
+	if [ "${FORCE_LEGACY_CACHE_RESET}" = "1" ];then
+		echo_date "检测到旧版 fancyss（${OLD_VER} < 3.6.0），强制清理节点配置缓存和 webtest 缓存..."
+		invalidate_runtime_caches_after_install
+		echo_date "重建节点运行缓存..."
+		fss_refresh_node_json_cache >/dev/null 2>&1 || true
+	else
+		echo_date "刷新节点运行缓存..."
+		invalidate_runtime_caches_after_install
+		fss_refresh_node_json_cache >/dev/null 2>&1 || true
 	fi
 
 	# 节点存储自动迁移：升级到支持 schema 2 的版本后，直接切换到新结构。

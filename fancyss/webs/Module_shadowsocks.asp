@@ -99,6 +99,10 @@
 	90%{opacity:1;}
 	100%{left:calc(100% - 24px);opacity:0;}
 }
+@keyframes submgr_saving_spin{
+	0%{transform:rotate(0deg);}
+	100%{transform:rotate(360deg);}
+}
 .shunt-flow-panel{position:relative;min-width:0;border:1px solid rgba(255,255,255,0.08);border-radius:8px;background:rgba(10,16,24,0.45);padding:6px 7px;box-shadow:inset 0 1px 0 rgba(255,255,255,0.02);transition:all .2s ease;display:flex;flex-direction:column;justify-content:center;z-index:2;}
 .shunt-flow-panel--source{border-color:rgba(110,168,254,0.22);flex:0 1 42%;max-width:380px;}
 .shunt-flow-panel--target{border-color:rgba(242,153,74,0.22);flex:0 1 42%;max-width:380px;}
@@ -153,12 +157,27 @@
 .shunt-fallback-target select,.shunt-fallback-target .input_option{width:100%;max-width:100%;height:34px;border-radius:8px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.15);padding-left:10px;color:#fff;}
 .shunt-layer-tip{max-width:320px;line-height:1.8;color:#f2f6fb;font-size:12px;}
 .shunt-editor{padding:18px 22px 4px;color:#fff;}
+.submgr-editor-saving-mask{position:absolute;inset:43px 0 0;display:flex;align-items:center;justify-content:center;background:rgba(9,9,9,0.72);backdrop-filter:blur(2px);z-index:20;border-radius:0 0 10px 10px;}
+.submgr-editor-saving-box{display:flex;align-items:center;gap:12px;padding:13px 18px;border-radius:12px;border:1px solid rgba(255,255,255,0.12);background:linear-gradient(180deg,rgba(24,32,44,0.96),rgba(12,16,22,0.96));box-shadow:0 18px 38px rgba(0,0,0,0.36);color:#edf4fb;font-size:13px;font-weight:600;letter-spacing:0.2px;}
+.submgr-editor-saving-spinner{width:18px;height:18px;border-radius:50%;border:2px solid rgba(255,255,255,0.18);border-top-color:#37b4ff;animation:submgr_saving_spin .8s linear infinite;}
 .shunt-editor-shell{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;align-items:start;}
 .shunt-editor-main,.shunt-editor-side{min-width:0;max-width:none;}
-.shunt-editor-row{display:flex;align-items:flex-start;gap:14px;margin-bottom:14px;}
+.shunt-editor-row{display:flex;align-items:flex-start;gap:14px;margin-bottom:7px;}
+.shunt-editor-row.checkbox-row{align-items:center;}
 .shunt-editor-label{width:76px;line-height:36px;color:#e1e7ee;flex:0 0 76px;font-size:13px;font-weight:500;text-align:left;}
 .shunt-editor-control{flex:1 1 auto;max-width:none;}
-.shunt-editor-control textarea,.shunt-editor-control input[type='text'],.shunt-editor-control select{box-sizing:border-box;width:100%;max-width:100%;border-radius:10px;background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.12);color:#fff;padding:8px 12px;height:36px;transition:all .18s ease;font-size:13px;}
+.shunt-editor-control label{display:inline-flex;align-items:center;min-height:36px;line-height:1.4;}
+.shunt-editor-row.checkbox-row .shunt-editor-control{display:flex;align-items:center;min-height:36px;}
+.submgr-hy2-inline{display:flex;align-items:center;gap:10px;flex-wrap:nowrap;}
+.submgr-hy2-inline > span{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;}
+.submgr-hy2-inline input[type='text']{width:50px !important;height:34px;}
+.submgr-hy2-inline select{width:110px !important;height:34px;}
+.submgr-schedule-inline{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.submgr-schedule-inline > span,.submgr-schedule-inline > label{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;}
+.submgr-schedule-inline select{width:86px !important;height:34px;}
+.submgr-schedule-inline input[type='text']{width:86px !important;height:34px;}
+.submgr-schedule-fields{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.shunt-editor-control textarea,.shunt-editor-control input[type='text'],.shunt-editor-control select{box-sizing:border-box;width:100%;max-width:100%;border-radius:10px;background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.12);color:#fff;padding:5px 8px;height:36px;transition:all .18s ease;font-size:13px;}
 .shunt-editor-control textarea:focus,.shunt-editor-control input[type='text']:focus,.shunt-editor-control select:focus{outline:none;border-color:#3b82f6;background:rgba(0,0,0,0.5);box-shadow:0 0 0 3px rgba(59,130,246,0.18);}
 .shunt-editor-control textarea.is-overlimit,.shunt-editor-control input[type='text'].is-overlimit{border-color:#ef4444;background:rgba(84,19,19,0.38);box-shadow:0 0 0 3px rgba(239,68,68,0.14);}
 .shunt-action-group{display:flex;gap:8px;flex-wrap:wrap;padding-top:2px;}
@@ -196,11 +215,135 @@
 .shunt-editor-preview-label{font-size:10px;color:#94a3b8;letter-spacing:0.7px;text-transform:uppercase;}
 .shunt-editor-preview-value{padding-top:4px;font-size:14px;line-height:1.45;color:#e2e8f0;word-break:break-word;font-weight:600;}
 .shunt-editor-actions-tip{padding-top:10px;font-size:11px;color:#94a3b8;line-height:1.7;border-top:1px solid rgba(255,255,255,0.06);margin-top:16px;padding-left:90px;}
-body .shunt-editor-layer{background:#0f172a !important;box-shadow:0 25px 50px -12px rgba(0,0,0,0.5) !important;border:1px solid rgba(255,255,255,0.1) !important;}
+body .shunt-editor-layer{background:#090909 !important;box-shadow:0 25px 50px -12px rgba(0,0,0,0.5) !important;border:1px solid rgba(255,255,255,0.1) !important;}
 body .shunt-editor-layer .layui-layer-title{background:rgba(255,255,255,0.02) !important;color:#f8fafc !important;border-bottom:1px solid rgba(255,255,255,0.08) !important;font-size:16px !important;}
 body .shunt-editor-layer .layui-layer-btn .layui-layer-btn0{background:#2563eb !important;border-color:#2563eb !important;font-weight:600 !important;letter-spacing:0.5px;}
 body .shunt-editor-layer .layui-layer-btn .layui-layer-btn1{background:rgba(255,255,255,0.05) !important;border-color:rgba(255,255,255,0.1) !important;color:#e2e8f0 !important;}
+body .shunt-editor-layer .layui-layer-btn a{border-radius:5px !important;}
+.submgr-log-shell{padding:14px 16px 12px;color:#fff;background:#090909;}
+.submgr-log-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:10px;color:#9fb6d1;font-size:12px;line-height:1.5;}
+.submgr-log-title{font-weight:700;color:#f3f7fb;}
+.submgr-log-status{color:#8fa4ba;}
+.submgr-log-textarea{box-sizing:border-box;width:100%;height:460px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:rgba(0,0,0,0.38);color:#e5edf7;padding:12px 14px;font-family:Menlo, Monaco, Consolas, "Courier New", monospace;font-size:11px;line-height:1.55;outline:none;resize:none;white-space:pre-wrap;}
+.submgr-log-textarea::-webkit-scrollbar{width:8px;height:8px;}
+.submgr-log-textarea::-webkit-scrollbar-thumb{border-radius:999px;background:linear-gradient(180deg,rgba(48,140,255,0.95),rgba(78,199,255,0.95));}
+.submgr-log-textarea::-webkit-scrollbar-track{border-radius:999px;background:rgba(255,255,255,0.08);}
+.submgr-log-textarea{scrollbar-width:thin;scrollbar-color:rgba(78,199,255,0.92) rgba(255,255,255,0.08);}
+.submgr-log-layer .layui-layer-content{background:#090909 !important;height:515px !important;}
+.submgr-entry{padding:6px 0;color:#dbe7f3;}
+.submgr-entry-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+.submgr-shell{padding:14px 20px 6px;color:#fff;min-height:0;max-height:560px;overflow:visible;}
+.submgr-tabs{display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;}
+.submgr-tab{display:inline-flex;align-items:center;justify-content:center;min-width:96px;height:34px;padding:0 16px;border-radius:5px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.04);color:#cfe0f1;font-size:12px;font-weight:600;cursor:pointer;transition:all .18s ease;}
+.submgr-tab.active{background:linear-gradient(135deg,#2563eb,#37b4ff);border-color:rgba(70,160,255,0.48);color:#fff;box-shadow:0 10px 24px rgba(37,99,235,0.24);}
+.submgr-toolbar{display:flex;justify-content:flex-start;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px;}
+.submgr-toolbar-note{font-size:12px;line-height:1.7;color:#8fa4ba;}
+.submgr-card-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-content:start;overflow-x:hidden;padding-top:3px;box-sizing:border-box;}
+.submgr-card-list::-webkit-scrollbar{width:8px;height:8px;}
+.submgr-card-list::-webkit-scrollbar-thumb{border-radius:999px;background:linear-gradient(180deg,rgba(48,140,255,0.95),rgba(78,199,255,0.95));}
+.submgr-card-list::-webkit-scrollbar-track{border-radius:999px;background:rgba(255,255,255,0.08);}
+.submgr-card-list::-webkit-scrollbar-corner{background:transparent;}
+.submgr-card-list{scrollbar-width:thin;scrollbar-color:rgba(78,199,255,0.92) rgba(255,255,255,0.08);}
+.submgr-card{position:relative;padding:14px 14px 12px;border:1px solid rgba(69,93,120,0.28);border-radius:12px;background:linear-gradient(180deg,rgba(24,32,44,0.97),rgba(16,22,30,0.95));box-shadow:0 12px 24px rgba(0,0,0,0.16),inset 0 1px 0 rgba(255,255,255,0.03);cursor:pointer;transition:border-color .18s ease,box-shadow .18s ease,transform .18s ease;}
+.submgr-card:hover{border-color:rgba(70,160,255,0.42);box-shadow:0 16px 28px rgba(0,0,0,0.22),inset 0 1px 0 rgba(255,255,255,0.04);transform:translateY(-1px);}
+.submgr-card.is-disabled{border-color:rgba(138,148,163,0.28);background:linear-gradient(180deg,rgba(38,42,48,0.97),rgba(24,28,34,0.95));box-shadow:0 12px 24px rgba(0,0,0,0.14),inset 0 1px 0 rgba(255,255,255,0.02);}
+.submgr-card.is-disabled:hover{border-color:rgba(160,170,184,0.36);box-shadow:0 14px 26px rgba(0,0,0,0.18),inset 0 1px 0 rgba(255,255,255,0.03);}
+.submgr-card.is-disabled .submgr-card-title{color:#d7dde6;}
+.submgr-card.is-disabled .submgr-card-subtitle{color:#98a3b3;}
+.submgr-card.is-disabled .submgr-chip{background:rgba(148,163,184,0.08);color:#d7dde6;border-color:rgba(148,163,184,0.12);}
+.submgr-card.is-disabled .submgr-chip-label{color:#a6b0bf;}
+.submgr-card.is-disabled .submgr-chip.warn,.submgr-card.is-disabled .submgr-chip.ok{background:rgba(148,163,184,0.08);color:#d7dde6;border-color:rgba(148,163,184,0.12);}
+.submgr-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding-right:28px;}
+.submgr-card-delete{position:absolute;top:10px;right:10px;width:22px;height:22px;border-radius:5px;display:flex;align-items:center;justify-content:center;background:#e54d4d;color:#fff;font-size:14px;line-height:1;text-decoration:none;opacity:0;transform:translate(4px,-4px) scale(.84);box-shadow:0 8px 16px rgba(159,38,38,0.3);transition:all .2s cubic-bezier(0.34,1.56,0.64,1);z-index:3;}
+.submgr-card:hover .submgr-card-delete,.submgr-card-delete:focus{opacity:1;transform:translate(0,0) scale(1);}
+.submgr-card-delete:hover{background:#ff5f5f;color:#fff;box-shadow:0 10px 20px rgba(188,49,49,0.45);transform:scale(1.1);}
+.submgr-card-title{font-size:16px;line-height:1.3;color:#fff;font-weight:600;word-break:break-word;}
+.submgr-card-subtitle{padding-top:5px;font-size:11px;line-height:1.6;color:#8fa4ba;word-break:break-all;}
+.submgr-chip-row{display:flex;flex-wrap:wrap;gap:8px;padding-top:10px;}
+.submgr-chip{display:inline-flex;align-items:center;gap:7px;padding:5px 10px;border-radius:999px;background:rgba(255,255,255,0.06);font-size:11px;line-height:1;color:#dbe9f8;border:1px solid rgba(255,255,255,0.06);}
+.submgr-chip-label{color:#9fb6d1;}
+.submgr-chip-value{font-weight:700;}
+.submgr-chip.warn{background:rgba(242,153,74,0.16);color:#ffd1b5;border-color:rgba(242,153,74,0.22);}
+.submgr-chip.ok{background:rgba(41,179,111,0.16);color:#bdf5d2;border-color:rgba(41,179,111,0.24);}
+.submgr-card-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;padding-top:14px;}
+.submgr-card-btn{display:inline-flex;align-items:center;justify-content:center;min-width:72px;height:32px;padding:0 14px;border-radius:5px;font-size:12px;font-weight:700;text-decoration:none;color:#fff;box-shadow:0 10px 20px rgba(0,0,0,0.18);}
+.submgr-card-btn.sync{background:linear-gradient(135deg,#159957,#38d27a);}
+.submgr-card-btn.sync.disabled{background:linear-gradient(135deg,#6b7280,#9ca3af);color:#eef2f7;box-shadow:none;cursor:not-allowed;pointer-events:none;}
+.submgr-empty{padding:34px 22px;border:1px dashed rgba(255,255,255,0.1);border-radius:5px;background:rgba(18,24,34,0.44);color:#9fb6d1;line-height:1.9;text-align:center;}
+.submgr-empty-ad{display:block;margin-top:10px;padding:12px 14px;border-radius:5px;background:linear-gradient(135deg,rgba(255,140,0,0.22),rgba(255,62,62,0.2));border:1px solid rgba(255,140,0,0.35);color:#ffd166 !important;font-weight:700;line-height:1.8;text-decoration:none;box-shadow:0 12px 26px rgba(255,94,0,0.12);}
+.submgr-empty-ad strong{color:#ff7b00;}
+.node-card-shell{width:750px;overflow:hidden;}
+.node-card-sections{display:flex;flex-direction:column;gap:10px;padding:12px 10px 4px 2px;box-sizing:border-box;}
+.node-card-sections::-webkit-scrollbar{width:8px;height:8px;}
+.node-card-sections::-webkit-scrollbar-thumb{border-radius:999px;background:linear-gradient(180deg,rgba(48,140,255,0.95),rgba(78,199,255,0.95));}
+.node-card-sections::-webkit-scrollbar-track{border-radius:999px;background:rgba(255,255,255,0.08);}
+.node-card-sections{scrollbar-width:thin;scrollbar-color:rgba(78,199,255,0.92) rgba(255,255,255,0.08);}
+.node-card-section{display:flex;flex-direction:column;gap:6px;}
+.node-card-section-head{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:30px;padding:0 12px;border-radius:10px;border:1px solid rgba(74,108,138,0.24);background:linear-gradient(180deg,rgba(24,34,48,0.96),rgba(16,24,34,0.94));box-shadow:inset 0 1px 0 rgba(255,255,255,0.03);cursor:pointer;user-select:none;transition:border-color .18s ease,background .18s ease,transform .18s ease;}
+.node-card-section-head:hover{border-color:rgba(70,160,255,0.36);background:linear-gradient(180deg,rgba(28,40,56,0.98),rgba(18,28,40,0.96));transform:translateY(-1px);}
+.node-card-section-title{font-size:12px;line-height:1.3;color:#f3f7fb;font-weight:700;letter-spacing:.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.node-card-section-meta{display:inline-flex;align-items:center;gap:8px;flex-wrap:nowrap;}
+.node-card-section-count{display:inline-flex;align-items:center;justify-content:center;padding:3px 8px;border-radius:999px;background:rgba(70,160,255,0.12);color:#9fc7ff;font-size:10px;font-weight:700;}
+.node-card-section-arrow{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:999px;background:rgba(255,255,255,0.06);color:#d7e4f2;font-size:11px;font-weight:700;transition:transform .18s ease,background .18s ease;}
+.node-card-section.is-collapsed .node-card-section-arrow{transform:rotate(-90deg);}
+.node-card-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;align-content:start;padding:0;box-sizing:border-box;}
+.node-card-grid::-webkit-scrollbar{width:8px;height:8px;}
+.node-card-grid::-webkit-scrollbar-thumb{border-radius:999px;background:linear-gradient(180deg,rgba(48,140,255,0.95),rgba(78,199,255,0.95));}
+.node-card-grid::-webkit-scrollbar-track{border-radius:999px;background:rgba(255,255,255,0.08);}
+.node-card-grid{scrollbar-width:thin;scrollbar-color:rgba(78,199,255,0.92) rgba(255,255,255,0.08);}
+.node-card{position:relative;display:flex;flex-direction:column;gap:2px;min-height:60px;padding:5px;border-radius:10px;border:1px solid rgba(74,108,138,0.22);transition:border-color .18s ease,background .18s ease,box-shadow .18s ease,transform .18s ease;cursor:pointer;overflow:visible;}
+.node-card:hover{border-color:rgba(70,160,255,0.42);box-shadow:0 14px 24px rgba(0,0,0,0.2),inset 0 1px 0 rgba(255,255,255,0.04);transform:translateY(-1px);}
+.node-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:4px;padding-right:6px;}
+.node-card-status{display:inline-flex;align-items:center;gap:6px;min-width:0;max-width:100%;}
+.node-card-dot{width:6px;height:6px;border-radius:999px;background:rgba(110,168,254,0.8);flex:0 0 6px;box-shadow:0 0 6px rgba(110,168,254,0.45);}
+.node-card.is-current .node-card-dot{background:#2bff79;box-shadow:0 0 10px rgb(32 255 93 / 62%);}
+.node-card.is-selected .node-card-dot{background:#ffd1d1;box-shadow:0 0 12px rgba(255,209,209,0.7);}
+.node-card-name{font-size:13px;line-height:1.2;color:#fff;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;min-height:auto;max-width:100%;}
+.node-card-subrow{display:flex;align-items:center;justify-content:space-between;gap:4px;margin-top:auto;}
+.node-card-type{display:inline-flex;align-items:center;justify-content:center;min-width:44px;padding:2px 6px;border-radius:999px;background:rgba(37,99,235,0.16);border:1px solid rgba(59,130,246,0.2);color:#bfdbfe;font-size:11px;line-height:1;font-weight:700;white-space:nowrap;box-sizing:border-box;}
+.node-card-type.current{background:rgba(255,122,122,0.2);border-color:rgba(255,122,122,0.3);color:#ffe2e2;}
+.node-card-type.proto-ss{background:rgba(37,99,235,0.16);border-color:rgba(59,130,246,0.2);color:#bfdbfe;}
+.node-card-type.proto-ssr{background:rgba(16,185,129,0.16);border-color:rgba(16,185,129,0.22);color:#c8f7e8;}
+.node-card-type.proto-vmess{background:rgba(139,92,246,0.18);border-color:rgba(139,92,246,0.24);color:#e9ddff;}
+.node-card-type.proto-vless{background:rgba(244,114,182,0.18);border-color:rgba(244,114,182,0.24);color:#ffd8ec;}
+.node-card-type.proto-trojan{background:rgba(245,158,11,0.18);border-color:rgba(245,158,11,0.24);color:#ffe6b8;}
+.node-card-type.proto-naive{background:rgba(20,184,166,0.18);border-color:rgba(20,184,166,0.24);color:#ccfbf1;}
+.node-card-type.proto-tuic{background:rgba(234,88,12,0.18);border-color:rgba(234,88,12,0.24);color:#ffdfcf;}
+.node-card-type.proto-hy2{background:rgba(168,85,247,0.18);border-color:rgba(168,85,247,0.24);color:#f1dcff;}
+.node-card-latency{display:inline-flex;align-items:center;justify-content:center;gap:4px;min-width:42px;max-width:58px;margin-left:0px;padding:3.5px 5px;border-radius:999px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.06);font-size:11px;line-height:1;}
+.node-card-latency.latency_btn{cursor:pointer;transition:border-color .16s ease,background .16s ease,box-shadow .16s ease;}
+.node-card-latency.latency_btn:hover{border-color:rgba(70,160,255,0.32);background:rgba(70,160,255,0.09);box-shadow:0 0 0 1px rgba(70,160,255,0.08);}
+.node-card-latency-icon{width:11px;height:11px;flex:0 0 11px;opacity:.88;pointer-events:none;}
+.node-card-actions{display:flex;align-items:center;justify-content:flex-end;gap:4px;min-width:40px;}
+.node-card-tool{position:relative;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:5px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);cursor:pointer;transition:all .16s ease;color:#e6eef8;font-size:0;line-height:1;overflow:hidden;}
+.node-card-tool:hover{background:rgba(70,160,255,0.12);border-color:rgba(70,160,255,0.24);transform:translateY(-1px);}
+.node-card-tool img{width:11px;height:11px;display:block;opacity:.92;pointer-events:none;}
+.node-card-delete{position:absolute;top:-6px;right:-6px;width:17px;height:17px;border-radius:5px;display:flex;align-items:center;justify-content:center;background:#e54d4d;color:#fff;font-size:12px;line-height:1;text-decoration:none;opacity:0;transform:translate(4px,-4px) scale(.86);box-shadow:0 8px 16px rgba(159,38,38,0.28);transition:all .18s ease;z-index:3;}
+.node-card:hover .node-card-delete,.node-card-delete:focus{opacity:1;transform:translate(0,0) scale(1);}
+.node-card-delete:hover{background:#ff5f5f;color:#fff;box-shadow:0 10px 20px rgba(188,49,49,0.4);}
+.node-card:hover .node-card-delete[data-disable-hidden="1"],.node-card-delete[data-disable-hidden="1"]:focus{opacity:1;transform:translate(0,0) scale(1);background:#6b7280;color:#eef2f7;box-shadow:none;cursor:not-allowed;}
+.node-card-empty{padding:26px 20px;border:1px dashed rgba(255,255,255,0.1);border-radius:12px;background:rgba(18,24,34,0.44);color:#9fb6d1;line-height:1.9;text-align:center;}
+.log-switch-bar{display:flex;gap:8px;align-items:center;justify-content:center;margin:10px 0 0 0;}
+.log-switch-btn{display:inline-flex;align-items:center;justify-content:center;min-width:88px;height:30px;padding:0 14px;border-radius:5px;border:1px solid rgba(255,255,255,0.14);background:rgba(255,255,255,0.06);color:#dce7f3;font-size:12px;line-height:1;cursor:pointer;transition:all .16s ease;}
+.log-switch-btn:hover{background:rgba(255,255,255,0.1);border-color:rgba(255,255,255,0.22);}
+.log-switch-btn.active{background:linear-gradient(135deg,#2563eb,#37b4ff);border-color:rgba(70,160,255,0.48);color:#fff;box-shadow:0 8px 18px rgba(37,99,235,0.22);}
+.submgr-uri-box textarea{width:100%;min-height:260px;box-sizing:border-box;border-radius:5px;background:rgba(0,0,0,0.35);border:1px solid rgba(255,255,255,0.1);color:#fff;padding:12px 14px;line-height:1.7;resize:vertical;font-family:Menlo, Monaco, Consolas, "Courier New", monospace;}
+.submgr-uri-box textarea:focus{outline:none;border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,0.18);}
+body .submgr-layer .layui-layer-btn{text-align:center !important;padding:0 16px 14px !important;}
+body .submgr-layer .layui-layer-btn .layui-layer-btn0{background:#2563eb !important;border-color:#2563eb !important;color:#fff !important;}
+body .submgr-layer .layui-layer-btn .layui-layer-btn1{background:#159957 !important;border-color:#159957 !important;color:#fff !important;}
+body .submgr-layer .layui-layer-btn .layui-layer-btn2{background:rgba(255,255,255,0.08) !important;border-color:rgba(255,255,255,0.18) !important;color:#f3f7fb !important;}
+body .submgr-layer .layui-layer-btn a{border-radius:5px !important;}
+body .submgr-editor-layer .layui-layer-btn a{border-radius:5px !important;}
+body .submgr-editor-layer .layui-layer-btn .layui-layer-btn1{background:linear-gradient(135deg,#159957,#38d27a) !important;border-color:#159957 !important;color:#fff !important;box-shadow:0 10px 20px rgba(0,0,0,0.18) !important;font-weight:700 !important;}
+body .submgr-layer .ss_btn{border-radius:5px !important;}
+body .submgr-log-layer .layui-layer-btn a.submgr-log-close-disabled{background:#6b7280 !important;border-color:#6b7280 !important;color:#eef2f7 !important;cursor:not-allowed !important;pointer-events:none !important;opacity:.72 !important;}
+body .submgr-log-layer .layui-layer-close.submgr-log-close-disabled{cursor:not-allowed !important;pointer-events:none !important;opacity:.28 !important;}
+body .shunt-editor-layer input,body .shunt-editor-layer select,body .shunt-editor-layer textarea{border-radius:5px !important;}
 @media (max-width: 900px){
+	.submgr-card-list{grid-template-columns:1fr;}
+	.submgr-shell{min-height:320px;max-height:520px;}
+	.node-card-grid{grid-template-columns:repeat(3,minmax(0,1fr));}
 	.shunt-rule-shell{display:block;padding-right:0;min-height:auto;}
 	.shunt-flow-link{width:100%;height:22px;margin:2px 0 4px;}
 	.shunt-flow-panel--source,.shunt-flow-panel--target{max-width:none;}
@@ -210,6 +353,8 @@ body .shunt-editor-layer .layui-layer-btn .layui-layer-btn1{background:rgba(255,
 	.shunt-info-band{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));}
 }
 @media (max-width: 640px){
+	.node-card-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+	.node-card-shell{width:100%;}
 	.shunt-summary-grid{grid-template-columns:1fr;}
 	.shunt-info-band{grid-template-columns:1fr;}
 	.shunt-rule-card,.shunt-fallback-card{padding:8px;}
@@ -221,6 +366,293 @@ body .shunt-editor-layer .layui-layer-btn .layui-layer-btn1{background:rgba(255,
 	.shunt-editor-label{width:auto;line-height:1.6;padding-bottom:6px;display:block;}
 	.shunt-editor-control{max-width:none;}
 	.shunt-editor{padding:16px 16px 4px;}
+}
+
+/* ========================================
+   皮肤主题适配样式
+   ======================================== */
+
+/* ROG 皮肤 (红黑色主题) - 保持当前样式 */
+body[skin="ROG"] .node-card-section-head {
+	border-color: rgba(74,108,138,0.24);
+	background: linear-gradient(180deg, rgb(24 34 48 / 50%), rgb(16 24 34 / 50%));
+}
+body[skin="ROG"] .node-card-section-head:hover {
+	border-color: rgba(255,70,70,0.36);
+	background: linear-gradient(180deg,rgba(40,28,28,0.98),rgba(28,18,18,0.96));
+}
+body[skin="ROG"] .node-card {
+	border-color: rgba(74,108,138,0.22);
+	background: linear-gradient(180deg, rgb(18 25 36 / 50%), rgb(12 18 27 / 50%));
+}
+body[skin="ROG"] .node-card:hover {
+	border-color: rgba(255,70,70,0.42);
+}
+body[skin="ROG"] .node-card.is-current {
+	border-color: rgb(11 11 11 / 56%);
+	background: linear-gradient(180deg, rgb(178 23 23 / 50%), rgb(117 16 16 / 50%));
+}
+body[skin="ROG"] .node-card.is-selected {
+	border-color: rgb(11 11 11 / 56%);
+	background: linear-gradient(180deg, rgb(178 23 23 / 70%), rgb(117 16 16 / 70%));
+}
+body[skin="ROG"] .node-card-section-count {
+	background: rgba(255,70,70,0.12);
+	color: #ffb3b3;
+}
+body[skin="ROG"] .submgr-tab.active {
+	background: linear-gradient(135deg,#dc2626,#ff5757);
+	border-color: rgba(255,70,70,0.48);
+}
+body[skin="ROG"] .submgr-card {
+	border-color: rgb(140 46 46);
+	background: linear-gradient(180deg, rgb(70 16 16 / 69%), rgba(28, 16, 16, 0.95));
+	border-radius: 10px;
+}
+body[skin="ROG"] .submgr-card:hover {
+	border-color: rgba(255,70,70,0.42);
+}
+body[skin="ROG"] .submgr-card.is-disabled {
+	border-color: rgba(138,148,163,0.3);
+	background: linear-gradient(180deg,rgba(44,46,52,0.96),rgba(26,28,32,0.95));
+}
+body[skin="ROG"] .submgr-card.is-disabled:hover {
+	border-color: rgba(170,180,194,0.38);
+}
+body[skin="ROG"] .shunt-editor-control textarea,
+body[skin="ROG"] .shunt-editor-control input[type='text'],
+body[skin="ROG"] .shunt-editor-control select{
+	border:1px solid rgb(117 35 35);
+}
+body[skin="ROG"] .shunt-editor-control textarea:focus,
+body[skin="ROG"] .shunt-editor-control input[type='text']:focus,
+body[skin="ROG"] .shunt-editor-control select:focus{
+	outline:1px solid rgb(204 23 23);
+	background:rgba(0,0,0,0.5);
+	box-shadow:none;
+}
+
+/* ASUSWRT 皮肤 (蓝灰色主题) */
+body[skin="ASUSWRT"] .node-card-section-head {
+	border-color: rgba(100,116,139,0.28);
+	background: linear-gradient(180deg, rgb(30 41 59 / 50%), rgb(15 23 42 / 50%));
+}
+body[skin="ASUSWRT"] .node-card-section-head:hover {
+	border-color: rgba(59,130,246,0.36);
+	background: linear-gradient(180deg,rgba(37,47,63,0.98),rgba(23,32,48,0.96));
+}
+body[skin="ASUSWRT"] .node-card {
+	border-color: rgba(74,108,138,0.22);
+	background: linear-gradient(180deg, rgb(18 25 36 / 50%), rgb(12 18 27 / 50%));
+	border-radius: 8px;
+}
+body[skin="ASUSWRT"] .node-card:hover {
+	border-color: rgba(59,130,246,0.42);
+}
+body[skin="ASUSWRT"] .node-card.is-current {
+	border-color: rgba(37,99,235,0.44);
+	background: linear-gradient(180deg, rgba(37,99,235,0.36), rgba(21,58,128,0.36));
+}
+body[skin="ASUSWRT"] .node-card.is-selected {
+	border-color: rgba(37,99,235,0.56);
+	background: linear-gradient(180deg, rgba(37,99,235,0.56), rgba(21,58,128,0.56));
+}
+body[skin="ASUSWRT"] .node-card-section-count {
+	background: rgba(59,130,246,0.14);
+	color: #93c5fd;
+}
+body[skin="ASUSWRT"] .submgr-tab.active {
+	background: linear-gradient(135deg,#1e40af,#3b82f6);
+	border-color: rgba(59,130,246,0.48);
+}
+body[skin="ASUSWRT"] .submgr-card {
+	border-color: rgb(44 95 168);
+	background: linear-gradient(180deg, rgb(14 44 86 / 69%), rgba(15,23,42,0.95));
+	border-radius: 10px;
+}
+body[skin="ASUSWRT"] .submgr-card:hover {
+	border-color: rgba(59,130,246,0.42);
+}
+body[skin="ASUSWRT"] .submgr-card.is-disabled {
+	border-color: rgba(138,148,163,0.3);
+	background: linear-gradient(180deg,rgba(44,48,56,0.96),rgba(26,30,36,0.95));
+}
+body[skin="ASUSWRT"] .submgr-card.is-disabled:hover {
+	border-color: rgba(170,180,194,0.38);
+}
+body[skin="ASUSWRT"] .shunt-editor-control textarea,
+body[skin="ASUSWRT"] .shunt-editor-control input[type='text'],
+body[skin="ASUSWRT"] .shunt-editor-control select{
+	border:1px solid rgb(38 88 160);
+}
+body[skin="ASUSWRT"] .shunt-editor-control textarea:focus,
+body[skin="ASUSWRT"] .shunt-editor-control input[type='text']:focus,
+body[skin="ASUSWRT"] .shunt-editor-control select:focus{
+	outline:1px solid rgb(42 111 239);
+	background:rgba(0,0,0,0.5);
+	box-shadow:none;
+}
+body[skin="ASUSWRT"] .shunt-summary-card {
+	border-color: rgba(100,116,139,0.28);
+	background: linear-gradient(180deg,rgba(30,41,59,0.98),rgba(15,23,42,0.94));
+	border-radius: 8px;
+}
+
+/* TUF 皮肤 (橙黑色主题) */
+body[skin="TUF"] .node-card-section-head {
+	border-color: rgba(120,80,40,0.28);
+	background: linear-gradient(180deg, rgb(40 30 20 / 50%), rgb(28 20 14 / 50%));
+}
+body[skin="TUF"] .node-card-section-head:hover {
+	border-color: rgba(251,146,60,0.36);
+	background: linear-gradient(180deg,rgba(48,36,24,0.98),rgba(32,24,16,0.96));
+}
+body[skin="TUF"] .node-card {
+	border-color: rgba(74,108,138,0.22);
+	background: linear-gradient(180deg, rgb(18 25 36 / 50%), rgb(12 18 27 / 50%));
+	border-radius: 8px;
+}
+body[skin="TUF"] .node-card:hover {
+	border-color: rgba(251,146,60,0.42);
+}
+body[skin="TUF"] .node-card.is-current {
+	border-color: rgba(251,146,60,0.44);
+	background: linear-gradient(180deg, rgba(251,146,60,0.36), rgba(194,65,12,0.36));
+}
+body[skin="TUF"] .node-card.is-selected {
+	border-color: rgba(251,146,60,0.56);
+	background: linear-gradient(180deg, rgba(251,146,60,0.56), rgba(194,65,12,0.56));
+}
+body[skin="TUF"] .node-card-section-count {
+	background: rgba(251,146,60,0.14);
+	color: #fed7aa;
+}
+body[skin="TUF"] .submgr-tab.active {
+	background: linear-gradient(135deg,#ea580c,#fb923c);
+	border-color: rgba(251,146,60,0.48);
+}
+body[skin="TUF"] .submgr-card {
+	border-color: rgb(146 101 15);
+	background: linear-gradient(180deg, rgb(62 34 6 / 69%), rgba(24,18,12,0.95));
+	border-radius: 10px;
+}
+body[skin="TUF"] .submgr-card:hover {
+	border-color: rgba(251,146,60,0.42);
+}
+body[skin="TUF"] .submgr-card.is-disabled {
+	border-color: rgba(138,148,163,0.3);
+	background: linear-gradient(180deg,rgba(48,44,40,0.96),rgba(30,28,24,0.95));
+}
+body[skin="TUF"] .submgr-card.is-disabled:hover {
+	border-color: rgba(170,180,194,0.38);
+}
+body[skin="TUF"] .shunt-editor-control textarea,
+body[skin="TUF"] .shunt-editor-control input[type='text'],
+body[skin="TUF"] .shunt-editor-control select{
+	border:1px solid rgb(101 70 10);
+}
+body[skin="TUF"] .shunt-editor-control textarea:focus,
+body[skin="TUF"] .shunt-editor-control input[type='text']:focus,
+body[skin="TUF"] .shunt-editor-control select:focus{
+	outline:1px solid rgb(201 116 21);
+	background:rgba(0,0,0,0.5);
+	box-shadow:none;
+}
+body[skin="TUF"] .shunt-summary-card {
+	border-color: rgba(120,80,40,0.28);
+	background: linear-gradient(180deg,rgba(36,28,20,0.98),rgba(24,18,12,0.94));
+	border-radius: 8px;
+}
+
+/* TS 皮肤 (青色主题) */
+body[skin="TS"] .node-card-section-head {
+	border-color: rgba(70,120,120,0.28);
+	background: linear-gradient(180deg, rgb(20 35 40 / 50%), rgb(14 25 30 / 50%));
+}
+body[skin="TS"] .node-card-section-head:hover {
+	border-color: rgba(34,211,238,0.36);
+	background: linear-gradient(180deg,rgba(24,42,48,0.98),rgba(16,30,36,0.96));
+}
+body[skin="TS"] .node-card {
+	border-color: rgba(74,108,138,0.22);
+	background: linear-gradient(180deg, rgb(18 25 36 / 50%), rgb(12 18 27 / 50%));
+	border-radius: 8px;
+}
+body[skin="TS"] .node-card:hover {
+	border-color: rgba(34,211,238,0.42);
+}
+body[skin="TS"] .node-card.is-current {
+	border-color: rgba(34,211,238,0.44);
+	background: linear-gradient(180deg, rgba(34,211,238,0.34), rgba(8,145,178,0.34));
+}
+body[skin="TS"] .node-card.is-selected {
+	border-color: rgba(34,211,238,0.56);
+	background: linear-gradient(180deg, rgba(34,211,238,0.54), rgba(8,145,178,0.54));
+}
+body[skin="TS"] .node-card-section-count {
+	background: rgba(34,211,238,0.14);
+	color: #a5f3fc;
+}
+body[skin="TS"] .submgr-tab.active {
+	background: linear-gradient(135deg,#0891b2,#22d3ee);
+	border-color: rgba(34,211,238,0.48);
+}
+body[skin="TS"] .submgr-card {
+	border-color: rgb(27 129 141);
+	background: linear-gradient(180deg, rgb(8 61 68 / 69%), rgba(16,24,28,0.95));
+	border-radius: 10px;
+}
+body[skin="TS"] .shunt-editor-control textarea,
+body[skin="TS"] .shunt-editor-control input[type='text'],
+body[skin="TS"] .shunt-editor-control select{
+	border:1px solid rgb(22 112 123);
+}
+body[skin="TS"] .shunt-editor-control textarea:focus,
+body[skin="TS"] .shunt-editor-control input[type='text']:focus,
+body[skin="TS"] .shunt-editor-control select:focus{
+	outline:1px solid rgb(25 196 220);
+	background:rgba(0,0,0,0.5);
+	box-shadow:none;
+}
+body[skin="TS"] .submgr-card:hover {
+	border-color: rgba(34,211,238,0.42);
+}
+body[skin="TS"] .submgr-card.is-disabled {
+	border-color: rgba(138,148,163,0.3);
+	background: linear-gradient(180deg,rgba(42,48,50,0.96),rgba(26,30,32,0.95));
+}
+body[skin="TS"] .submgr-card.is-disabled:hover {
+	border-color: rgba(170,180,194,0.38);
+}
+body[skin="TS"] .shunt-summary-card {
+	border-color: rgba(70,120,120,0.28);
+	background: linear-gradient(180deg,rgba(22,34,38,0.98),rgba(16,24,28,0.94));
+	border-radius: 8px;
+}
+
+/* 通用优化：减小圆角 */
+body[skin="ASUSWRT"] .node-card-section-head,
+body[skin="TUF"] .node-card-section-head,
+body[skin="TS"] .node-card-section-head {
+	border-radius: 8px;
+}
+
+/* 通用优化：select option 背景色 */
+body[skin="ROG"] select option {
+	background: #1a1a1a;
+	color: #fff;
+}
+body[skin="ASUSWRT"] select option {
+	background: #1e293b;
+	color: #e2e8f0;
+}
+body[skin="TUF"] select option {
+	background: #1c1410;
+	color: #fef3c7;
+}
+body[skin="TS"] select option {
+	background: #0f1a1e;
+	color: #cffafe;
 }
 </style>
 <script language="JavaScript" type="text/javascript" src="/js/jquery.js"></script>
@@ -324,19 +756,32 @@ var node_form_defaults = null;
 var single_test_wait = {};
 var single_test_running = false;
 var single_test_node = null;
+var singleLatencyPollingNode = null;
+var singleLatencyWsFallbackStarted = false;
+var singleLatencyWsOpenTimer = null;
+var singleLatencyWsLastMessageAt = 0;
+var singleLatencyWsWatchdogTimer = null;
 var batch_test_running = false;
 var batch_stop_pending = false;
 var batch_ws_fallback_started = false;
 var batch_ws_completed = false;
 var batch_ws_last_message_at = 0;
 var batch_ws_watchdog_timer = null;
+var batchLatencyPollSeq = 0;
+var webtestSnapshotActive = false;
+var webtestSnapshotBuffer = "";
+var webtestFileWsCache = {};
+var webtestFileWsPending = {};
+var current_log_view = "plugin";
 var singleLatencySocket = null;
+var singleLatencyPollSeq = 0;
 var fss_nodes_raw = {};
 var node_auto_migrate_attempted = false;
 var node_auto_migrate_layer = null;
 var prepared_route_files = {};
 var pending_route_callbacks = {};
 var referenceNoticeShownTs = "";
+var nodeCardCollapseState = {};
 var shuntRulesState = [];
 var shuntCustomPresetsState = [];
 var shuntPresetMap = {};
@@ -360,13 +805,37 @@ var shuntStatsSummary = {};
 var shuntStatsTimer = null;
 var shuntStatsRequestPending = false;
 var shuntStatsWs = null;
+var schema2NodeDeleteQueue = [];
+var schema2NodeDeletePendingMap = {};
+var schema2NodeDeleteInFlight = false;
+var schema2NodeDeleteRefreshTimer = null;
+var schema2NodeDeleteRestoreScrollTop = null;
+var suppressLatencyCacheReloadOnce = false;
+var nodeTableRefreshSeq = 0;
+var nodeTableRefreshXhr = null;
 var shuntStatsWsOpenTimer = null;
 var shuntStatsWsInitTimer = null;
 var shuntStatsWsClosing = false;
 var shuntStatsWsReceived = false;
+var pageLiveRuntimeBound = false;
 var shuntUptimeTicker = null;
 var shuntUptimeBaseSeconds = -1;
 var shuntUptimeBaseClientMs = 0;
+var subscribeProfilesState = [];
+var subscribeProfileMap = {};
+var subscribeProfileScopeMap = {};
+var subscribeManagerLayerIndex = null;
+var subscribeProfileEditorLayerIndex = null;
+var subscribeManagerActiveTab = "profiles";
+var subscribeProfilesLoading = false;
+var subscribeLogLayerIndex = null;
+var subscribeLogWs = null;
+var subscribeLogWsFallbackTimer = null;
+var subscribeLogRefreshNodesAfterDone = false;
+var subscribeLogTaskDone = false;
+var subscribeLogCloseCountdown = -1;
+var subscribeLogCloseTimer = null;
+var subscribeLogUserInteracted = false;
 var SHUNT_STATS_REFRESH_INTERVAL = 6000;
 var ACL_DEFAULT_MODE_FORMAT_KEY = "ss_acl_default_mode_format";
 var SMARTDNS_STORAGE_PREFIX = "j1:";
@@ -382,7 +851,7 @@ var smartdnsDnsOptionsReady = false;
 var smartdnsIpv6ServiceEnabled = ('<% nvram_get("ipv6_service"); %>' != "disabled");
 var NODE_BOOL_FIELDS = ["v2ray_use_json", "v2ray_mux_enable", "v2ray_network_security_ai", "v2ray_network_security_alpn_h2", "v2ray_network_security_alpn_http", "xray_use_json", "xray_network_security_ai", "xray_network_security_alpn_h2", "xray_network_security_alpn_http", "xray_show", "trojan_ai", "trojan_tfo", "hy2_ai", "hy2_tfo"];
 var NODE_B64_FIELDS = ["password", "naive_pass", "v2ray_json", "xray_json", "tuic_json"];
-var NODE_RUNTIME_FIELDS = ["server_ip", "latency", "ping"];
+var NODE_RUNTIME_FIELDS = ["latency", "ping"];
 var NODE_STORAGE_COMMON_FIELDS = ["group", "name", "mode", "type"];
 var NODE_STORAGE_FIELDS_BY_TYPE = {
 	"0": ["server", "port", "method", "password", "ss_obfs", "ss_obfs_host"],
@@ -396,7 +865,7 @@ var NODE_STORAGE_FIELDS_BY_TYPE = {
 };
 var ALLOW_INSECURE_NOTICE = "已勾选允许不安全；Xray-core 计划于 2026 年 6 月 1 日移除 allowInsecure，建议尽快迁移服务端配置，并改用 pinnedPeerCertSha256 / verifyPeerCertByName。";
 var NODE_COMMON_FIELDS = ["group", "name", "port", "method", "password", "mode", "ss_obfs", "ss_obfs_host", "rss_protocol", "rss_protocol_param", "rss_obfs", "rss_obfs_param", "v2ray_uuid", "v2ray_alterid", "v2ray_security", "v2ray_network", "v2ray_headtype_tcp", "v2ray_headtype_kcp", "v2ray_kcp_seed", "v2ray_headtype_quic", "v2ray_grpc_mode", "v2ray_grpc_authority", "v2ray_network_path", "v2ray_network_host", "v2ray_network_security", "v2ray_network_security_sni", "v2ray_mux_concurrency", "v2ray_json", "v2ray_use_json", "xray_uuid", "xray_encryption", "xray_flow", "xray_network", "xray_headtype_tcp", "xray_headtype_kcp", "xray_kcp_seed", "xray_headtype_quic", "xray_grpc_mode", "xray_grpc_authority", "xray_xhttp_mode", "xray_network_path", "xray_network_host", "xray_network_security", "xray_network_security_sni", "xray_pcs", "xray_vcn", "xray_fingerprint", "xray_publickey", "xray_shortid", "xray_spiderx", "xray_show", "xray_json", "tuic_json", "xray_use_json", "trojan_ai", "trojan_uuid", "trojan_sni", "trojan_pcs", "trojan_vcn", "trojan_tfo", "naive_prot", "naive_server", "naive_port", "naive_user", "naive_pass", "hy2_server", "hy2_port", "hy2_pass", "hy2_up", "hy2_dl", "hy2_obfs", "hy2_obfs_pass", "hy2_sni", "hy2_pcs", "hy2_vcn", "hy2_ai", "hy2_tfo", "hy2_cg"];
-var NODE_FIELD_REWRITE_LIST = ["name", "server", "server_ip", "mode", "port", "password", "method", "rss_protocol", "rss_protocol_param", "rss_obfs", "rss_obfs_param", "ss_obfs", "ss_obfs_host", "latency", "group", "v2ray_uuid", "v2ray_alterid", "v2ray_security", "v2ray_network", "v2ray_headtype_tcp", "v2ray_headtype_kcp", "v2ray_kcp_seed", "v2ray_headtype_quic", "v2ray_grpc_mode", "v2ray_grpc_authority", "v2ray_network_path", "v2ray_network_host", "v2ray_network_security", "v2ray_network_security_ai", "v2ray_network_security_alpn_h2", "v2ray_network_security_alpn_http", "v2ray_network_security_sni", "v2ray_mux_concurrency", "v2ray_json", "v2ray_use_json", "v2ray_mux_enable", "xray_uuid", "xray_alterid", "xray_prot", "xray_encryption", "xray_flow", "xray_network", "xray_headtype_tcp", "xray_headtype_kcp", "xray_kcp_seed", "xray_headtype_quic", "xray_grpc_mode", "xray_grpc_authority", "xray_xhttp_mode", "xray_network_path", "xray_network_host", "xray_network_security", "xray_network_security_ai", "xray_network_security_alpn_h2", "xray_network_security_alpn_http", "xray_network_security_sni", "xray_pcs", "xray_vcn", "xray_fingerprint", "xray_publickey", "xray_shortid", "xray_spiderx", "xray_show", "xray_json", "tuic_json", "xray_use_json", "type", "trojan_ai", "trojan_uuid", "trojan_sni", "trojan_pcs", "trojan_vcn", "trojan_tfo", "naive_prot", "naive_server", "naive_port", "naive_user", "naive_pass", "hy2_server", "hy2_port", "hy2_pass", "hy2_up", "hy2_dl", "hy2_obfs", "hy2_obfs_pass", "hy2_sni", "hy2_pcs", "hy2_vcn", "hy2_ai", "hy2_tfo", "hy2_cg"];
+var NODE_FIELD_REWRITE_LIST = ["name", "server", "mode", "port", "password", "method", "rss_protocol", "rss_protocol_param", "rss_obfs", "rss_obfs_param", "ss_obfs", "ss_obfs_host", "latency", "group", "v2ray_uuid", "v2ray_alterid", "v2ray_security", "v2ray_network", "v2ray_headtype_tcp", "v2ray_headtype_kcp", "v2ray_kcp_seed", "v2ray_headtype_quic", "v2ray_grpc_mode", "v2ray_grpc_authority", "v2ray_network_path", "v2ray_network_host", "v2ray_network_security", "v2ray_network_security_ai", "v2ray_network_security_alpn_h2", "v2ray_network_security_alpn_http", "v2ray_network_security_sni", "v2ray_mux_concurrency", "v2ray_json", "v2ray_use_json", "v2ray_mux_enable", "xray_uuid", "xray_alterid", "xray_prot", "xray_encryption", "xray_flow", "xray_network", "xray_headtype_tcp", "xray_headtype_kcp", "xray_kcp_seed", "xray_headtype_quic", "xray_grpc_mode", "xray_grpc_authority", "xray_xhttp_mode", "xray_network_path", "xray_network_host", "xray_network_security", "xray_network_security_ai", "xray_network_security_alpn_h2", "xray_network_security_alpn_http", "xray_network_security_sni", "xray_pcs", "xray_vcn", "xray_fingerprint", "xray_publickey", "xray_shortid", "xray_spiderx", "xray_show", "xray_json", "tuic_json", "xray_use_json", "type", "trojan_ai", "trojan_uuid", "trojan_sni", "trojan_pcs", "trojan_vcn", "trojan_tfo", "naive_prot", "naive_server", "naive_port", "naive_user", "naive_pass", "hy2_server", "hy2_port", "hy2_pass", "hy2_up", "hy2_dl", "hy2_obfs", "hy2_obfs_pass", "hy2_sni", "hy2_pcs", "hy2_vcn", "hy2_ai", "hy2_tfo", "hy2_cg"];
 function refresh_ws_enable(){
 	ws_enable = 1;
 }
@@ -488,15 +957,16 @@ function get_fss_node_data(cb) {
 function refresh_fss_bundle(cb) {
 	get_fss_data(function() {
 		get_fss_node_data(function() {
-			if (typeof cb === "function") {
-				cb(db_fss);
-			}
+			fetch_subscription_profiles_dbus(function() {
+				if (typeof cb === "function") {
+					cb(db_fss);
+				}
+			}, {silent: true});
 		});
 	});
 }
 function get_node_storage_schema() {
-	var hasNodes = !!db_fss["fss_node_order"] || Object.keys(fss_nodes_raw).length > 0;
-	return (db_fss["fss_data_schema"] == "2" && hasNodes) ? 2 : 1;
+	return db_fss["fss_data_schema"] == "2" ? 2 : 1;
 }
 function get_compare_store() {
 	return $.extend({}, db_ss, db_fss);
@@ -507,6 +977,7 @@ function base64_decode_utf8(value) {
 	if (!value) {
 		return "";
 	}
+	value = String(value).replace(/\s+/g, "");
 	try {
 		if (fssUtf8Decoder && window.atob) {
 			var binary = window.atob(value);
@@ -997,6 +1468,53 @@ function get_fss_node_ids() {
 		return key.replace("fss_node_", "");
 	});
 }
+function slugify_subscription_profile_identity(raw, fallback) {
+	var slug = String(raw || "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+	return slug || String(fallback || "sub");
+}
+function build_subscription_profile_scope(item) {
+	item = item || {};
+	var lastGroup = $.trim(String(item.last_group || ""));
+	var lastUrlHash = $.trim(String(item.last_url_hash || ""));
+	var scope = "";
+	if (!lastGroup) {
+		return "";
+	}
+	scope = slugify_subscription_profile_identity(lastGroup, "sub");
+	if (lastUrlHash) {
+		scope += "_" + lastUrlHash;
+	}
+	return scope;
+}
+function get_subscription_profile_for_node(raw) {
+	var profileId = "";
+	var sourceScope = "";
+	if (!raw || String(raw["_source"] || "") != "subscribe") {
+		return null;
+	}
+	profileId = String(raw["_profile_id"] || "");
+	if (profileId && subscribeProfileMap[profileId]) {
+		return subscribeProfileMap[profileId];
+	}
+	sourceScope = String(raw["_source_scope"] || "");
+	if (sourceScope && subscribeProfileScopeMap[sourceScope]) {
+		return subscribeProfileScopeMap[sourceScope];
+	}
+	return null;
+}
+function schema2_node_is_effective_for_ui(raw) {
+	var profile = get_subscription_profile_for_node(raw);
+	if (!raw) {
+		return false;
+	}
+	if (String(raw["_source"] || "") != "subscribe") {
+		return true;
+	}
+	if (!profile) {
+		return true;
+	}
+	return subscription_profile_is_enabled(profile);
+}
 function get_first_node_id() {
 	return ss_nodes.length ? String(ss_nodes[0]) : "";
 }
@@ -1412,6 +1930,85 @@ function is_shunt_supported_node(nodeId) {
 	default:
 		return false;
 	}
+}
+function get_shunt_node_block_message(nodeId) {
+	var c = confs[nodeId] || {};
+	var typeLabel = get_node_display_type_label(c) || "该";
+	switch (String(typeLabel || "").toLowerCase()) {
+	case "tuic":
+		typeLabel = "Tuic";
+		break;
+	case "naïve":
+	case "naive":
+		typeLabel = "Naïve";
+		break;
+	case "ss[obfs]":
+		typeLabel = "SS[obfs]";
+		break;
+	case "ss":
+		typeLabel = "SS";
+		break;
+	case "ssr":
+		typeLabel = "SSR";
+		break;
+	case "vmess":
+		typeLabel = "Vmess";
+		break;
+	case "vless":
+		typeLabel = "Vless";
+		break;
+	case "trojan":
+		typeLabel = "Trojan";
+		break;
+	case "hy2":
+	case "hysteria2":
+		typeLabel = "Hysteria2";
+		break;
+	}
+	return typeLabel + "协议节点暂不支持xray分流，请选择其它节点或者使用其它分流模式！";
+}
+function show_shunt_node_block_layer(nodeId) {
+	var msg = get_shunt_node_block_message(nodeId);
+	if (typeof layer != "undefined" && layer.alert) {
+		layer.alert(msg, {
+			title: "节点选择提醒",
+			shade: 0.8
+		});
+		return;
+	}
+	alert(msg);
+}
+function rollback_shunt_mode_selection(prevMode) {
+	if (E("ss_basic_mode")) {
+		E("ss_basic_mode").value = String(prevMode || "2");
+	}
+	refresh_shunt_ui();
+}
+function rollback_shunt_node_selection(prevNodeId) {
+	var rollbackId = resolve_node_id(prevNodeId, true) || get_saved_current_node_id() || get_first_node_id();
+	if (!rollbackId) {
+		return;
+	}
+	E("ssconf_basic_node").value = rollbackId;
+	var obj = ssconf_node2obj(rollbackId);
+	conf2obj(obj, 1);
+	verifyFields();
+	refresh_basic_method_width();
+	refresh_basic_input_width();
+	refresh_shunt_ui();
+}
+function guard_shunt_main_node_selection(nodeId, silent) {
+	nodeId = resolve_node_id(nodeId, true);
+	if (!current_mode_is_shunt() || !nodeId) {
+		return nodeId;
+	}
+	if (is_shunt_supported_node(nodeId)) {
+		return nodeId;
+	}
+	if (!silent) {
+		show_shunt_node_block_layer(nodeId);
+	}
+	return "";
 }
 function decode_shunt_custom_text(customB64) {
 	try {
@@ -2127,7 +2724,7 @@ function update_shunt_default_target(nodeId) {
 	if (is_shunt_direct_target(nodeId)) {
 		shuntFallbackNodeId = SHUNT_DIRECT_TARGET;
 	} else {
-		shuntFallbackNodeId = resolve_node_id(nodeId || "", true);
+		shuntFallbackNodeId = sync_shunt_current_node_selection(nodeId || "");
 	}
 	refresh_shunt_ui();
 }
@@ -2250,7 +2847,7 @@ function normalize_shunt_latency_text(value) {
 		return "timeout!";
 	}
 	if (/^(waiting|loading|booting|queued|testing|warming)(\.\.\.)?$/i.test(text)) {
-		return text.replace(/\.\.\.+$/, "") + "...";
+		return text.replace(/\.\.\.+$/, "");
 	}
 	return text;
 }
@@ -2277,19 +2874,19 @@ function get_shunt_latency_chip_class(value) {
 		}
 		return "latency-slow";
 	}
-	if (text == "waiting...") {
+	if (text == "waiting" || text == "waiting...") {
 		return "latency-waiting";
 	}
-	if (text == "loading...") {
+	if (text == "loading" || text == "loading...") {
 		return "latency-loading";
 	}
-	if (text == "booting...") {
+	if (text == "booting" || text == "booting...") {
 		return "latency-booting";
 	}
-	if (text == "queued...") {
+	if (text == "queued" || text == "queued...") {
 		return "latency-queued";
 	}
-	if (text == "testing..." || text == "warming...") {
+	if (text == "testing" || text == "testing..." || text == "warming" || text == "warming...") {
 		return "latency-testing";
 	}
 	if (text == "failed!" || text == "timeout!" || text == "不支持!" || text == "stopped" || text == "canceled") {
@@ -2636,7 +3233,7 @@ function apply_shunt_stats_payload(payload) {
 	start_shunt_uptime_tick();
 }
 function fallback_shunt_stats_ws() {
-	if (!is_shunt_tab_active()) {
+	if (!should_run_shunt_stats_live()) {
 		return;
 	}
 	close_shunt_stats_ws(true);
@@ -2657,7 +3254,7 @@ function handle_shunt_stats_ws_payload(raw) {
 	return handled;
 }
 function start_shunt_stats_ws() {
-	if (!is_shunt_tab_active() || ws_flag != 1) {
+	if (!should_run_shunt_stats_live() || ws_flag != 1) {
 		return false;
 	}
 	if (shuntStatsWs) {
@@ -2674,7 +3271,7 @@ function start_shunt_stats_ws() {
 	shuntStatsWs.onopen = function() {
 		clear_shunt_stats_ws_timers();
 		try {
-			shuntStatsWs.send("follow_shunt_stats");
+			shuntStatsWs.send("sh /koolshare/scripts/ss_shunt_stats.sh follow_ws");
 		} catch (e) {
 			fallback_shunt_stats_ws();
 			return;
@@ -2701,7 +3298,7 @@ function start_shunt_stats_ws() {
 		shuntStatsWs = null;
 		shuntStatsWsClosing = false;
 		clear_shunt_stats_ws_timers();
-		if (shouldFallback && is_shunt_tab_active()) {
+		if (shouldFallback && should_run_shunt_stats_live()) {
 			stop_shunt_stats_refresh();
 			shuntStatsTimer = setTimeout(fetch_shunt_stats_http, 0);
 		}
@@ -2710,7 +3307,8 @@ function start_shunt_stats_ws() {
 }
 function schedule_shunt_stats_refresh(immediate) {
 	stop_shunt_stats_refresh();
-	if (!is_shunt_tab_active()) {
+	if (!should_run_shunt_stats_live()) {
+		stop_shunt_stats_runtime();
 		return;
 	}
 	if (ws_probe_pending && ws_enable == 1) {
@@ -2729,7 +3327,7 @@ function schedule_shunt_stats_refresh(immediate) {
 function fetch_shunt_stats_http() {
 	var id = parseInt(Math.random() * 100000000);
 	var postData = {"id": id, "method": "ss_conf.sh", "params": ["shunt_stats"], "fields": {}};
-	if (!is_shunt_tab_active()) {
+	if (!should_run_shunt_stats_live()) {
 		stop_shunt_stats_runtime();
 		return;
 	}
@@ -3298,6 +3896,17 @@ function get_current_node_id() {
 	}
 	return get_saved_current_node_id();
 }
+function sync_shunt_current_node_selection(nodeId) {
+	var resolved = resolve_node_id(nodeId || "", true);
+	if (!resolved) {
+		return "";
+	}
+	if (E("ssconf_basic_node")) {
+		E("ssconf_basic_node").value = resolved;
+	}
+	shuntFallbackNodeId = resolved;
+	return resolved;
+}
 function get_failover_node_id() {
 	if (get_node_storage_schema() == 2) {
 		var resolvedFailover = resolve_node_id_with_identity(db_fss["fss_node_failover_backup"] || "", db_fss["fss_node_failover_identity"] || db_fss["fss_failover_node_identity"] || "", true);
@@ -3489,6 +4098,7 @@ var SCHEMA2_NODE_POSTSAVE_IGNORE_FIELDS = {
 	"_rev": true,
 	"_updated_at": true,
 	"_source": true,
+	"_profile_id": true,
 	"_airport_identity": true,
 	"_source_scope": true,
 	"_source_url_hash": true,
@@ -4030,6 +4640,1070 @@ function check_reference_notice() {
 	}
 	show_reference_notice(payload);
 }
+function render_subscription_manager_entry() {
+	return '' +
+		'<tr id="subscription_manager_row">' +
+		'<th>订阅管理</th>' +
+		'<td>' +
+		'<div class="submgr-entry">' +
+		'<div class="submgr-entry-actions">' +
+		'<a type="button" class="ss_btn" style="cursor:pointer;width:auto;min-width:auto;display:inline-block;white-space:nowrap;" onclick="open_subscription_manager()">打开订阅管理</a>' +
+		'</div>' +
+		'</div>' +
+		'</td>' +
+		'</tr>';
+}
+function hide_subscription_legacy_row_by_selector(selector) {
+	var $el = $(selector);
+	if ($el.length) {
+		$el.closest("tr").css("display", "none");
+	}
+}
+function init_subscription_manager_entry() {
+	var $table = $("#table_subscribe");
+	if (!$table.length) {
+		return;
+	}
+	if (!$("#subscription_manager_row").length) {
+		var $rows = $table.find("tr");
+		if ($rows.length >= 2) {
+			$rows.eq(1).after(render_subscription_manager_entry());
+		} else {
+			$table.append(render_subscription_manager_entry());
+		}
+	}
+	hide_subscription_legacy_row_by_selector("#ss_online_links");
+	hide_subscription_legacy_row_by_selector("#ssr_subscribe_mode");
+	hide_subscription_legacy_row_by_selector("#ss_basic_hy2_up_speed");
+	hide_subscription_legacy_row_by_selector("#ss_basic_sub_ai");
+	hide_subscription_legacy_row_by_selector("#ss_basic_sub_node_log");
+	hide_subscription_legacy_row_by_selector("#ss_basic_sub_keep_info_node");
+	hide_subscription_legacy_row_by_selector("#ss_basic_online_links_proxy");
+	hide_subscription_legacy_row_by_selector("#ss_basic_online_ua");
+	hide_subscription_legacy_row_by_selector("#ss_basic_exclude");
+	hide_subscription_legacy_row_by_selector("#ss_basic_include");
+	hide_subscription_legacy_row_by_selector("#ss_basic_node_update");
+	hide_subscription_legacy_row_by_selector("#ss_basic_node_update_day");
+	hide_subscription_legacy_row_by_selector("#ss_basic_node_update_hr");
+	hide_subscription_legacy_row_by_selector("#ss_base64_links");
+	hide_subscription_legacy_row_by_selector("#ss_adv_sub");
+	$("#ss_basic_remove_node").hide();
+	$("#ss_sub_save_only").hide();
+	$("#table_link").css("display", "none");
+}
+function normalize_subscription_profiles_payload(payload) {
+	if (!payload || typeof payload != "object") {
+		return {version: 1, items: []};
+	}
+	if (!$.isArray(payload.items)) {
+		payload.items = [];
+	}
+	return payload;
+}
+function set_subscription_profiles_state(payload) {
+	payload = normalize_subscription_profiles_payload(payload);
+	subscribeProfilesState = [];
+	subscribeProfileMap = {};
+	subscribeProfileScopeMap = {};
+	for (var i = 0; i < payload.items.length; i++) {
+		var item = payload.items[i] || {};
+		if (typeof item.enabled == "undefined" || item.enabled === null) {
+			item.enabled = true;
+		}
+		item.schedule_enabled = item.schedule_enabled !== false;
+		item.node_count = parseInt(item.node_count, 10);
+		if (isNaN(item.node_count) || item.node_count < 0) {
+			item.node_count = 0;
+		}
+		subscribeProfilesState.push(item);
+		if (item.id) {
+			subscribeProfileMap[item.id] = item;
+		}
+		var scope = build_subscription_profile_scope(item);
+		if (scope) {
+			subscribeProfileScopeMap[scope] = item;
+		}
+	}
+}
+function upsert_subscription_profile_state(item) {
+	var items = subscribeProfilesState.slice();
+	var replaced = false;
+	var i = 0;
+	item = item || {};
+	for (i = 0; i < items.length; i++) {
+		if (String((items[i] || {}).id || "") == String(item.id || "")) {
+			items[i] = item;
+			replaced = true;
+			break;
+		}
+	}
+	if (!replaced) {
+		items.push(item);
+	}
+	set_subscription_profiles_state({version: 1, items: items});
+}
+function subscription_profile_is_enabled(item) {
+	return !item || item.enabled !== false;
+}
+function parse_subscription_profile_record(raw) {
+	raw = $.trim(String(raw || ""));
+	if (!raw) {
+		return null;
+	}
+	if (raw.charAt(0) == "{") {
+		try {
+			return JSON.parse(raw);
+		} catch (e0) {}
+	}
+	try {
+		return JSON.parse(base64_decode_utf8(raw));
+	} catch (e) {}
+	return null;
+}
+function count_subscription_profile_nodes(item) {
+	var ids = get_fss_node_ids();
+	var count = 0;
+	var profileId = String((item || {}).id || "");
+	var scope = build_subscription_profile_scope(item);
+	for (var i = 0; i < ids.length; i++) {
+		var raw = get_fss_raw_node(ids[i]);
+		if (!raw || String(raw["_source"] || "") != "subscribe") {
+			continue;
+		}
+		if (profileId && String(raw["_profile_id"] || "") == profileId) {
+			count++;
+			continue;
+		}
+		if (scope && String(raw["_source_scope"] || "") == scope) {
+			count++;
+		}
+	}
+	return count;
+}
+function build_subscription_profile_item(profileId, profileJson, stateJson) {
+	var profile = profileJson || {};
+	var state = stateJson || {};
+	var item = {
+		id: String(profile.id || profileId || ""),
+		name: String(profile.name || ""),
+		url: String(profile.url || ""),
+		enabled: profile.enabled !== false,
+		subscribe_mode: String(profile.subscribe_mode || "2"),
+		download_policy: String(((profile.download || {}).policy) || profile.download_policy || "auto"),
+		ua_mode: String(((profile.ua || {}).mode) || profile.ua_mode || "fixed"),
+		ua_preset: String(((profile.ua || {}).preset) || profile.ua_preset || "default"),
+		ua_custom: String(((profile.ua || {}).custom) || profile.ua_custom || ""),
+		exclude: String(((profile.filter || {}).exclude) || profile.exclude || ""),
+		include: String(((profile.filter || {}).include) || profile.include || ""),
+		keep_info_node: true,
+		allow_insecure: (((profile.flags || {}).allow_insecure) === true) || profile.allow_insecure === true,
+		node_log: true,
+		hy2_up: String(((profile.hy2 || {}).up) || profile.hy2_up || ""),
+		hy2_dl: String(((profile.hy2 || {}).dl) || profile.hy2_dl || ""),
+		hy2_tfo_switch: String(((profile.hy2 || {}).tfo_switch) || profile.hy2_tfo_switch || "2"),
+		hy2_cg_opt: String(((profile.hy2 || {}).cg_opt) || profile.hy2_cg_opt || "bbr"),
+		schedule_enabled: (((profile.schedule || {}).enabled) !== false) && profile.schedule_enabled !== false,
+		schedule_type: String(((profile.schedule || {}).type) || profile.schedule_type || "1"),
+		schedule_week: String(((profile.schedule || {}).week) || profile.schedule_week || "1"),
+		schedule_day: String(((profile.schedule || {}).day) || profile.schedule_day || "7"),
+		schedule_hour: String(((profile.schedule || {}).hour) || profile.schedule_hour || "3"),
+		schedule_minute: String(((profile.schedule || {}).minute) || profile.schedule_minute || "5"),
+		schedule_interval_value: String(((profile.schedule || {}).interval_value) || profile.schedule_interval_value || "1"),
+		schedule_interval_unit: String(((profile.schedule || {}).interval_unit) || profile.schedule_interval_unit || "2"),
+		schedule_custom_hours: String(((profile.schedule || {}).custom_hours) || profile.schedule_custom_hours || ""),
+		last_ok_ts: parseInt(state.last_ok_ts || 0, 10) || 0,
+		last_error_ts: parseInt(state.last_error_ts || 0, 10) || 0,
+		last_error: String(state.last_error || ""),
+		last_url_hash: String(state.last_url_hash || ""),
+		last_group: String(state.last_group || ""),
+		last_download_tool: String(state.last_download_tool || ""),
+		last_download_path: String(state.last_download_path || ""),
+		last_ua_mode: String(state.last_ua_mode || ""),
+		last_ua_preset: String(state.last_ua_preset || "")
+	};
+	item.node_count = count_subscription_profile_nodes(item);
+	return item;
+}
+function build_subscription_profiles_payload_from_dbus(result) {
+	var payload = {version: 1, items: []};
+	var ids = [];
+	var seen = {};
+	var key = "";
+	var prefix = "ss_subprof_";
+	var rawIds = $.trim(String((result || {}).ss_subprof_ids || ""));
+	if (rawIds) {
+		ids = rawIds.split(",").map(function(item) {
+			return $.trim(String(item || ""));
+		}).filter(function(item) {
+			return item !== "";
+		});
+	}
+	for (var i = 0; i < ids.length; i++) {
+		seen[ids[i]] = true;
+	}
+	for (key in (result || {})) {
+		if (!result.hasOwnProperty(key)) {
+			continue;
+		}
+		if (key == "ss_subprof_ids" || key.indexOf(prefix) !== 0 || /_state$/.test(key)) {
+			continue;
+		}
+		var profileId = key.substring(prefix.length);
+		if (!profileId || seen[profileId]) {
+			continue;
+		}
+		ids.push(profileId);
+		seen[profileId] = true;
+	}
+	for (var j = 0; j < ids.length; j++) {
+		var currentId = ids[j];
+		var profileJson = parse_subscription_profile_record((result || {})[prefix + currentId]);
+		var stateJson = parse_subscription_profile_record((result || {})[prefix + currentId + "_state"]) || {};
+		if (!profileJson) {
+			continue;
+		}
+		payload.items.push(build_subscription_profile_item(currentId, profileJson, stateJson));
+	}
+	return normalize_subscription_profiles_payload(payload);
+}
+function fetch_subscription_profiles_dbus(cb, options) {
+	options = options || {};
+	$.ajax({
+		type: "GET",
+		url: "/_api/ss_subprof_",
+		dataType: "json",
+		cache: false,
+		success: function(data) {
+			var result = (data && data.result && data.result[0]) ? data.result[0] : {};
+			var payload = build_subscription_profiles_payload_from_dbus(result);
+			set_subscription_profiles_state(payload);
+			if (typeof cb === "function") {
+				cb(true, subscribeProfilesState);
+			}
+		},
+		error: function() {
+			if (typeof cb === "function") {
+				cb(false, subscribeProfilesState);
+			}
+		}
+	});
+}
+function call_subscription_profile_api(action, fields, cb) {
+	var id = parseInt(Math.random() * 100000000);
+	$.ajax({
+		type: "POST",
+		cache: false,
+		url: "/_api/",
+		data: JSON.stringify({"id": id, "method": "ss_subscribe_profile.sh", "params": [action], "fields": fields || {}}),
+		dataType: "json",
+		success: function(response) {
+			if (response && String(response.result) == String(id)) {
+				if (typeof cb === "function") {
+					cb(true, response.payload || null, null);
+				}
+			} else if (typeof cb === "function") {
+				cb(false, null, response && response.error ? response.error : null);
+			}
+		},
+		error: function() {
+			if (typeof cb === "function") {
+				cb(false, null, null);
+			}
+		}
+	});
+}
+function load_subscription_profiles_http(cb, allowMigrate) {
+	fetch_subscription_profiles_dbus(function(ok) {
+		if (ok) {
+			if (allowMigrate !== false && (!subscribeProfilesState || !subscribeProfilesState.length) && E("ss_online_links") && $.trim(E("ss_online_links").value || "").length > 0) {
+				call_subscription_profile_api("migrate_legacy", {}, function(migrateOk) {
+					fetch_subscription_profiles_dbus(function(refetchOk) {
+						subscribeProfilesLoading = false;
+						if (typeof cb === "function") {
+							cb(!!(migrateOk && refetchOk), subscribeProfilesState);
+						}
+					}, {silent: true});
+				});
+				return;
+			}
+			subscribeProfilesLoading = false;
+			if (typeof cb === "function") {
+				cb(true, subscribeProfilesState);
+			}
+			return;
+		}
+		subscribeProfilesLoading = false;
+		if (typeof layer != "undefined" && layer.msg) {
+			layer.msg("读取订阅配置失败");
+		}
+		if (typeof cb === "function") {
+			cb(false, subscribeProfilesState);
+		}
+	});
+}
+function load_subscription_profiles(cb) {
+	if (subscribeProfilesLoading) {
+		return;
+	}
+	subscribeProfilesLoading = true;
+	load_subscription_profiles_http(cb, true);
+}
+function format_subscription_timestamp(ts) {
+	var num = parseInt(ts, 10);
+	if (isNaN(num) || num <= 0) {
+		return "未同步";
+	}
+	if (num < 1000000000000) {
+		num = num * 1000;
+	}
+	var d = new Date(num);
+	var pad = function(v) { return v < 10 ? "0" + v : "" + v; };
+	return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
+}
+function get_subscription_profile_host(url) {
+	var match = String(url || "").match(/^[a-z][a-z0-9+.-]*:\/\/([^\/@:]+)/i);
+	return match ? match[1] : "";
+}
+function normalize_subscription_profile_url(url) {
+	return $.trim(String(url || ""));
+}
+function find_subscription_profile_by_url(url, excludeId) {
+	var normalized = normalize_subscription_profile_url(url);
+	var exclude = String(excludeId || "");
+	if (!normalized) {
+		return null;
+	}
+	for (var i = 0; i < subscribeProfilesState.length; i++) {
+		var item = subscribeProfilesState[i] || {};
+		if (exclude && String(item.id || "") == exclude) {
+			continue;
+		}
+		if (normalize_subscription_profile_url(item.url || "") == normalized) {
+			return item;
+		}
+	}
+	return null;
+}
+function format_subscription_last_result(item) {
+	var raw = $.trim(String((item && item.last_error) || ""));
+	if (!raw) {
+		return Number((item && item.last_ok_ts) || 0) > 0 ? "同步成功" : "尚未同步";
+	}
+	var lowered = raw.toLowerCase();
+	if (lowered.indexOf("empty payload") >= 0) {
+		return "返回为空";
+	}
+	if (lowered.indexOf("payload validation failed") >= 0) {
+		return "结果无效";
+	}
+	if (lowered.indexOf("parse failed") >= 0 || lowered.indexOf("parser failed") >= 0) {
+		return "解析失败";
+	}
+	if (lowered.indexOf("download failed") >= 0) {
+		return "下载失败";
+	}
+	if (lowered.indexOf("timed out") >= 0 || lowered.indexOf("timeout") >= 0) {
+		return "请求超时";
+	}
+	if (lowered.indexOf("resolve host") >= 0 || lowered.indexOf("could not resolve host") >= 0 || lowered.indexOf("name lookup timed out") >= 0) {
+		return "域名解析失败";
+	}
+	if (lowered.indexOf("connection refused") >= 0) {
+		return "连接被拒绝";
+	}
+	if (lowered.indexOf("ssl") >= 0 || lowered.indexOf("tls") >= 0 || lowered.indexOf("certificate") >= 0) {
+		return "证书异常";
+	}
+	if (lowered.indexOf("proxy") >= 0 && lowered.indexOf("failed") >= 0) {
+		return "代理失败";
+	}
+	if (lowered.indexOf("no nodes") >= 0 || lowered.indexOf("not contain any") >= 0) {
+		return "无可用节点";
+	}
+	if (raw.length > 12) {
+		return "同步失败";
+	}
+	return raw;
+}
+function render_subscription_chip(label, value, extraClass) {
+	return '<span class="submgr-chip' + (extraClass ? (" " + extraClass) : "") + '"><span class="submgr-chip-label">' + htmlEscape(label) + '</span><span class="submgr-chip-value">' + htmlEscape(value) + '</span></span>';
+}
+function normalize_subscription_select_pairs(options) {
+	var out = [];
+	options = options || [];
+	for (var i = 0; i < options.length; i++) {
+		if ($.isArray(options[i])) {
+			out.push([options[i][0], options[i][1]]);
+		} else {
+			out.push([String(options[i]), String(options[i])]);
+		}
+	}
+	return out;
+}
+function get_subscription_schedule_label(itemOrDay, hour) {
+	var item = (itemOrDay && typeof itemOrDay == "object") ? itemOrDay : {schedule_day: itemOrDay, schedule_hour: hour};
+	var type = String(item.schedule_type || "1");
+	var minute = String(item.schedule_minute || "5");
+	var hourText = String(item.schedule_hour || "3");
+	var weekTextMap = {"1": "周一", "2": "周二", "3": "周三", "4": "周四", "5": "周五", "6": "周六", "7": "周日", "0": "周日"};
+	if (type == "2") {
+		return (weekTextMap[String(item.schedule_week || "1")] || "周一") + " " + hourText + ":" + minute.padStart(2, "0");
+	}
+	if (type == "3") {
+		return "每月" + String(item.schedule_day || "1") + "日 " + hourText + ":" + minute.padStart(2, "0");
+	}
+	if (type == "4") {
+		var unitMap = {"1": "分钟", "2": "小时", "3": "天"};
+		var unit = String(item.schedule_interval_unit || "2");
+		var base = "每隔" + String(item.schedule_interval_value || "1") + (unitMap[unit] || "小时");
+		if (unit == "2") {
+			return base + " " + minute.padStart(2, "0") + "分";
+		}
+		if (unit == "3") {
+			return base + " " + hourText + ":" + minute.padStart(2, "0");
+		}
+		return base;
+	}
+	if (type == "5") {
+		return "每天 " + String(item.schedule_custom_hours || hourText) + "点" + minute.padStart(2, "0") + "分";
+	}
+	return "每天 " + hourText + ":" + minute.padStart(2, "0");
+}
+function render_subscription_profiles_cards() {
+	if (!subscribeProfilesState.length) {
+		return '<div class="submgr-empty">当前还没有订阅配置。<br />点击下方“新增订阅”开始创建机场级配置。<a class="submgr-empty-ad" target="_blank" href="https://123s.co/#/register?code=yf6ozeEO">🚀没有订阅地址？试试 <strong>ssLinks</strong> 机场，全中转 / 多国线路 / 流媒体解锁，优惠码: fancyss</a></div>';
+	}
+	var html = '<div class="submgr-card-list">';
+	for (var i = 0; i < subscribeProfilesState.length; i++) {
+		var item = subscribeProfilesState[i] || {};
+		var enabled = subscription_profile_is_enabled(item);
+		var host = get_subscription_profile_host(item.url || "");
+		var lastStatus = format_subscription_last_result(item);
+		var lastClass = item.last_error ? "warn" : (Number(item.last_ok_ts || 0) > 0 ? "ok" : "");
+		var scheduleText = item.schedule_enabled ? get_subscription_schedule_label(item) : "未启用";
+		var nodeCountText = String(item.node_count || "0");
+		html += '<div class="submgr-card' + (enabled ? '' : ' is-disabled') + '" onclick="open_subscription_profile_editor(\'' + htmlEscape(String(item.id || "")) + '\')" title="点击编辑订阅">';
+		html += '<a href="javascript:void(0);" class="submgr-card-delete" onclick="event.stopPropagation();delete_subscription_profile(\'' + htmlEscape(String(item.id || "")) + '\');return false;" title="删除订阅">&times;</a>';
+		html += '<div class="submgr-card-head"><div><div class="submgr-card-title">' + htmlEscape(item.name || "未命名订阅") + '</div><div class="submgr-card-subtitle">' + htmlEscape(host || item.url || "") + '</div></div></div>';
+		html += '<div class="submgr-chip-row">';
+		html += render_subscription_chip("状态", enabled ? "启用" : "未启用", enabled ? "ok" : "warn");
+		html += render_subscription_chip("节点数量", nodeCountText);
+		html += render_subscription_chip("最近结果", lastStatus, lastClass);
+		html += '</div>';
+		html += '<div class="submgr-chip-row">';
+		html += render_subscription_chip("上次成功", format_subscription_timestamp(item.last_ok_ts || 0));
+		html += render_subscription_chip("计划任务", scheduleText, item.schedule_enabled ? "ok" : "");
+		if (item.exclude) {
+			html += render_subscription_chip("排除", item.exclude);
+		}
+		if (item.include) {
+			html += render_subscription_chip("包含", item.include);
+		}
+		html += '</div>';
+		html += '<div class="submgr-card-actions">';
+		html += '<a class="submgr-card-btn sync' + (enabled ? '' : ' disabled') + '" href="javascript:void(0);" onclick="event.stopPropagation();' + (enabled ? ('sync_subscription_profiles(\'' + htmlEscape(String(item.id || "")) + '\');') : '') + 'return false;">同步</a>';
+		html += '</div>';
+		html += '</div>';
+	}
+	html += '</div>';
+	return html;
+}
+function adjust_subscription_manager_layer_height() {
+	if (subscribeManagerLayerIndex === null || typeof layer == "undefined") {
+		return;
+	}
+	var layero = $("#layui-layer" + subscribeManagerLayerIndex);
+	if (!layero.length) {
+		return;
+	}
+	var shell = layero.find(".submgr-shell").first();
+	var root = layero.find("#subscription_manager_root").first();
+	var layerContent = layero.children(".layui-layer-content").first();
+	var layerTitle = layero.children(".layui-layer-title").first();
+	var layerBtn = layero.children(".layui-layer-btn").first();
+	var center_layer = function(totalHeight) {
+		var viewportH = $(window).height();
+		var viewportW = $(window).width();
+		var layerW = layero.outerWidth() || parseInt(layero.css("width"), 10) || 920;
+		var top = Math.max(20, Math.round((viewportH - totalHeight) / 2));
+		var left = Math.max(0, Math.round((viewportW - layerW) / 2));
+		layer.style(subscribeManagerLayerIndex, {
+			height: Math.ceil(totalHeight) + "px",
+			top: top + "px",
+			left: left + "px"
+		});
+	};
+	if (!shell.length) {
+		return;
+	}
+	if (subscribeManagerActiveTab != "profiles") {
+		shell.css({height: "auto", minHeight: "", maxHeight: "", overflowY: "visible"});
+		if (layerContent.length) {
+			layerContent.css({
+				height: (root.outerHeight() || shell.outerHeight()) + "px",
+				overflowY: "hidden"
+			});
+		}
+		center_layer(
+			(root.outerHeight() || shell.outerHeight())
+			+ (layerTitle.outerHeight() || 0)
+			+ (layerBtn.outerHeight() || 0)
+			+ 4
+		);
+		return;
+	}
+	var cardList = shell.find(".submgr-card-list").first();
+	var cards = cardList.find(".submgr-card");
+	if (!cards.length) {
+		shell.css({height: "auto", minHeight: "", maxHeight: "", overflowY: "visible"});
+		cardList.css({height: "auto", overflowY: "visible", paddingRight: "0"});
+		if (layerContent.length) {
+			layerContent.css({
+				height: (root.outerHeight() || shell.outerHeight()) + "px",
+				overflowY: "hidden"
+			});
+		}
+		center_layer(
+			(root.outerHeight() || shell.outerHeight())
+			+ (layerTitle.outerHeight() || 0)
+			+ (layerBtn.outerHeight() || 0)
+			+ 4
+		);
+		return;
+	}
+	var maxCards = Math.min(4, cards.length);
+	var columns = 2;
+	var templateColumns = cardList.css("grid-template-columns") || "";
+	if (templateColumns) {
+		columns = Math.max(1, templateColumns.split(" ").length);
+	}
+	var rowGap = parseFloat(cardList.css("row-gap") || cardList.css("gap") || "0") || 0;
+	var rowHeights = [];
+	cards.slice(0, maxCards).each(function(idx) {
+		var rowIndex = Math.floor(idx / columns);
+		var cardHeight = $(this).outerHeight() || 0;
+		rowHeights[rowIndex] = Math.max(rowHeights[rowIndex] || 0, cardHeight);
+	});
+	var visibleRows = 1;
+	if (columns <= 1) {
+		visibleRows = Math.min(cards.length, 4);
+	} else {
+		visibleRows = cards.length <= 2 ? 1 : 2;
+	}
+	var cardsHeight = 0;
+	for (var i = 0; i < rowHeights.length; i++) {
+		if (i >= visibleRows) {
+			break;
+		}
+		cardsHeight += rowHeights[i] || 0;
+	}
+	if (visibleRows > 1 && rowHeights.length > 1) {
+		cardsHeight += rowGap * (Math.min(rowHeights.length, visibleRows) - 1);
+	}
+	var hasScroll = cards.length > 4;
+	var listExtra = hasScroll ? 12 : 3;
+	cardList.css({
+		height: Math.ceil(cardsHeight + listExtra) + "px",
+		maxHeight: Math.ceil(cardsHeight + listExtra) + "px",
+		overflowX: "hidden",
+		overflowY: hasScroll ? "auto" : "hidden",
+		paddingRight: hasScroll ? "4px" : "0"
+	});
+	shell.css({
+		height: "auto",
+		minHeight: "",
+		maxHeight: "",
+		overflowY: "visible"
+	});
+	if (layerContent.length) {
+		layerContent.css({
+			height: (root.outerHeight() || shell.outerHeight()) + "px",
+			overflowY: "hidden"
+		});
+	}
+	center_layer(
+		(root.outerHeight() || shell.outerHeight())
+		+ (layerTitle.outerHeight() || 0)
+		+ (layerBtn.outerHeight() || 0)
+		+ 4
+	);
+}
+function render_subscription_manager_body() {
+	var html = '<div class="submgr-shell">';
+	html += '<div class="submgr-tabs">';
+	html += '<a href="javascript:void(0);" class="submgr-tab' + (subscribeManagerActiveTab == "profiles" ? ' active' : '') + '" onclick="handle_subscription_manager_tab(\'profiles\')">订阅配置管理</a>';
+	html += '<a href="javascript:void(0);" class="submgr-tab' + (subscribeManagerActiveTab == "uri" ? ' active' : '') + '" onclick="handle_subscription_manager_tab(\'uri\')">分享链接导入</a>';
+	html += '</div>';
+	if (subscribeManagerActiveTab == "uri") {
+		html += '<div class="submgr-toolbar"><div class="submgr-toolbar-note">用于快速解析单条或多条分享链接，沿用现有 URI 导入逻辑，不进入订阅 profile。</div></div>';
+		html += '<div class="submgr-uri-box"><textarea id="submgr_uri_input" placeholder="填入 ss://、ssr://、vmess://、vless://、trojan://、hy2://、hysteria2://、tuic://、naive+https://、naive+quic:// 等链接，支持多行。"></textarea></div>';
+	} else {
+		html += render_subscription_profiles_cards();
+	}
+	html += '</div>';
+	return html;
+}
+function update_subscription_manager_buttons() {
+	if (subscribeManagerLayerIndex === null || typeof layer == "undefined") {
+		return;
+	}
+	var layero = $("#layui-layer" + subscribeManagerLayerIndex);
+	if (!layero.length) {
+		return;
+	}
+	var btnBox = layero.children(".layui-layer-btn");
+	if (!btnBox.length) {
+		return;
+	}
+	var btn0 = btnBox.find(".layui-layer-btn0");
+	var btn1 = btnBox.find(".layui-layer-btn1");
+	var btn2 = btnBox.find(".layui-layer-btn2");
+	if (subscribeManagerActiveTab == "uri") {
+		btn0.text("解析并保存为节点").show();
+		btn1.hide();
+		btn2.text("关闭窗口").show();
+	} else {
+		btn0.text("新增订阅").show();
+		btn1.text("全部同步").show();
+		btn2.text("关闭窗口").show();
+	}
+}
+function render_subscription_manager() {
+	var root = $("#subscription_manager_root");
+	if (root.length) {
+		root.html(render_subscription_manager_body());
+		update_subscription_manager_buttons();
+		adjust_subscription_manager_layer_height();
+	}
+}
+function wait_subscription_profiles_until(checkFn, cb, attempt) {
+	attempt = attempt || 0;
+	fetch_subscription_profiles_dbus(function(fetchOk) {
+		var items = subscribeProfilesState;
+		var matched = typeof checkFn === "function" ? !!checkFn(items || []) : !!fetchOk;
+		if (matched || attempt >= 30) {
+			if (typeof cb === "function") {
+				cb(matched, items || []);
+			}
+			return;
+		}
+		setTimeout(function() {
+			wait_subscription_profiles_until(checkFn, cb, attempt + 1);
+		}, 400);
+	});
+}
+function handle_subscription_manager_tab(tabKey) {
+	subscribeManagerActiveTab = tabKey == "uri" ? "uri" : "profiles";
+	render_subscription_manager();
+}
+function open_subscription_manager() {
+	subscribeManagerActiveTab = subscribeManagerActiveTab || "profiles";
+	if (subscribeManagerLayerIndex !== null && typeof layer != "undefined" && layer.close) {
+		layer.close(subscribeManagerLayerIndex);
+		subscribeManagerLayerIndex = null;
+	}
+	layer.open({
+		type: 1,
+		title: "订阅管理",
+		skin: "shunt-editor-layer submgr-layer",
+		area: [$(window).width() < 760 ? '92%' : '920px', $(window).width() < 760 ? '88%' : 'auto'],
+		maxHeight: 560,
+		shade: 0.8,
+		shadeClose: false,
+		content: '<div id="subscription_manager_root"><div class="submgr-shell"><div class="submgr-empty">正在加载订阅配置...</div></div></div>',
+		btn: ["新增订阅", "全部同步", "关闭窗口"],
+		btnAlign: "c",
+		success: function(layero, index) {
+			subscribeManagerLayerIndex = index;
+			update_subscription_manager_buttons();
+			load_subscription_profiles(function() {
+				render_subscription_manager();
+			});
+		},
+		yes: function(index) {
+			if (subscribeManagerActiveTab == "uri") {
+				submit_subscription_uri_from_manager();
+			} else {
+				open_subscription_profile_editor('');
+			}
+			return false;
+		},
+		btn2: function(index) {
+			if (subscribeManagerActiveTab == "uri") {
+				return false;
+			}
+			sync_subscription_profiles('');
+			return false;
+		},
+		btn3: function(index) {
+			layer.close(index);
+		},
+		end: function() {
+			subscribeManagerLayerIndex = null;
+		}
+	});
+}
+function build_subscription_profile_editor_defaults(profile) {
+	profile = profile || {};
+	return {
+		id: profile.id || "",
+		name: profile.name || "",
+		url: profile.url || "",
+		enabled: profile.enabled !== false,
+		subscribe_mode: String(profile.subscribe_mode || "2"),
+		download_policy: String(profile.download_policy || "auto"),
+		ua_mode: String(profile.ua_mode || "fixed"),
+		ua_preset: String(profile.ua_preset || "default"),
+		ua_custom: profile.ua_custom || "",
+		exclude: profile.exclude || "",
+		include: profile.include || "",
+		allow_insecure: profile.allow_insecure === true,
+		hy2_up: profile.hy2_up || "",
+		hy2_dl: profile.hy2_dl || "",
+		hy2_tfo_switch: String(profile.hy2_tfo_switch || "2"),
+		hy2_cg_opt: String(profile.hy2_cg_opt || "bbr"),
+		schedule_enabled: profile.schedule_enabled !== false,
+		schedule_type: String(profile.schedule_type || "1"),
+		schedule_week: String(profile.schedule_week || "1"),
+		schedule_day: String(profile.schedule_day || "7"),
+		schedule_hour: String(profile.schedule_hour || "3"),
+		schedule_minute: String(profile.schedule_minute || "5"),
+		schedule_interval_value: String(profile.schedule_interval_value || "1"),
+		schedule_interval_unit: String(profile.schedule_interval_unit || "2"),
+		schedule_custom_hours: profile.schedule_custom_hours || ""
+	};
+}
+function render_subscription_select_options(options, selected) {
+	var html = "";
+	options = normalize_subscription_select_pairs(options);
+	for (var i = 0; i < options.length; i++) {
+		html += '<option value="' + htmlEscape(String(options[i][0])) + '"' + (String(options[i][0]) == String(selected) ? ' selected' : '') + '>' + htmlEscape(String(options[i][1])) + '</option>';
+	}
+	return html;
+}
+function build_subscription_number_options(start, end, suffix) {
+	var out = [];
+	for (var i = start; i <= end; i++) {
+		out.push([String(i), String(i) + String(suffix || "")]);
+	}
+	return out;
+}
+function toggle_subscription_profile_ua_fields() {
+	var mode = $("#submgr_profile_ua_mode").val() || "fixed";
+	$("#submgr_profile_ua_preset_row").toggle(mode == "fixed");
+	$("#submgr_profile_ua_custom_row").toggle(mode == "custom");
+}
+function toggle_subscription_schedule_fields() {
+	var enabled = !!$("#submgr_profile_schedule_enabled").prop("checked");
+	$("#submgr_profile_schedule_fields").toggle(enabled);
+	var type = String($("#submgr_profile_schedule_type").val() || "1");
+	var intervalUnit = String($("#submgr_profile_schedule_interval_unit").val() || "2");
+	$(".submgr-schedule-week").toggle(enabled && type == "2");
+	$(".submgr-schedule-day").toggle(enabled && type == "3");
+	$(".submgr-schedule-interval").toggle(enabled && type == "4");
+	$(".submgr-schedule-custom").toggle(enabled && type == "5");
+	$(".submgr-schedule-time").toggle(enabled && type != "5" && (type != "4" || intervalUnit == "3"));
+	$(".submgr-schedule-time-prefix").toggle(!(type == "4" && intervalUnit == "3"));
+	$(".submgr-schedule-minute").toggle(enabled && (type != "4" || intervalUnit != "1"));
+	$(".submgr-schedule-minute-tail").toggle(enabled && !(type == "4" && intervalUnit == "1"));
+}
+function open_subscription_profile_editor(profileId) {
+	var profile = null;
+	if (profileId && subscribeProfileMap[profileId]) {
+		profile = subscribeProfileMap[profileId];
+	} else if (profileId && $.isArray(subscribeProfilesState)) {
+		for (var i = 0; i < subscribeProfilesState.length; i++) {
+			if (String((subscribeProfilesState[i] || {}).id || "") == String(profileId)) {
+				profile = subscribeProfilesState[i];
+				break;
+			}
+		}
+	}
+	var state = build_subscription_profile_editor_defaults(profile);
+	var html = "";
+	html += '<div class="shunt-editor">';
+	html += '<div class="shunt-editor-row"><div class="shunt-editor-label">别名</div><div class="shunt-editor-control"><input type="text" id="submgr_profile_name" value="' + htmlEscape(state.name) + '" maxlength="64" placeholder="例如：sslinks 主号"></div></div>';
+	html += '<div class="shunt-editor-row"><div class="shunt-editor-label">订阅链接</div><div class="shunt-editor-control"><input type="text" id="submgr_profile_url" value="' + htmlEscape(state.url) + '" placeholder="https://example.com/..."></div></div>';
+	html += '<div class="shunt-editor-row"><div class="shunt-editor-label">启用</div><div class="shunt-editor-control"><label><input type="checkbox" id="submgr_profile_enabled"' + (state.enabled ? ' checked' : '') + '> 启用该订阅配置</label></div></div>';
+	html += '<div class="shunt-editor-row"><div class="shunt-editor-label">节点模式</div><div class="shunt-editor-control"><select id="submgr_profile_subscribe_mode">' + render_subscription_select_options(option_modes || [["2", "大陆白名单模式"]], state.subscribe_mode) + '</select></div></div>';
+	html += '<div class="shunt-editor-row"><div class="shunt-editor-label">下载策略</div><div class="shunt-editor-control"><select id="submgr_profile_download_policy">' + render_subscription_select_options([["auto", "自动判断"], ["proxy", "走代理"], ["direct", "不走代理"]], state.download_policy) + '</select></div></div>';
+	// UA 自动探测后续接入下载器后再开放。
+	html += '<div class="shunt-editor-row"><div class="shunt-editor-label">UA 模式</div><div class="shunt-editor-control"><select id="submgr_profile_ua_mode" onchange="toggle_subscription_profile_ua_fields()">' + render_subscription_select_options([["fixed", "固定预设"], ["custom", "自定义字符串"]], state.ua_mode) + '</select></div></div>';
+	html += '<div class="shunt-editor-row" id="submgr_profile_ua_preset_row"><div class="shunt-editor-label">UA 预设</div><div class="shunt-editor-control"><select id="submgr_profile_ua_preset">' + render_subscription_select_options([["default", "fancyss 默认"], ["curl", "curl/wget"], ["v2rayn", "V2rayN"], ["v2rayng", "V2rayNG"], ["shadowrocket", "Shadowrocket"]], state.ua_preset) + '</select></div></div>';
+	html += '<div class="shunt-editor-row" id="submgr_profile_ua_custom_row"><div class="shunt-editor-label">UA 自定义</div><div class="shunt-editor-control"><input type="text" id="submgr_profile_ua_custom" value="' + htmlEscape(state.ua_custom) + '" placeholder="自定义 User-Agent 字符串"></div></div>';
+	html += '<div class="shunt-editor-row"><div class="shunt-editor-label">排除关键词</div><div class="shunt-editor-control"><input type="text" id="submgr_profile_exclude" value="' + htmlEscape(state.exclude) + '" placeholder="多个关键词用英文逗号分隔"></div></div>';
+	html += '<div class="shunt-editor-row"><div class="shunt-editor-label">包含关键词</div><div class="shunt-editor-control"><input type="text" id="submgr_profile_include" value="' + htmlEscape(state.include) + '" placeholder="多个关键词用英文逗号分隔"></div></div>';
+	html += '<div class="shunt-editor-row checkbox-row"><div class="shunt-editor-label">附加选项</div><div class="shunt-editor-control">';
+	html += '<label style="margin-right:14px;"><input type="checkbox" id="submgr_profile_allow_insecure"' + (state.allow_insecure ? ' checked' : '') + '> 允许不安全</label>';
+	html += '</div></div>';
+	html += '<div class="shunt-editor-row"><div class="shunt-editor-label">Hy2 默认</div><div class="shunt-editor-control"><div class="submgr-hy2-inline"><span>上行 <input type="text" id="submgr_profile_hy2_up" value="' + htmlEscape(state.hy2_up) + '"> mbps</span><span>下行 <input type="text" id="submgr_profile_hy2_dl" value="' + htmlEscape(state.hy2_dl) + '"> mbps</span><span>TFO <select id="submgr_profile_hy2_tfo_switch">' + render_subscription_select_options([["0", "强制关闭"], ["1", "强制开启"], ["2", "根据订阅"]], state.hy2_tfo_switch) + '</select></span><span>拥塞 <select id="submgr_profile_hy2_cg_opt">' + render_subscription_select_options(option_hy2_cg && option_hy2_cg.length ? option_hy2_cg : ["bbr", "brutal"], state.hy2_cg_opt) + '</select></span></div></div></div>';
+	html += '<div class="shunt-editor-row checkbox-row"><div class="shunt-editor-label">定时更新</div><div class="shunt-editor-control submgr-schedule-inline"><label><input type="checkbox" id="submgr_profile_schedule_enabled" onchange="toggle_subscription_schedule_fields()"' + (state.schedule_enabled ? ' checked' : '') + '></label><div id="submgr_profile_schedule_fields" class="submgr-schedule-fields"><span>按 <select id="submgr_profile_schedule_type" onchange="toggle_subscription_schedule_fields()">' + render_subscription_select_options([["1", "每天"], ["2", "每周"], ["3", "每月"], ["4", "每隔"], ["5", "自定义"]], state.schedule_type == "0" ? "1" : state.schedule_type) + '</select></span><span class="submgr-schedule-week"><select id="submgr_profile_schedule_week">' + render_subscription_select_options(option_rebw || [["1", "一"], ["2", "二"], ["3", "三"], ["4", "四"], ["5", "五"], ["6", "六"], ["7", "日"]], state.schedule_week) + '</select></span><span class="submgr-schedule-day"><select id="submgr_profile_schedule_day">' + render_subscription_select_options(build_subscription_number_options(1, 31, ""), state.schedule_day) + '</select> 日,</span><span class="submgr-schedule-interval"><select id="submgr_profile_schedule_interval_value">' + render_subscription_select_options(build_subscription_number_options(1, 30, ""), state.schedule_interval_value) + '</select> <select id="submgr_profile_schedule_interval_unit" onchange="toggle_subscription_schedule_fields()">' + render_subscription_select_options(option_rebip || [["1", "分钟"], ["2", "小时"], ["3", "天"]], state.schedule_interval_unit) + '</select></span><span class="submgr-schedule-custom">每天 <input type="text" id="submgr_profile_schedule_custom_hours" value="' + htmlEscape(state.schedule_custom_hours) + '" placeholder="3,8,12" title="填写说明：此处填写0-23之间任意小时；多个小时用英文逗号分隔，如：当天的3点、8点、12点则填入：3,8,12"> 时</span><span class="submgr-schedule-time"><span class="submgr-schedule-time-prefix">在 </span><select id="submgr_profile_schedule_hour">' + render_subscription_select_options(build_subscription_number_options(0, 23, ""), state.schedule_hour) + '</select> 时</span><span class="submgr-schedule-minute"><select id="submgr_profile_schedule_minute">' + render_subscription_select_options(build_subscription_number_options(0, 59, ""), state.schedule_minute) + '</select><span class="submgr-schedule-minute-tail"> 分更新</span></span></div></div></div>';
+	html += '</div>';
+	if (subscribeProfileEditorLayerIndex !== null && typeof layer != "undefined" && layer.close) {
+		layer.close(subscribeProfileEditorLayerIndex);
+		subscribeProfileEditorLayerIndex = null;
+	}
+	layer.open({
+		type: 1,
+		title: profile ? "编辑订阅配置" : "新增订阅配置",
+		skin: "shunt-editor-layer submgr-editor-layer",
+		area: [$(window).width() < 760 ? '92%' : '760px', $(window).width() < 760 ? '88%' : 'auto'],
+		maxHeight: 720,
+		shadeClose: false,
+		content: html,
+		btn: ["仅保存配置", "保存并同步", "取消"],
+		btnAlign: "c",
+		success: function(layero, index) {
+			subscribeProfileEditorLayerIndex = index;
+			layero.attr("data-profile-id", state.id || "");
+			layero.children(".layui-layer-content").css({height: "auto", overflowY: "visible"});
+			toggle_subscription_profile_ua_fields();
+			toggle_subscription_schedule_fields();
+		},
+		end: function() {
+			subscribeProfileEditorLayerIndex = null;
+		},
+		yes: function(index) {
+			return save_subscription_profile_from_editor(false);
+		},
+		btn2: function(index) {
+			return save_subscription_profile_from_editor(true);
+		},
+		btn3: function(index) {
+			layer.close(index);
+		}
+	});
+}
+function open_subscription_profile_editor_by_payload(payloadB64) {
+	var payload = null;
+	try {
+		payload = JSON.parse(base64_decode_utf8(payloadB64 || "") || "{}");
+	} catch (e) {
+		payload = null;
+	}
+	if (payload && payload.id && (!subscribeProfileMap[payload.id] || !subscribeProfileMap[payload.id].url)) {
+		subscribeProfileMap[payload.id] = payload;
+	}
+	open_subscription_profile_editor(payload && payload.id ? payload.id : "");
+	return false;
+}
+function get_subscription_profile_editor_payload() {
+	var profileId = "";
+	var layerWrap = $(".layui-layer:has(#submgr_profile_name)").last();
+	if (layerWrap.length) {
+		profileId = layerWrap.attr("data-profile-id") || "";
+	}
+	return {
+		id: profileId,
+		name: $.trim($("#submgr_profile_name").val() || ""),
+		url: $.trim($("#submgr_profile_url").val() || ""),
+		enabled: !!$("#submgr_profile_enabled").prop("checked"),
+		subscribe_mode: String($("#submgr_profile_subscribe_mode").val() || "2"),
+		download_policy: String($("#submgr_profile_download_policy").val() || "auto"),
+		ua_mode: String($("#submgr_profile_ua_mode").val() || "fixed"),
+		ua_preset: String($("#submgr_profile_ua_preset").val() || "default"),
+		ua_custom: $.trim($("#submgr_profile_ua_custom").val() || ""),
+		exclude: $.trim($("#submgr_profile_exclude").val() || ""),
+		include: $.trim($("#submgr_profile_include").val() || ""),
+		allow_insecure: !!$("#submgr_profile_allow_insecure").prop("checked"),
+		hy2_up: $.trim($("#submgr_profile_hy2_up").val() || ""),
+		hy2_dl: $.trim($("#submgr_profile_hy2_dl").val() || ""),
+		hy2_tfo_switch: String($("#submgr_profile_hy2_tfo_switch").val() || "2"),
+		hy2_cg_opt: String($("#submgr_profile_hy2_cg_opt").val() || "bbr"),
+		schedule_enabled: !!$("#submgr_profile_schedule_enabled").prop("checked"),
+		schedule_type: String($("#submgr_profile_schedule_type").val() || "1"),
+		schedule_week: String($("#submgr_profile_schedule_week").val() || "1"),
+		schedule_day: String($("#submgr_profile_schedule_day").val() || "7"),
+		schedule_hour: String($("#submgr_profile_schedule_hour").val() || "3"),
+		schedule_minute: String($("#submgr_profile_schedule_minute").val() || "5"),
+		schedule_interval_value: String($("#submgr_profile_schedule_interval_value").val() || "1"),
+		schedule_interval_unit: String($("#submgr_profile_schedule_interval_unit").val() || "2"),
+		schedule_custom_hours: $.trim($("#submgr_profile_schedule_custom_hours").val() || "")
+	};
+}
+function generate_subscription_profile_id() {
+	var alphabet = "0123456789abcdef";
+	var id = "";
+	var exists = true;
+	var attempt = 0;
+	while (exists && attempt < 32) {
+		id = "";
+		if (window.crypto && window.crypto.getRandomValues) {
+			var bytes = new Uint8Array(6);
+			window.crypto.getRandomValues(bytes);
+			for (var i = 0; i < bytes.length; i++) {
+				id += alphabet[(bytes[i] >> 4) & 15] + alphabet[bytes[i] & 15];
+			}
+		} else {
+			id = String(Date.now().toString(16) + Math.floor(Math.random() * 0x1000000).toString(16));
+			id = id.replace(/[^a-f0-9]/g, "").slice(-12);
+		}
+		exists = !!subscribeProfileMap[id];
+		attempt++;
+	}
+	return id || String(Date.now()).slice(-12);
+}
+function set_subscription_profile_editor_saving(isSaving, text) {
+	var layero = subscribeProfileEditorLayerIndex !== null ? $("#layui-layer" + subscribeProfileEditorLayerIndex) : $(".layui-layer:has(#submgr_profile_name)").last();
+	if (!layero || !layero.length) {
+		return;
+	}
+	layero.find(".submgr-editor-saving-mask").remove();
+	layero.find(".layui-layer-btn a").toggleClass("layui-btn-disabled", !!isSaving).css("pointer-events", isSaving ? "none" : "");
+	if (!isSaving) {
+		return;
+	}
+	layero.append('<div class="submgr-editor-saving-mask"><div class="submgr-editor-saving-box"><span class="submgr-editor-saving-spinner"></span><span>' + htmlEscape(text || "数据保存中，请稍后...") + '</span></div></div>');
+}
+function validate_subscription_custom_hours() {
+	var enabled = !!$("#submgr_profile_schedule_enabled").prop("checked");
+	var type = String($("#submgr_profile_schedule_type").val() || "1");
+	var input = $("#submgr_profile_schedule_custom_hours");
+	var raw = $.trim(input.val() || "");
+	var parts = [];
+	var value = 0;
+	if (!enabled || type != "5") {
+		return true;
+	}
+	if (!raw || !/^[0-9,]+$/.test(raw) || raw.indexOf(",,") !== -1 || raw.charAt(0) == "," || raw.charAt(raw.length - 1) == ",") {
+		input.val("").focus();
+		layer.msg("自定义更新时间不合法：只能填写 0-23 的数字，并用英文逗号分隔。");
+		return false;
+	}
+	parts = raw.split(",");
+	for (var i = 0; i < parts.length; i++) {
+		if (!/^[0-9]+$/.test(parts[i])) {
+			input.val("").focus();
+			layer.msg("自定义更新时间不合法：只能填写 0-23 的数字，并用英文逗号分隔。");
+			return false;
+		}
+		value = parseInt(parts[i], 10);
+		if (isNaN(value) || value < 0 || value >= 24) {
+			input.val("").focus();
+			layer.msg("自定义更新时间不合法：小时必须小于 24。");
+			return false;
+		}
+	}
+	return true;
+}
+function save_subscription_profile_from_editor(syncAfter) {
+	var payload = get_subscription_profile_editor_payload();
+	var duplicated = null;
+	var originalProfile = payload.id ? (subscribeProfileMap[payload.id] || null) : null;
+	var shouldRefreshNodePanel = false;
+	var optimisticProfile = null;
+	var finalize_profile_save = function() {
+		optimisticProfile = $.extend({}, originalProfile || {}, payload, {
+			id: payload.id,
+			node_count: parseInt((originalProfile || {}).node_count || 0, 10) || 0,
+			last_ok_ts: (originalProfile || {}).last_ok_ts || 0,
+			last_error_ts: (originalProfile || {}).last_error_ts || 0,
+			last_error: (originalProfile || {}).last_error || "",
+			last_url_hash: (originalProfile || {}).last_url_hash || "",
+			last_group: (originalProfile || {}).last_group || "",
+			last_download_tool: (originalProfile || {}).last_download_tool || "",
+			last_download_path: (originalProfile || {}).last_download_path || "",
+			last_ua_mode: (originalProfile || {}).last_ua_mode || "",
+			last_ua_preset: (originalProfile || {}).last_ua_preset || ""
+		});
+		upsert_subscription_profile_state(optimisticProfile);
+		if (shouldRefreshNodePanel) {
+			refresh_table();
+		}
+		render_subscription_manager();
+		if (subscribeProfileEditorLayerIndex !== null) {
+			layer.close(subscribeProfileEditorLayerIndex);
+			subscribeProfileEditorLayerIndex = null;
+		}
+		if (typeof layer != "undefined" && layer.msg) {
+			layer.msg("订阅配置已保存");
+		}
+		if (syncAfter && subscription_profile_is_enabled(optimisticProfile)) {
+			sync_subscription_profiles(optimisticProfile.id);
+		}
+	};
+	if (!payload.name) {
+		alert("请填写订阅别名。");
+		return false;
+	}
+	if (!payload.url || !/^https?:\/\//i.test(payload.url)) {
+		alert("请填写正确的 http(s) 订阅链接。");
+		return false;
+	}
+	if (!validate_subscription_custom_hours()) {
+		return false;
+	}
+	duplicated = find_subscription_profile_by_url(payload.url, payload.id);
+	if (duplicated) {
+		alert("检测到相同订阅链接已添加：" + (duplicated.name || duplicated.id || "该订阅"));
+		return false;
+	}
+	if (!payload.id) {
+		payload.id = generate_subscription_profile_id();
+		originalProfile = null;
+	}
+	shouldRefreshNodePanel = !!originalProfile && subscription_profile_is_enabled(originalProfile) !== !!payload.enabled;
+	set_subscription_profile_editor_saving(true);
+	call_subscription_profile_api("save", {"ss_subscribe_profile_payload": base64_encode_utf8(JSON.stringify(payload))}, function(ok) {
+		if (!ok) {
+			set_subscription_profile_editor_saving(false);
+			layer.msg("保存订阅配置失败");
+			return;
+		}
+		finalize_profile_save();
+	});
+	return false;
+}
+function delete_subscription_profile(profileId) {
+	if (!profileId) {
+		return false;
+	}
+	layer.confirm("确定删除这个订阅配置吗？<br><br>删除此订阅会同时删除对应节点！", {
+		shade: 0.8
+	}, function(index) {
+		layer.close(index);
+		call_subscription_profile_api("delete", {"ss_subscribe_profile_id": profileId}, function(ok) {
+			if (!ok) {
+				layer.msg("删除订阅配置失败");
+				return;
+			}
+			wait_subscription_profiles_until(function(items) {
+				for (var i = 0; i < items.length; i++) {
+					if (String((items[i] || {}).id || "") == String(profileId || "")) {
+						return false;
+					}
+				}
+				return true;
+			}, function() {
+				refresh_table();
+				render_subscription_manager();
+			});
+		});
+	});
+	return false;
+}
+function sync_subscription_profiles(profileId) {
+	var dbus_post = {};
+	db_ss["ss_basic_action"] = "13";
+	if (profileId) {
+		dbus_post["ss_subscribe_profile_selected"] = profileId;
+	}
+	push_subscription_data("3", dbus_post, profileId ? "同步订阅配置" : "同步全部订阅配置", profileId || "", true);
+	return false;
+}
+function submit_subscription_uri_from_manager() {
+	var value = $("#submgr_uri_input").val() || "";
+	if (!$.trim(value)) {
+		alert("请填写至少一条分享链接。");
+		return false;
+	}
+	db_ss["ss_basic_action"] = "13";
+	var dbus_post = {
+		"ss_base64_links": Base64.encode(encodeURIComponent(value))
+	};
+	push_subscription_data("4", dbus_post, "分享链接导入日志", "", true);
+	return false;
+}
 function get_legacy_node_ids() {
 	var ids = [];
 	for (var field in db_ss) {
@@ -4040,7 +5714,7 @@ function get_legacy_node_ids() {
 	return ids.sort(compare);
 }
 function need_auto_migrate_nodes() {
-	return !node_auto_migrate_attempted && get_node_storage_schema() != 2 && get_legacy_node_ids().length > 0;
+	return !node_auto_migrate_attempted && db_fss["fss_data_schema"] != "2" && get_legacy_node_ids().length > 0;
 }
 function close_auto_migrate_layer() {
 	if (node_auto_migrate_layer !== null) {
@@ -4103,6 +5777,9 @@ function auto_migrate_node_storage(cb) {
 	});
 }
 function wait_ws_probe_then_start_status(retry){
+	if (!is_page_live_updates_allowed()) {
+		return false;
+	}
 	if (db_ss['ss_basic_enable'] != "1") {
 		return false;
 	}
@@ -4114,6 +5791,180 @@ function wait_ws_probe_then_start_status(retry){
 	}
 	get_ss_status(ws_flag == 1);
 	return true;
+}
+function is_page_live_updates_allowed() {
+	if (typeof document.hidden !== "undefined" && document.hidden) {
+		return false;
+	}
+	if (typeof document.visibilityState !== "undefined" && document.visibilityState == "hidden") {
+		return false;
+	}
+	return true;
+}
+function is_node_tab_active() {
+	return $("#tablet_1").is(":visible");
+}
+function should_run_front_status_live() {
+	return is_page_live_updates_allowed();
+}
+function should_run_node_latency_live() {
+	return is_page_live_updates_allowed() && (is_node_tab_active() || is_shunt_tab_active());
+}
+function should_run_shunt_stats_live() {
+	return is_page_live_updates_allowed() && is_shunt_tab_active();
+}
+function close_optional_socket(refName) {
+	var socket = window[refName];
+	if (!socket) {
+		return;
+	}
+	try {
+		socket.onopen = null;
+		socket.onmessage = null;
+		socket.onerror = null;
+		socket.onclose = null;
+		socket.close();
+	} catch (e) {}
+	window[refName] = null;
+}
+function close_front_status_socket() {
+	if (wss) {
+		try {
+			wss.onopen = null;
+			wss.onmessage = null;
+			wss.onerror = null;
+			wss.onclose = null;
+			wss.close();
+		} catch (e) {}
+		wss = null;
+	}
+	wss_open = 0;
+	if (statusFrontSocket && statusFrontSocket !== wss) {
+		try {
+			statusFrontSocket.close();
+		} catch (e) {}
+		statusFrontSocket = null;
+	}
+}
+function stop_front_status_runtime() {
+	clear_front_status_poll_timer();
+	clear_front_status_ws_watchdog();
+	clear_front_status_http_watchdog();
+	clear_front_status_http_abort();
+	statusFrontPending = false;
+	close_front_status_socket();
+}
+function stop_node_latency_live_runtime() {
+	batchLatencyPollSeq += 1;
+	singleLatencyPollSeq += 1;
+	batch_ws_fallback_started = false;
+	singleLatencyWsFallbackStarted = false;
+	singleLatencyPollingNode = null;
+	close_latency_ws(false);
+	close_single_latency_ws();
+}
+function close_proc_status_socket() {
+	if (window.procStatusWs) {
+		try {
+			window.procStatusWs.onopen = null;
+			window.procStatusWs.onmessage = null;
+			window.procStatusWs.onerror = null;
+			window.procStatusWs.onclose = null;
+			window.procStatusWs.close();
+		} catch (e) {}
+		window.procStatusWs = null;
+	}
+}
+function stop_page_live_runtime() {
+	stop_front_status_runtime();
+	stop_shunt_stats_runtime();
+	stop_node_latency_live_runtime();
+	close_status_history_ws();
+	close_optional_socket("wsl");
+	close_optional_socket("ws");
+	close_proc_status_socket();
+}
+function maybe_start_node_latency_auto_refresh() {
+	if (!should_run_node_latency_live()) {
+		return false;
+	}
+	if (!node_nu || db_ss["ss_basic_latency_val"] == "0") {
+		update_latency_action_links();
+		return false;
+	}
+	if (db_ss["ss_basic_lt_cru_opts"] == "1" || db_ss["ss_basic_lt_web_time"] == "0") {
+		load_latency_cache();
+		return true;
+	}
+	if (batch_test_running || single_test_running || batch_stop_pending) {
+		return true;
+	}
+	latency_test(db_ss["ss_basic_latency_val"]);
+	return true;
+}
+function resume_node_latency_live_runtime() {
+	if (!should_run_node_latency_live()) {
+		return false;
+	}
+	if (!node_nu || db_ss["ss_basic_latency_val"] == "0") {
+		update_latency_action_links();
+		return false;
+	}
+	if (batch_test_running) {
+		if (ws_flag == 1) {
+			return start_latency_ws(2);
+		}
+		batchLatencyPollSeq += 1;
+		get_latency_data(2, batchLatencyPollSeq);
+		return true;
+	}
+	if (single_test_running && single_test_node) {
+		if (ws_flag == 1) {
+			return start_single_latency_ws(single_test_node);
+		}
+		singleLatencyPollingNode = single_test_node;
+		singleLatencyPollSeq += 1;
+		get_latency_data_single(single_test_node, 0, singleLatencyPollSeq);
+		return true;
+	}
+	return maybe_start_node_latency_auto_refresh();
+}
+function resume_page_live_runtime() {
+	if (!is_page_live_updates_allowed()) {
+		return false;
+	}
+	if (db_ss && db_ss["ss_basic_enable"] == "1") {
+		if (ws_probe_pending) {
+			wait_ws_probe_then_start_status(0);
+		} else {
+			get_ss_status(ws_flag == 1);
+		}
+	}
+	if (should_run_shunt_stats_live()) {
+		schedule_shunt_stats_refresh(true);
+	}
+	if (should_run_node_latency_live()) {
+		resume_node_latency_live_runtime();
+	}
+	return true;
+}
+function handle_page_live_runtime_state() {
+	if (is_page_live_updates_allowed()) {
+		setTimeout(function() {
+			resume_page_live_runtime();
+		}, 120);
+	} else {
+		stop_page_live_runtime();
+	}
+}
+function bind_page_live_runtime() {
+	if (pageLiveRuntimeBound) {
+		return;
+	}
+	pageLiveRuntimeBound = true;
+	document.addEventListener("visibilitychange", handle_page_live_runtime_state);
+	window.addEventListener("pagehide", stop_page_live_runtime);
+	window.addEventListener("beforeunload", stop_page_live_runtime);
 }
 function clear_front_status_poll_timer() {
 	if (statusFrontPollTimer) {
@@ -4147,9 +5998,17 @@ function get_status_refresh_delay_ms() {
 	return Math.floor(Math.random() * time_base) + time_plus;
 }
 function schedule_next_front_status_poll(delayMs) {
+	if (!should_run_front_status_live()) {
+		stop_front_status_runtime();
+		return false;
+	}
 	clear_front_status_poll_timer();
 	statusFrontPollTimer = setTimeout(function() {
 		statusFrontPollTimer = null;
+		if (!should_run_front_status_live()) {
+			stop_front_status_runtime();
+			return;
+		}
 		if (db_ss && db_ss["ss_failover_enable"] == "1") {
 			get_ss_status_front_httpd();
 		} else if (ws_flag == 1) {
@@ -4160,6 +6019,10 @@ function schedule_next_front_status_poll(delayMs) {
 	}, delayMs);
 }
 function finish_front_status_poll() {
+	if (!should_run_front_status_live()) {
+		stop_front_status_runtime();
+		return false;
+	}
 	statusFrontPending = false;
 	clear_front_status_ws_watchdog();
 	clear_front_status_http_watchdog();
@@ -4348,12 +6211,17 @@ function get_dbus_data(cb) {
 					sync_shunt_state_from_dbus();
 					// generate node table
 					refresh_html();
+					if(db_ss["ss_basic_latency_val"] && db_ss["ss_basic_lt_cru_opts"] != "1" && db_ss["ss_basic_lt_web_time"] != "0"){
+						latency_test(db_ss["ss_basic_latency_val"]);
+					}
+					init_subscription_manager_entry();
 					// fill node value
 					ss_node_sel();
 					refresh_shunt_ui();
 					check_reference_notice();
 					// define click action
 					toggle_func();
+					setTimeout(init_subscription_manager_entry, 0);
 					// try to get latest version of fancyss
 					version_show();
 					message_show();
@@ -4465,6 +6333,7 @@ function ssconf_node2obj(node_sel) {
 }
 function ss_node_sel() {
 	var node_sel = resolve_node_id(E("ssconf_basic_node").value);
+	var prevNodeId = get_saved_current_node_id();
 	if (!node_sel) {
 		return;
 	}
@@ -4475,6 +6344,10 @@ function ss_node_sel() {
 	refresh_basic_method_width();
 	refresh_basic_input_width();
 	refresh_shunt_ui();
+	if (current_mode_is_shunt() && !is_shunt_supported_node(node_sel)) {
+		show_shunt_node_block_layer(node_sel);
+		rollback_shunt_node_selection(prevNodeId);
+	}
 }
 function refresh_options() {
 	if (node_max == 0) return false;
@@ -4573,6 +6446,11 @@ function save() {
 	var node_type = get_node_type(node_sel);
 	submit_flag="1";
 	if (E("ss_basic_mode") && E("ss_basic_mode").value == "7") {
+		if (node_sel && !is_shunt_supported_node(node_sel)) {
+			show_shunt_node_block_layer(node_sel);
+			return false;
+		}
+		node_sel = sync_shunt_current_node_selection(node_sel) || node_sel;
 		shuntDefaultNodeId = get_shunt_default_node_id();
 		shuntRuntimeNodeId = get_shunt_runtime_node_id();
 		if (is_shunt_direct_target(shuntDefaultNodeId) && !shuntRulesState.length) {
@@ -4667,17 +6545,16 @@ function save() {
 	  "ss_basic_week",
 	  "ss_basic_day",
 	  "ss_basic_inter_min",
-	  "ss_basic_inter_hour",
-	  "ss_basic_inter_day",
-	  "ss_basic_inter_pre",
-	  "ss_basic_time_hour",
-	  "ss_basic_time_min",
-	  "ss_basic_furl",
-	  "ss_basic_curl",
-	  "ss_basic_latency_batch",
-	  "ss_basic_lt_web_time",
-	  "ss_basic_lt_cru_opts",
-	  "ss_basic_lt_cru_time",
+		  "ss_basic_inter_hour",
+		  "ss_basic_inter_day",
+		  "ss_basic_inter_pre",
+		  "ss_basic_time_hour",
+		  "ss_basic_time_min",
+		  "ss_basic_furl",
+		  "ss_basic_curl",
+		  "ss_basic_lt_web_time",
+		  "ss_basic_lt_cru_opts",
+		  "ss_basic_lt_cru_time",
 	  "ss_basic_hy2_up_speed",
 	  "ss_basic_hy2_dl_speed",
 	  "ss_basic_hy2_tfo_switch",
@@ -4692,6 +6569,7 @@ function save() {
 	  "ss_adv_sub",
 	  "ss_basic_tablet",
 	  "ss_basic_noserver",
+	  "ss_basic_node_cards",
 	  "ss_basic_dragable",
 	  "ss_basic_qrcode",
 	  "ss_basic_enable",
@@ -4777,7 +6655,7 @@ function save() {
 	if (E("ss_basic_mode") && E("ss_basic_mode").value == "7") {
 		if (is_shunt_direct_target(shuntDefaultNodeId)) {
 			dbus["ss_basic_shunt_default_node"] = SHUNT_DIRECT_TARGET;
-		} else if (shuntDefaultNodeId && (String(shuntDefaultNodeId) != String(node_sel) || !is_shunt_supported_node(node_sel))) {
+		} else if (shuntDefaultNodeId) {
 			dbus["ss_basic_shunt_default_node"] = shuntDefaultNodeId;
 			dbus["ss_basic_shunt_default_node_identity"] = get_node_identity(shuntDefaultNodeId);
 		}
@@ -5122,6 +7000,8 @@ function push_data_ws(script, arg, obj, flag, ws_cmd){
 					//console.log('ws：成功建立websocket链接，开始获取启动日志...');
 					if (resolvedWsCmd) {
 						ws.send(resolvedWsCmd);
+					} else if (script == "ss_config.sh") {
+						ws.send(script + " " + arg);
 					} else {
 						ws.send(". " + script + " " + arg);
 					}
@@ -5331,6 +7211,328 @@ function push_data(script, arg, obj, flag){
 					}
 				}
 			}
+		}
+	});
+}
+function get_subscription_log_layero() {
+	if (subscribeLogLayerIndex === null || typeof layer == "undefined") {
+		return $();
+	}
+	return $("#layui-layer" + subscribeLogLayerIndex);
+}
+function clear_subscription_log_close_countdown() {
+	if (subscribeLogCloseTimer) {
+		clearTimeout(subscribeLogCloseTimer);
+		subscribeLogCloseTimer = null;
+	}
+	subscribeLogCloseCountdown = -1;
+}
+function set_subscription_log_close_disabled(disabled) {
+	var layero = get_subscription_log_layero();
+	if (!layero.length) {
+		return;
+	}
+	layero.find(".layui-layer-close").toggleClass("submgr-log-close-disabled", !!disabled);
+	layero.find(".layui-layer-btn0").toggleClass("submgr-log-close-disabled", !!disabled);
+}
+function update_subscription_log_close_button(text) {
+	var layero = get_subscription_log_layero();
+	if (!layero.length) {
+		return;
+	}
+	layero.find(".layui-layer-btn0").text(text || "关闭");
+}
+function set_subscription_log_running_state() {
+	subscribeLogTaskDone = false;
+	subscribeLogUserInteracted = false;
+	clear_subscription_log_close_countdown();
+	set_subscription_log_close_disabled(true);
+	update_subscription_log_close_button("订阅运行中...");
+}
+function stop_subscription_log_auto_close() {
+	subscribeLogUserInteracted = true;
+	clear_subscription_log_close_countdown();
+	set_subscription_log_close_disabled(false);
+	update_subscription_log_close_button("关闭");
+}
+function count_down_close_subscription_log() {
+	if (subscribeLogUserInteracted || subscribeLogLayerIndex === null) {
+		clear_subscription_log_close_countdown();
+		return false;
+	}
+	if (subscribeLogCloseCountdown <= 0) {
+		clear_subscription_log_close_countdown();
+		if (typeof layer != "undefined" && subscribeLogLayerIndex !== null) {
+			layer.close(subscribeLogLayerIndex);
+		}
+		return true;
+	}
+	update_subscription_log_close_button("自动关闭（" + subscribeLogCloseCountdown + "）");
+	subscribeLogCloseCountdown--;
+	subscribeLogCloseTimer = setTimeout(count_down_close_subscription_log, 1000);
+	return true;
+}
+function finish_subscription_log_task() {
+	if (subscribeLogTaskDone) {
+		return;
+	}
+	subscribeLogTaskDone = true;
+	set_subscription_log_close_disabled(false);
+	subscribeLogCloseCountdown = 6;
+	count_down_close_subscription_log();
+}
+function unlock_subscription_log_close_button() {
+	subscribeLogTaskDone = true;
+	clear_subscription_log_close_countdown();
+	set_subscription_log_close_disabled(false);
+	update_subscription_log_close_button("关闭");
+}
+function open_subscription_log_layer(title) {
+	var width = $(window).width() < 760 ? '92%' : '820px';
+	var height = $(window).height() < 720 ? '82%' : '620px';
+	if (subscribeLogLayerIndex !== null && typeof layer != "undefined" && layer.close) {
+		layer.close(subscribeLogLayerIndex);
+		subscribeLogLayerIndex = null;
+	}
+	subscribeLogLayerIndex = layer.open({
+		type: 1,
+		title: title || "订阅更新日志",
+		skin: "shunt-editor-layer submgr-log-layer",
+		area: [width, height],
+		shade: 0,
+		shadeClose: false,
+		zIndex: 19891060,
+		content: '<div class="submgr-log-shell"><div class="submgr-log-toolbar"><span class="submgr-log-title">订阅任务输出</span><span id="submgr_log_status" class="submgr-log-status">等待日志输出...</span></div><textarea id="submgr_log_textarea" class="submgr-log-textarea" readonly autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea></div>',
+		btn: ["关闭"],
+		btnAlign: "c",
+		success: function(layero, index) {
+			subscribeLogLayerIndex = index;
+			layero.css("z-index", 19891060);
+			layer.setTop(layero);
+			set_subscription_log_running_state();
+			layero.on("mousedown.subscriptionLog touchstart.subscriptionLog keydown.subscriptionLog", function(e) {
+				if (!subscribeLogTaskDone || subscribeLogUserInteracted) {
+					return;
+				}
+				if ($(e.target).closest(".layui-layer-close,.layui-layer-btn0").length) {
+					return;
+				}
+				stop_subscription_log_auto_close();
+			});
+			if (E("submgr_log_textarea")) {
+				E("submgr_log_textarea").value = "";
+			}
+		},
+		yes: function(index) {
+			if (!subscribeLogTaskDone) {
+				return false;
+			}
+			stop_subscription_log_auto_close();
+			layer.close(index);
+		},
+		cancel: function(index) {
+			if (!subscribeLogTaskDone) {
+				return false;
+			}
+			stop_subscription_log_auto_close();
+		},
+		end: function() {
+			clear_subscription_log_close_countdown();
+			clear_text_file_poll_state("subscribe_log");
+			close_subscription_log_ws();
+			finish_subscription_log_with_refresh();
+			subscribeLogLayerIndex = null;
+			subscribeLogTaskDone = false;
+			subscribeLogUserInteracted = false;
+		}
+	});
+}
+function close_subscription_log_ws() {
+	if (subscribeLogWsFallbackTimer) {
+		clearTimeout(subscribeLogWsFallbackTimer);
+		subscribeLogWsFallbackTimer = null;
+	}
+	if (subscribeLogWs) {
+		try {
+			subscribeLogWs.close();
+		} catch (e) {}
+		subscribeLogWs = null;
+	}
+}
+function finish_subscription_log_with_refresh() {
+	if (subscribeLogRefreshNodesAfterDone) {
+		subscribeLogRefreshNodesAfterDone = false;
+		fetch_subscription_profiles_dbus(function() {
+			render_subscription_manager();
+			refresh_table(function() {
+				maybe_start_node_latency_auto_refresh();
+			});
+		}, {silent: true});
+	}
+}
+function poll_subscription_log(reset) {
+	poll_text_file({
+		key: "subscribe_log",
+		reset: reset === true,
+		url: '/_temp/ss_subscribe_log.txt',
+		dataType: 'text',
+		onSuccess: function(response, state) {
+			var retArea = E("submgr_log_textarea");
+			var statusEl = E("submgr_log_status");
+			if (!retArea) {
+				return {done: true};
+			}
+			if (response.search("XU6J03M6") != -1) {
+				retArea.value = response.myReplace("XU6J03M6", " ");
+				retArea.scrollTop = retArea.scrollHeight;
+				if (statusEl) {
+					statusEl.innerHTML = "订阅任务已完成";
+				}
+				finish_subscription_log_with_refresh();
+				finish_subscription_log_task();
+				return {done: true};
+			}
+			note_text_file_poll_progress(state, response);
+			retArea.value = response || "";
+			retArea.scrollTop = retArea.scrollHeight;
+			if (statusEl) {
+				statusEl.innerHTML = state.attempt > 1 ? "订阅任务运行中..." : "正在获取日志...";
+			}
+			if (state.noChange > 1000) {
+				if (statusEl) {
+					statusEl.innerHTML = "日志长时间无更新";
+				}
+				unlock_subscription_log_close_button();
+				return {done: true};
+			}
+			return {done: false, delay: 180};
+		},
+		onError: function(xhr, state) {
+			var retArea = E("submgr_log_textarea");
+			var statusEl = E("submgr_log_status");
+			if (retArea && state.attempt > 8) {
+				retArea.value = "暂无订阅日志输出，请稍后重试。";
+			}
+			if (statusEl) {
+				statusEl.innerHTML = "等待日志文件生成...";
+			}
+			return {done: false, delay: 300};
+		}
+	});
+}
+function start_subscription_log_http() {
+	close_subscription_log_ws();
+	poll_subscription_log(true);
+}
+function start_subscription_log_stream(action, profileId) {
+	var retArea = E("submgr_log_textarea");
+	var statusEl = E("submgr_log_status");
+	if (ws_flag != 1 || window.location.protocol != "http:" || !ws_host_allowed(hostname)) {
+		start_subscription_log_http();
+		return;
+	}
+	close_subscription_log_ws();
+	if (statusEl) {
+		statusEl.innerHTML = "正在建立 WebSocket 日志通道...";
+	}
+	subscribeLogWs = new WebSocket("ws://" + hostname + ":803/");
+	subscribeLogWsFallbackTimer = setTimeout(function() {
+		if (subscribeLogWs) {
+			start_subscription_log_http();
+		}
+	}, 2500);
+	subscribeLogWs.onopen = function() {
+		if (subscribeLogWsFallbackTimer) {
+			clearTimeout(subscribeLogWsFallbackTimer);
+			subscribeLogWsFallbackTimer = null;
+		}
+		if (statusEl) {
+			statusEl.innerHTML = "订阅任务运行中...";
+		}
+		try {
+			subscribeLogWs.send("env LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 sh /koolshare/scripts/ss_node_subscribe.sh " + String(action || "3") + (profileId ? (" " + String(profileId)) : ""));
+		} catch (e) {
+			start_subscription_log_http();
+		}
+	};
+	subscribeLogWs.onerror = function() {
+		start_subscription_log_http();
+	};
+	subscribeLogWs.onmessage = function(event) {
+		var msg = String(event.data || "");
+		if (!retArea) {
+			close_subscription_log_ws();
+			return;
+		}
+		if (msg.indexOf("XU6J03M6") != -1) {
+			var cleanMsg = msg.myReplace("XU6J03M6", " ");
+			if (cleanMsg) {
+				retArea.value += cleanMsg + '\n';
+			}
+			retArea.scrollTop = retArea.scrollHeight;
+			if (statusEl) {
+				statusEl.innerHTML = "订阅任务已完成";
+			}
+			finish_subscription_log_with_refresh();
+			finish_subscription_log_task();
+			close_subscription_log_ws();
+			return;
+		}
+		retArea.value += msg + '\n';
+		retArea.scrollTop = retArea.scrollHeight;
+	};
+	subscribeLogWs.onclose = function() {
+		if (subscribeLogWsFallbackTimer) {
+			clearTimeout(subscribeLogWsFallbackTimer);
+			subscribeLogWsFallbackTimer = null;
+		}
+		subscribeLogWs = null;
+	};
+}
+function push_subscription_data(action, obj, title, profileId, affectsNodeList) {
+	var id = parseInt(Math.random() * 100000000);
+	var useWsLog = ws_flag == 1 && window.location.protocol == "http:" && ws_host_allowed(hostname);
+	var postData = {"id": id, "method": "ss_node_subscribe.sh", "params": [action], "fields": obj || {}};
+	clear_text_file_poll_state("subscribe_log");
+	subscribeLogRefreshNodesAfterDone = !!affectsNodeList;
+	if (useWsLog) {
+		open_subscription_log_layer(title || "订阅更新日志");
+			start_subscription_log_stream(action, profileId || "");
+		return;
+	}
+	$.ajax({
+		type: "POST",
+		cache: false,
+		url: "/_api/",
+		data: JSON.stringify(postData),
+		dataType: "json",
+		beforeSend: function() {
+			open_subscription_log_layer(title || "订阅更新日志");
+		},
+		success: function(response) {
+			var statusEl = E("submgr_log_status");
+				if (response && String(response.result) == String(id)) {
+					if (statusEl) {
+						statusEl.innerHTML = "订阅任务已开始，正在获取日志...";
+					}
+					start_subscription_log_http();
+					return;
+				}
+			if (statusEl) {
+				statusEl.innerHTML = "订阅任务提交异常";
+			}
+			unlock_subscription_log_close_button();
+		},
+		error: function() {
+			var retArea = E("submgr_log_textarea");
+			var statusEl = E("submgr_log_status");
+			if (retArea) {
+				retArea.value += (retArea.value ? "\n" : "") + "订阅任务提交失败，请检查软件中心接口。";
+			}
+			if (statusEl) {
+				statusEl.innerHTML = "订阅任务提交失败";
+			}
+			unlock_subscription_log_close_button();
 		}
 	});
 }
@@ -5741,13 +7943,16 @@ function verifyFields(r) {
 	}
 	// push on click
 	var trid = $(r).attr("id")
-	if ( trid == "ss_basic_qrcode" || trid == "ss_basic_dragable" || trid == "ss_basic_tablet" || trid == "ss_basic_noserver") {
+	if ( trid == "ss_basic_qrcode" || trid == "ss_basic_dragable" || trid == "ss_basic_tablet" || trid == "ss_basic_noserver" || trid == "ss_basic_node_cards") {
 		var dbus_post = {};
 		dbus_post[trid] = E(trid).checked ? '1' : '0';
 		if(ws_flag == 1){
 			push_data_ws("ss_dummy.sh", "", dbus_post, "1");
 		}else{
 			push_data("dummy_script.sh", "", dbus_post, "1");
+		}
+		if ($("#tablet_1").is(":visible")) {
+			refresh_html();
 		}
 	}
 	if ( $(r).attr("id") == "ss_adv_sub" ) {
@@ -5907,10 +8112,17 @@ function Add_profile() { //点击节点页面内添加节点动作
 	tabclickhandler(0); //默认显示添加ss节点
 	show_add_node_panel();
 }
+function show_node_editor_overlay() {
+	$("#node_editor_overlay").css("visibility", "visible").show();
+}
+function hide_node_editor_overlay() {
+	$("#node_editor_overlay").css("visibility", "hidden").hide();
+}
 function show_add_node_panel(){
 	// show add node pannel
 	document.scrollingElement.scrollTop = 0;
 	//$('html, body').css({overflow: 'hidden', height: '100%'});
+	show_node_editor_overlay();
 	$("#add_fancyss_node").show();
 	$(".contentM_qis").css("top", "0px");
 	$("#cancel_Btn").css("margin-left", "160px");
@@ -5918,6 +8130,7 @@ function show_add_node_panel(){
 }
 function cancel_add_node() {
 	//点击添加节点面板上的返回
+	hide_node_editor_overlay();
 	$("#add_fancyss_node").hide();
 	//$('html, body').css({overflow: 'auto', height: 'auto'});
 	$("body").find(".fullScreen").show(function() { tableApi.removeElement("fullScreen"); });
@@ -6184,51 +8397,13 @@ function remove_conf_table(o) {
 		return false;
 	}
 	if (get_node_storage_schema() == 2) {
-		var nodeTableScrollTop = get_node_table_scroll_top();
-		var new_nodes_v2 = ss_nodes.concat();
-		new_nodes_v2.splice(new_nodes_v2.indexOf(String(id)), 1);
-		var deleteImpact = collect_node_reference_delete_impact(String(id));
-		var removedNodeName = (confs[String(id)] && confs[String(id)]["name"]) ? String(confs[String(id)]["name"]) : ("ID " + String(id));
-		var fields_v2 = {};
-		var touchTs = get_schema2_touch_timestamp();
-		fields_v2["fss_node_" + id] = "";
-		fields_v2["fss_node_order"] = new_nodes_v2.join(",");
-		fields_v2["fss_node_catalog_ts"] = touchTs;
-		fields_v2["fss_node_config_ts"] = touchTs;
-		if (get_saved_current_node_id() == String(id)) {
-			var nextCurrentId = new_nodes_v2.length ? new_nodes_v2[0] : "";
-			fields_v2["fss_node_current"] = nextCurrentId;
-			fields_v2["fss_node_current_identity"] = nextCurrentId ? (get_node_identity(nextCurrentId) || "") : "";
-		}
-		if (get_failover_node_id() == String(id)) {
-			fields_v2["fss_node_failover_backup"] = "";
-			fields_v2["fss_node_failover_identity"] = "";
-		}
-		var post_data_v2 = compfilter(get_compare_store(), fields_v2);
-		var id_2 = parseInt(Math.random() * 100000000);
-		var postData_v2 = build_schema2_postsave_request(id_2, post_data_v2) || {"id": id_2, "method": "dummy_script.sh", "params":[], "fields": post_data_v2 };
-		$.ajax({
-			type: "POST",
-			cache:false,
-			url: "/_api/",
-			data: JSON.stringify(postData_v2),
-			dataType: "json",
-			success: function(response) {
-				schedule_schema2_node_direct_refresh();
-				invalidate_schema2_webtest_results();
-				schedule_schema2_webtest_warm();
-				refresh_table(function() {
-					set_node_table_scroll_top(nodeTableScrollTop);
-				});
-				show_deleted_node_reference_notice(removedNodeName, deleteImpact, new_nodes_v2.length ? String(new_nodes_v2[0]) : "");
-			}
-		});
+		enqueue_schema2_node_delete(String(id));
 		return;
 	}
 	//console.log("删除第", id, "个节点！！！")
 	var dbus_tmp = {};
 	var perf = "ssconf_basic_"
-	var temp = ["name", "server", "server_ip", "mode", "port", "password", "method", "rss_protocol", "rss_protocol_param", "rss_obfs", "rss_obfs_param", "ss_obfs", "ss_obfs_host", "latency", "group", "v2ray_uuid", "v2ray_alterid", "v2ray_security", "v2ray_network", "v2ray_headtype_tcp", "v2ray_headtype_kcp", "v2ray_kcp_seed", "v2ray_headtype_quic", "v2ray_grpc_mode", "v2ray_grpc_authority", "v2ray_network_path", "v2ray_network_host", "v2ray_network_security", "v2ray_network_security_ai", "v2ray_network_security_alpn_h2", "v2ray_network_security_alpn_http", "v2ray_network_security_sni", "v2ray_mux_concurrency", "v2ray_json", "v2ray_use_json", "v2ray_mux_enable", "xray_uuid", "xray_alterid", "xray_prot", "xray_encryption", "xray_flow", "xray_network", "xray_headtype_tcp", "xray_headtype_kcp", "xray_kcp_seed", "xray_headtype_quic", "xray_grpc_mode", "xray_grpc_authority", "xray_xhttp_mode", "xray_network_path", "xray_network_host", "xray_network_security", "xray_network_security_ai", "xray_network_security_alpn_h2", "xray_network_security_alpn_http", "xray_network_security_sni", "xray_pcs", "xray_vcn", "xray_fingerprint", "xray_publickey", "xray_shortid", "xray_spiderx", "xray_show", "xray_json", "tuic_json", "xray_use_json", "type", "trojan_ai", "trojan_uuid", "trojan_sni", "trojan_pcs", "trojan_vcn", "trojan_tfo", "naive_prot", "naive_server", "naive_port", "naive_user", "naive_pass", "hy2_server", "hy2_port", "hy2_pass", "hy2_up", "hy2_dl", "hy2_obfs", "hy2_obfs_pass", "hy2_sni", "hy2_pcs", "hy2_vcn", "hy2_ai", "hy2_tfo", "hy2_cg"];
+	var temp = ["name", "server", "mode", "port", "password", "method", "rss_protocol", "rss_protocol_param", "rss_obfs", "rss_obfs_param", "ss_obfs", "ss_obfs_host", "latency", "group", "v2ray_uuid", "v2ray_alterid", "v2ray_security", "v2ray_network", "v2ray_headtype_tcp", "v2ray_headtype_kcp", "v2ray_kcp_seed", "v2ray_headtype_quic", "v2ray_grpc_mode", "v2ray_grpc_authority", "v2ray_network_path", "v2ray_network_host", "v2ray_network_security", "v2ray_network_security_ai", "v2ray_network_security_alpn_h2", "v2ray_network_security_alpn_http", "v2ray_network_security_sni", "v2ray_mux_concurrency", "v2ray_json", "v2ray_use_json", "v2ray_mux_enable", "xray_uuid", "xray_alterid", "xray_prot", "xray_encryption", "xray_flow", "xray_network", "xray_headtype_tcp", "xray_headtype_kcp", "xray_kcp_seed", "xray_headtype_quic", "xray_grpc_mode", "xray_grpc_authority", "xray_xhttp_mode", "xray_network_path", "xray_network_host", "xray_network_security", "xray_network_security_ai", "xray_network_security_alpn_h2", "xray_network_security_alpn_http", "xray_network_security_sni", "xray_pcs", "xray_vcn", "xray_fingerprint", "xray_publickey", "xray_shortid", "xray_spiderx", "xray_show", "xray_json", "tuic_json", "xray_use_json", "type", "trojan_ai", "trojan_uuid", "trojan_sni", "trojan_pcs", "trojan_vcn", "trojan_tfo", "naive_prot", "naive_server", "naive_port", "naive_user", "naive_pass", "hy2_server", "hy2_port", "hy2_pass", "hy2_up", "hy2_dl", "hy2_obfs", "hy2_obfs_pass", "hy2_sni", "hy2_pcs", "hy2_vcn", "hy2_ai", "hy2_tfo", "hy2_cg"];
 	var new_nodes = ss_nodes.concat()
 	new_nodes.splice(new_nodes.indexOf(id), 1);
 	//first: mark all node from ss_nodes data as empty
@@ -6260,19 +8435,368 @@ function remove_conf_table(o) {
 		data: JSON.stringify(postData),
 		dataType: "json",
 		success: function(response) {
-			$('#ss_node_list_table tr:nth-child(' + id + ')').remove();
-			refresh_dbss(function() {
-				reorder_trs();
-				refresh_options();
+			if (get_node_view_prefers_cards()) {
+				refresh_table();
+			} else {
+				$('#ss_node_list_table tr:nth-child(' + id + ')').remove();
+				refresh_dbss(function() {
+					reorder_trs();
+					refresh_options();
+				});
+			}
+		}
+	});
+}
+function set_schema2_node_delete_pending(nodeId, pending) {
+	nodeId = nodeId ? String(nodeId) : "";
+	if (!nodeId) {
+		return;
+	}
+	if (pending) {
+		schema2NodeDeletePendingMap[nodeId] = 1;
+	} else {
+		delete schema2NodeDeletePendingMap[nodeId];
+	}
+	var $trigger = $("#td_node_" + nodeId);
+	if ($trigger.length) {
+		if ($trigger.is("input,button")) {
+			$trigger.prop("disabled", !!pending);
+		}
+		$trigger.css({
+			"pointer-events": pending ? "none" : "",
+			"opacity": pending ? "0.45" : ""
+		});
+	}
+	update_node_delete_buttons_state();
+}
+function update_node_delete_buttons_state() {
+	var deleting = schema2NodeDeleteInFlight || schema2NodeDeleteQueue.length > 0;
+	var webtesting = batch_test_running || single_test_running || batch_stop_pending;
+	var disabled = deleting || webtesting;
+	var title = deleting ? "节点删除处理中，请稍候" : (webtesting ? "测速进行中，暂不可删除节点" : "");
+	$(".remove_btn, .node-card-delete").each(function() {
+		var $btn = $(this);
+		var isPendingNode = false;
+		var id = String($btn.attr("id") || "");
+		var nodeId = "";
+		if (id.indexOf("td_node_") === 0) {
+			nodeId = id.substring("td_node_".length);
+			isPendingNode = !!schema2NodeDeletePendingMap[String(nodeId)];
+		}
+		var locked = disabled || isPendingNode;
+		if ($btn.is("input,button")) {
+			$btn.prop("disabled", !!locked);
+		}
+		if (locked) {
+			if ($btn.data("orig-title") === undefined) {
+				$btn.data("orig-title", $btn.attr("title") || "");
+			}
+			if ($btn.hasClass("node-card-delete")) {
+				$btn.data("disable-hidden", 1);
+				if ($btn.data("orig-onclick") === undefined) {
+					$btn.data("orig-onclick", $btn.attr("onclick") || "");
+				}
+			}
+			if (title) {
+				$btn.attr("title", title);
+			}
+			if ($btn.hasClass("node-card-delete") && webtesting) {
+				$btn.attr("onclick", "event.stopPropagation();alert('请等待测速结束后操作');return false;");
+			}
+			$btn.css({
+				"pointer-events": ($btn.hasClass("node-card-delete") && webtesting) ? "auto" : "none",
+				"opacity": $btn.hasClass("node-card-delete") ? "" : "0.35",
+				"cursor": "not-allowed"
+			});
+		} else {
+			if ($btn.data("orig-title") !== undefined) {
+				$btn.attr("title", $btn.data("orig-title"));
+			}
+			if ($btn.hasClass("node-card-delete")) {
+				$btn.removeData("disable-hidden");
+				if ($btn.data("orig-onclick") !== undefined) {
+					if ($btn.data("orig-onclick")) {
+						$btn.attr("onclick", $btn.data("orig-onclick"));
+					} else {
+						$btn.removeAttr("onclick");
+					}
+				}
+			}
+			$btn.css({
+				"pointer-events": "",
+				"opacity": "",
+				"cursor": ""
+			});
+		}
+	});
+	$(".latency_btn").each(function() {
+		var $btn = $(this);
+		if (disabled) {
+			if ($btn.data("orig-title") === undefined) {
+				$btn.data("orig-title", $btn.attr("title") || "");
+			}
+			if ($btn.data("orig-onclick") === undefined) {
+				$btn.data("orig-onclick", $btn.attr("onclick") || "");
+			}
+			if ($btn.data("orig-onmouseover") === undefined) {
+				$btn.data("orig-onmouseover", $btn.attr("onmouseover") || "");
+			}
+			if ($btn.data("orig-onmouseout") === undefined) {
+				$btn.data("orig-onmouseout", $btn.attr("onmouseout") || "");
+			}
+			if (title) {
+				$btn.attr("title", title);
+			}
+			$btn.attr("onclick", "return false;");
+			$btn.removeAttr("onmouseover");
+			$btn.removeAttr("onmouseout");
+			if ($btn.hasClass("node-card-latency")) {
+				$btn.css({
+					"pointer-events": "auto",
+					"opacity": "",
+					"cursor": "default"
+				});
+			} else {
+				$btn.css({
+					"pointer-events": "none",
+					"opacity": "0.35",
+					"cursor": "not-allowed"
+				});
+			}
+		} else {
+			if ($btn.data("orig-title") !== undefined) {
+				$btn.attr("title", $btn.data("orig-title"));
+			}
+			if ($btn.data("orig-onclick") !== undefined) {
+				if ($btn.data("orig-onclick")) {
+					$btn.attr("onclick", $btn.data("orig-onclick"));
+				} else {
+					$btn.removeAttr("onclick");
+				}
+			}
+			if ($btn.data("orig-onmouseover") !== undefined) {
+				if ($btn.data("orig-onmouseover")) {
+					$btn.attr("onmouseover", $btn.data("orig-onmouseover"));
+				} else {
+					$btn.removeAttr("onmouseover");
+				}
+			}
+			if ($btn.data("orig-onmouseout") !== undefined) {
+				if ($btn.data("orig-onmouseout")) {
+					$btn.attr("onmouseout", $btn.data("orig-onmouseout"));
+				} else {
+					$btn.removeAttr("onmouseout");
+				}
+			}
+			$btn.css({
+				"pointer-events": "",
+				"opacity": "",
+				"cursor": ""
 			});
 		}
 	});
 }
+function schedule_schema2_node_delete_refresh(scrollTop) {
+	if (typeof scrollTop != "undefined" && scrollTop !== null) {
+		schema2NodeDeleteRestoreScrollTop = parseInt(scrollTop, 10) || 0;
+	}
+	if (schema2NodeDeleteRefreshTimer) {
+		clearTimeout(schema2NodeDeleteRefreshTimer);
+	}
+	schema2NodeDeleteRefreshTimer = setTimeout(function() {
+		var restoreScrollTop = schema2NodeDeleteRestoreScrollTop;
+		schema2NodeDeleteRefreshTimer = null;
+		schema2NodeDeleteRestoreScrollTop = null;
+		refresh_table(function() {
+			if (restoreScrollTop !== null && typeof restoreScrollTop != "undefined") {
+				set_node_table_scroll_top(restoreScrollTop);
+			}
+		});
+	}, 160);
+}
+function normalize_latency_snapshot_value(text) {
+	text = $.trim(String(text || ""));
+	if (!text || text == "-") {
+		return "";
+	}
+	if (/^[0-9]+\s*ms$/i.test(text)) {
+		return text.replace(/\s*ms$/i, "");
+	}
+	if (/^failed!?$/i.test(text)) {
+		return "failed";
+	}
+	if (/^timeout!?$/i.test(text)) {
+		return "timeout";
+	}
+	if (/^不支持!?$/i.test(text)) {
+		return "ns";
+	}
+	if (/^(waiting|loading|booting|queued|testing|warming|stopped|canceled)$/i.test(text)) {
+		return text.toLowerCase();
+	}
+	return text;
+}
+function capture_latency_snapshot() {
+	var snapshot = [];
+	$("[id^='ss_node_lt_']").each(function() {
+		var id = String(this.id || "").replace("ss_node_lt_", "");
+		var $val = $(this).find(".latency_val");
+		var text = normalize_latency_snapshot_value($val.length ? $val.text() : $(this).text());
+		if (id && text) {
+			snapshot.push([id, text]);
+		}
+	});
+	return snapshot;
+}
+function apply_latency_snapshot(snapshot) {
+	if (!snapshot || !snapshot.length) {
+		return;
+	}
+	write_webtest(snapshot);
+}
+function apply_schema2_node_delete_local(nodeId) {
+	var nextCurrentId = "";
+	var latencySnapshot = capture_latency_snapshot();
+	nodeId = nodeId ? String(nodeId) : "";
+	if (!nodeId || $.inArray(nodeId, ss_nodes) === -1) {
+		return;
+	}
+	delete db_fss["fss_node_" + nodeId];
+	delete fss_nodes_raw[nodeId];
+	delete confs[nodeId];
+	ss_nodes = ss_nodes.filter(function(item) {
+		return String(item) !== nodeId;
+	});
+	db_fss["fss_node_order"] = ss_nodes.join(",");
+	if (get_saved_current_node_id() == nodeId) {
+		nextCurrentId = ss_nodes.length ? String(ss_nodes[0]) : "";
+		db_fss["fss_node_current"] = nextCurrentId;
+		db_fss["fss_node_current_identity"] = nextCurrentId ? (get_node_identity(nextCurrentId) || "") : "";
+	}
+	if (get_failover_node_id() == nodeId) {
+		db_fss["fss_node_failover_backup"] = "";
+		db_fss["fss_node_failover_identity"] = "";
+	}
+	fss_nodes_raw = {};
+	confs = {};
+	suppressLatencyCacheReloadOnce = true;
+	generate_node_info();
+	refresh_options();
+	refresh_html();
+	apply_latency_snapshot(latencySnapshot);
+}
+function process_schema2_node_delete_queue() {
+	if (schema2NodeDeleteInFlight) {
+		return;
+	}
+	while (schema2NodeDeleteQueue.length) {
+		var id = String(schema2NodeDeleteQueue.shift() || "");
+		if (!id) {
+			continue;
+		}
+		if ($.inArray(id, ss_nodes) === -1) {
+			set_schema2_node_delete_pending(id, false);
+			continue;
+		}
+		schema2NodeDeleteInFlight = true;
+		var nodeTableScrollTop = get_node_table_scroll_top();
+		var new_nodes_v2 = ss_nodes.concat();
+		new_nodes_v2.splice(new_nodes_v2.indexOf(id), 1);
+		var deleteImpact = collect_node_reference_delete_impact(id);
+		var removedNodeName = (confs[id] && confs[id]["name"]) ? String(confs[id]["name"]) : ("ID " + id);
+		var fields_v2 = {};
+		var touchTs = get_schema2_touch_timestamp();
+		fields_v2["fss_node_" + id] = "";
+		fields_v2["fss_node_order"] = new_nodes_v2.join(",");
+		fields_v2["fss_node_catalog_ts"] = touchTs;
+		fields_v2["fss_node_config_ts"] = touchTs;
+		if (get_saved_current_node_id() == id) {
+			var nextCurrentId = new_nodes_v2.length ? new_nodes_v2[0] : "";
+			fields_v2["fss_node_current"] = nextCurrentId;
+			fields_v2["fss_node_current_identity"] = nextCurrentId ? (get_node_identity(nextCurrentId) || "") : "";
+		}
+		if (get_failover_node_id() == id) {
+			fields_v2["fss_node_failover_backup"] = "";
+			fields_v2["fss_node_failover_identity"] = "";
+		}
+		var post_data_v2 = compfilter(get_compare_store(), fields_v2);
+		apply_schema2_node_delete_local(id);
+		set_node_table_scroll_top(nodeTableScrollTop);
+		if (!Object.keys(post_data_v2).length) {
+			set_schema2_node_delete_pending(id, false);
+			schema2NodeDeleteInFlight = false;
+			update_node_delete_buttons_state();
+			process_schema2_node_delete_queue();
+			continue;
+		}
+		var requestId = parseInt(Math.random() * 100000000);
+		var postData_v2 = build_schema2_postsave_request(requestId, post_data_v2) || {"id": requestId, "method": "dummy_script.sh", "params":[], "fields": post_data_v2 };
+		$.ajax({
+			type: "POST",
+			cache:false,
+			url: "/_api/",
+			data: JSON.stringify(postData_v2),
+			dataType: "json",
+			complete: function() {
+				set_schema2_node_delete_pending(id, false);
+				schema2NodeDeleteInFlight = false;
+				update_node_delete_buttons_state();
+				process_schema2_node_delete_queue();
+			},
+			success: function() {
+				schedule_schema2_node_cache_prune(id);
+				show_deleted_node_reference_notice(removedNodeName, deleteImpact, new_nodes_v2.length ? String(new_nodes_v2[0]) : "");
+			},
+			error: function() {
+				console.log("schema2 node delete failed:", id);
+				schedule_schema2_node_delete_refresh(nodeTableScrollTop);
+			}
+		});
+		return;
+	}
+}
+function enqueue_schema2_node_delete(nodeId) {
+	nodeId = nodeId ? String(nodeId) : "";
+	if (!nodeId) {
+		return false;
+	}
+	if (batch_test_running || single_test_running || batch_stop_pending) {
+		return false;
+	}
+	if (schema2NodeDeletePendingMap[nodeId]) {
+		return false;
+	}
+	set_schema2_node_delete_pending(nodeId, true);
+	schema2NodeDeleteQueue.push(nodeId);
+	process_schema2_node_delete_queue();
+	return false;
+}
+function schedule_schema2_node_cache_prune(nodeId) {
+	var requestId;
+	nodeId = nodeId ? String(nodeId) : "";
+	if (!nodeId || get_node_storage_schema() != 2) {
+		return;
+	}
+	requestId = parseInt(Math.random() * 100000000);
+	$.ajax({
+		type: "POST",
+		cache:false,
+		url: "/_api/",
+		data: JSON.stringify({"id": requestId, "method": "ss_node_cache.sh", "params": ["drop_node_cache", nodeId], "fields": {}}),
+		dataType: "json"
+	});
+}
 function edit_conf_table(o) {
-	var id = $(o).attr("id");
-	var ids = id.split("_");
+	var id = "";
+	var ids = [];
 	var p = "ssconf_basic";
-	id = ids[ids.length - 1];
+	if (typeof o == "string" || typeof o == "number") {
+		id = String(o);
+	} else {
+		id = $(o).attr("id");
+		ids = String(id || "").split("_");
+		id = ids[ids.length - 1];
+	}
 	edit_id = id;
 	if((String(get_saved_current_node_id()) == String(id)) && db_ss["ss_basic_enable"] == "1"){
 		alert("提醒：这个节点正在运行！\n如果更改了其中的参数，需要重新点击【保存&应用】才能生效！")
@@ -6652,26 +9176,56 @@ function refresh_node_panel(cb) {
 			}
 		}
 	});
+	$(".latency_btn").each(function() {
+		var $btn = $(this);
+		if (disabled) {
+			if ($btn.data("orig-title") === undefined) {
+				$btn.data("orig-title", $btn.attr("title") || "");
+			}
+			if (title) {
+				$btn.attr("title", title);
+			}
+			$btn.css({
+				"pointer-events": "none",
+				"opacity": "0.35",
+				"cursor": "not-allowed"
+			});
+		} else {
+			if ($btn.data("orig-title") !== undefined) {
+				$btn.attr("title", $btn.data("orig-title"));
+			}
+			$btn.css({
+				"pointer-events": "",
+				"opacity": "",
+				"cursor": ""
+			});
+		}
+	});
 }
 function generate_node_info() {
 	if (get_node_storage_schema() == 2) {
-		ss_nodes = get_fss_node_ids();
-		node_nu = ss_nodes.length;
-		node_max = ss_nodes.length > 0 ? Math.max.apply(null, ss_nodes.map(function(item) { return parseInt(item, 10); })) : 0;
-		node_idx = $.inArray(get_saved_current_node_id(), ss_nodes) + 1;
+		var allNodeIds = get_fss_node_ids();
+		ss_nodes = [];
 		confs = {};
 		fss_nodes_raw = {};
-		for (var j = 0; j < ss_nodes.length; j++) {
-			var idx = ss_nodes[j];
+		for (var j = 0; j < allNodeIds.length; j++) {
+			var idx = allNodeIds[j];
 			var raw = get_fss_raw_node(idx);
 			if (!raw) {
 				continue;
 			}
+			if (!schema2_node_is_effective_for_ui(raw)) {
+				continue;
+			}
+			ss_nodes.push(String(idx));
 			var obj = normalize_fss_node_for_ui(idx, raw);
 			if (obj != null) {
 				confs[idx] = obj;
 			}
 		}
+		node_nu = ss_nodes.length;
+		node_max = ss_nodes.length > 0 ? Math.max.apply(null, ss_nodes.map(function(item) { return parseInt(item, 10); })) : 0;
+		node_idx = $.inArray(get_saved_current_node_id(), ss_nodes) + 1;
 		return;
 	}
 	// 统计节点信息
@@ -6889,15 +9443,27 @@ function generate_node_info() {
 	//console.log("所有节点信息：", confs);
 }
 function refresh_table(cb) {
-	return $.ajax({
+	var requestSeq = ++nodeTableRefreshSeq;
+	if (nodeTableRefreshXhr && nodeTableRefreshXhr.readyState && nodeTableRefreshXhr.readyState !== 4) {
+		try {
+			nodeTableRefreshXhr.abort();
+		} catch (e) {}
+	}
+	nodeTableRefreshXhr = $.ajax({
 		type: "GET",
 		url: "/_api/ss",
 		dataType: "json",
 		cache:false,
 		success: function(data) {
+			if (requestSeq !== nodeTableRefreshSeq) {
+				return;
+			}
 			db_ss = data.result[0];
 			normalize_latency_val();
 			refresh_fss_bundle(function() {
+				if (requestSeq !== nodeTableRefreshSeq) {
+					return;
+				}
 				generate_node_info();
 				refresh_options();
 				refresh_html();
@@ -6907,11 +9473,15 @@ function refresh_table(cb) {
 			});
 		},
 		error: function() {
+			if (requestSeq !== nodeTableRefreshSeq) {
+				return;
+			}
 			if (typeof cb === "function") {
 				cb();
 			}
 		}
 	});
+	return nodeTableRefreshXhr;
 }
 function get_node_table_scroll_top() {
 	var el = E("ss_node_list_table_main");
@@ -6924,6 +9494,371 @@ function set_node_table_scroll_top(scrollTop) {
 	}
 	var maxScroll = Math.max(0, el.scrollHeight - el.clientHeight);
 	el.scrollTop = Math.min(Math.max(parseInt(scrollTop || 0, 10), 0), maxScroll);
+}
+function scroll_current_node_into_view(nodeId) {
+	var el = null;
+	nodeId = nodeId ? String(nodeId) : "";
+	if (!nodeId || !get_node_view_prefers_cards()) {
+		return false;
+	}
+	el = E("node_" + nodeId);
+	if (!el || !el.scrollIntoView) {
+		return false;
+	}
+	el.scrollIntoView({block: "nearest", inline: "nearest"});
+	return true;
+}
+function get_node_view_prefers_cards() {
+	if (E("ss_basic_node_cards")) {
+		return E("ss_basic_node_cards").checked;
+	}
+	return db_ss["ss_basic_node_cards"] != "0";
+}
+function get_node_display_type_label(c) {
+	switch(String(c["type"] || "")) {
+		case "0":
+			return (c["ss_obfs"] == "http" || c["ss_obfs"] == "tls") ? "ss[obfs]" : "ss";
+		case "1":
+			return "ssr";
+		case "3":
+			return c["protoc"] || "vmess";
+		case "4":
+			return c["protoc"] || c["xray_prot"] || "vless";
+		case "5":
+			return "trojan";
+		case "6":
+			return "Naive";
+		case "7":
+			return "tuic";
+		case "8":
+			return "hy2";
+		default:
+			return "unknown";
+	}
+}
+function get_node_display_source_label(c) {
+	var raw = null;
+	var profile = null;
+	if (!c || !c["node"]) {
+		return "本地节点";
+	}
+	raw = get_fss_raw_node(String(c["node"]));
+	if (raw && String(raw["_source"] || "") == "subscribe") {
+		profile = get_subscription_profile_for_node(raw);
+		if (profile && profile.name) {
+			return String(profile.name);
+		}
+		if (c["group"]) {
+			return String(c["group"]);
+		}
+		return "订阅节点";
+	}
+	return "本地节点";
+}
+function get_node_card_section_key(label) {
+	return encodeURIComponent(String(label || ""));
+}
+function get_node_card_section_display_label(label) {
+	var text = String(label || "");
+	var match = text.match(/^(.*)_([0-9a-fA-F]{4})$/);
+	if (match && match[1]) {
+		return match[1];
+	}
+	return text;
+}
+function get_node_card_sections() {
+	var sections = [];
+	var sectionMap = {};
+	var label = "";
+	var displayLabel = "";
+	for (var i = 0; i < ss_nodes.length; i++) {
+		var nodeId = ss_nodes[i];
+		var conf = confs[nodeId];
+		if (!conf) {
+			continue;
+		}
+		label = get_node_display_source_label(conf);
+		displayLabel = get_node_card_section_display_label(label);
+		if (!sectionMap[label]) {
+			sectionMap[label] = {
+				label: displayLabel,
+				key: get_node_card_section_key(label),
+				nodes: []
+			};
+			sections.push(sectionMap[label]);
+		}
+		sectionMap[label].nodes.push({
+			conf: conf,
+			order: i + 1
+		});
+	}
+	return sections;
+}
+function get_node_card_grid_columns($grid) {
+	var template = "";
+	var count = 0;
+	if ($grid && $grid.length && window.getComputedStyle) {
+		template = window.getComputedStyle($grid[0]).gridTemplateColumns || "";
+		if (template && template != "none") {
+			count = template.split(" ").filter(function(item) {
+				return item && item !== "/";
+			}).length;
+		}
+	}
+	return count > 0 ? count : ($(window).width() <= 640 ? 2 : 3);
+}
+var nodeCardHeightAdjustTimer = null;
+function schedule_node_card_view_height_adjust(maxVisibleRows) {
+	if (nodeCardHeightAdjustTimer) {
+		clearTimeout(nodeCardHeightAdjustTimer);
+		nodeCardHeightAdjustTimer = null;
+	}
+	nodeCardHeightAdjustTimer = setTimeout(function() {
+		nodeCardHeightAdjustTimer = null;
+		if (!$("#tablet_1").is(":visible") || !get_node_view_prefers_cards()) {
+			return;
+		}
+		adjust_node_card_view_height(maxVisibleRows);
+	}, 0);
+}
+function adjust_node_card_view_height(maxVisibleRows) {
+	var $shell = $(".node-card-shell").first();
+	var $container = $("#ss_node_list_table_main");
+	var $sections = $container.find(".node-card-section");
+	var $empty = $container.find(".node-card-empty").first();
+	var containerStyle = null;
+	var paddingBottom = 0;
+	var containerRect = null;
+	var containerScrollTop = 0;
+	var totalContentHeight = 0;
+	var visibleCardRows = 0;
+	var visibleContentHeight = 0;
+	maxVisibleRows = parseInt(maxVisibleRows || 8, 10) || 8;
+	if (!$shell.length || !$container.length) {
+		return;
+	}
+	if (!$container.is(":visible") || !$container[0].getClientRects().length) {
+		return;
+	}
+	containerStyle = window.getComputedStyle ? window.getComputedStyle($container[0]) : null;
+	paddingBottom = containerStyle ? parseFloat(containerStyle.paddingBottom || 0) : 0;
+	containerRect = $container[0].getBoundingClientRect();
+	containerScrollTop = $container[0].scrollTop || 0;
+	if ($empty.length) {
+		visibleContentHeight = Math.ceil($empty[0].getBoundingClientRect().bottom - containerRect.top + containerScrollTop);
+		totalContentHeight = Math.max(visibleContentHeight + paddingBottom, $container[0].scrollHeight || 0);
+	} else {
+		$sections.each(function() {
+		var $section = $(this);
+		var $head = $section.find(".node-card-section-head").first();
+		var headBottom = $head.length ? Math.ceil($head[0].getBoundingClientRect().bottom - containerRect.top + containerScrollTop) : 0;
+		var collapsed = $section.hasClass("is-collapsed");
+		var rowMap = {};
+		var rows = [];
+		if (headBottom > 0) {
+			totalContentHeight = Math.max(totalContentHeight, headBottom);
+			if (visibleCardRows < maxVisibleRows || visibleContentHeight === 0) {
+				visibleContentHeight = Math.max(visibleContentHeight, headBottom);
+			}
+		}
+		if (collapsed) {
+			return;
+		}
+		$section.find(".node-card").each(function() {
+			var rect = this.getBoundingClientRect();
+			var rowTop = Math.round(rect.top - containerRect.top + containerScrollTop);
+			var rowBottom = Math.ceil(rect.bottom - containerRect.top + containerScrollTop);
+			if (!rowMap[rowTop]) {
+				rowMap[rowTop] = {
+					top: rowTop,
+					bottom: rowBottom
+				};
+			} else if (rowBottom > rowMap[rowTop].bottom) {
+				rowMap[rowTop].bottom = rowBottom;
+			}
+		});
+		for (var key in rowMap) {
+			if (rowMap.hasOwnProperty(key)) {
+				rows.push(rowMap[key]);
+			}
+		}
+		rows.sort(function(a, b) {
+			return a.top - b.top;
+		});
+		if (rows.length) {
+			totalContentHeight = Math.max(totalContentHeight, rows[rows.length - 1].bottom);
+		}
+		for (var i = 0; i < rows.length && visibleCardRows < maxVisibleRows; i++) {
+			visibleContentHeight = Math.max(visibleContentHeight, rows[i].bottom);
+			visibleCardRows += 1;
+		}
+		});
+		totalContentHeight = Math.max(totalContentHeight + paddingBottom, $container[0].scrollHeight || 0);
+	}
+	nodeH = Math.max(120, Math.ceil(visibleContentHeight + paddingBottom));
+	$container.css({
+		height: nodeH + "px",
+		overflowY: totalContentHeight > nodeH ? "auto" : "hidden"
+	});
+	$shell.css("height", nodeH + "px");
+	if (totalContentHeight > nodeH) {
+		$("#ss_list_table").attr("style", "height:" + (nodeH + 56) + "px");
+	} else {
+		$("#ss_list_table").removeAttr("style");
+	}
+}
+function toggle_node_card_section(sectionKey) {
+	sectionKey = String(sectionKey || "");
+	if (!sectionKey) {
+		return false;
+	}
+	nodeCardCollapseState[sectionKey] = nodeCardCollapseState[sectionKey] ? 0 : 1;
+	refresh_html();
+	return false;
+}
+function sync_node_card_current_state(nodeId) {
+	var currentId = E("ss_basic_enable") && E("ss_basic_enable").checked ? String(get_saved_current_node_id() || "") : "";
+	var selectedId = String(resolve_node_id(E("ssconf_basic_node").value, true) || "");
+	if (!get_node_view_prefers_cards()) {
+		return;
+	}
+	$(".node-card").removeClass("is-current is-selected");
+	$(".node-card-type").removeClass("current");
+	if (currentId) {
+		var $currentCard = $("#node_" + currentId);
+		if ($currentCard.length) {
+			$currentCard.addClass("is-current");
+			$currentCard.find(".node-card-type").addClass("current");
+		}
+	}
+	if (selectedId && selectedId != currentId) {
+		var $selectedCard = $("#node_" + selectedId);
+		if ($selectedCard.length) {
+			$selectedCard.addClass("is-selected");
+		}
+	}
+}
+function get_node_card_protocol_class(c) {
+	var label = String(get_node_display_type_label(c) || "").toLowerCase();
+	if (label.indexOf("ss[obfs]") === 0 || label == "ss") return "proto-ss";
+	if (label == "ssr") return "proto-ssr";
+	if (label == "vmess") return "proto-vmess";
+	if (label == "vless") return "proto-vless";
+	if (label == "trojan") return "proto-trojan";
+	if (label == "naïve" || label == "naive") return "proto-naive";
+	if (label == "tuic") return "proto-tuic";
+	if (label == "hy2" || label == "hysteria2") return "proto-hy2";
+	return "";
+}
+function select_node_card(nodeId) {
+	nodeId = resolve_node_id(nodeId, true);
+	if (!nodeId) {
+		return false;
+	}
+	E("ssconf_basic_node").value = nodeId;
+	ss_node_sel();
+	select_default_node(2);
+	return false;
+}
+function open_node_card_qrcode(nodeId) {
+	nodeId = resolve_node_id(nodeId, true);
+	if (!nodeId) {
+		return false;
+	}
+	makeQRcode({id: "server_" + nodeId});
+	return false;
+}
+function open_node_card_editor(nodeId) {
+	nodeId = resolve_node_id(nodeId, true);
+	if (!nodeId) {
+		return false;
+	}
+	edit_conf_table(nodeId);
+	return false;
+}
+function render_node_list_footer_html() {
+	var html = '';
+	html += '<div align="center" class="nodeTable" id="node_button" style="width: 750px;margin-top:20px">';
+	if(node_nu){
+		html += '<input class="button_gen" id="dropdownbtn" type="button" value="延迟测试">';
+		html += '<div class="dropdown" id="dropdown">';
+		html += '<a id="start_latency_batch" onclick="test_latency_now(2);return false;" href="javascript:void(0);"></lable>开始批量延迟测试<lable id="ss_wts_show"></lable></a>';
+		html += '<a id="stop_latency_batch" onclick="stop_latency_batch();return false;" href="javascript:void(0);">停止批量测速</a>';
+		html += '<a onclick="clear_latency_cache()" href="javascript:void(0);"></lable>清空延迟测试结果</a>';
+		html += '<a onclick="open_latency_sett()" href="javascript:void(0);"></lable>设置</a>';
+		html += '</div>';
+	}
+	html += '<input style="margin-left:10px" id="add_ss_node" class="button_gen" onClick="Add_profile()" type="button" value="添加节点"/>';
+	if(node_nu){
+		html += '<input style="margin-left:10px" class="button_gen" type="button" onclick="save()" value="保存&应用">';
+	}
+	html += '<input id="reset_select" style="margin-left:10px; display:none" class="button_gen" onClick="select_default_node(1)" type="button" value="取消"/>';
+	html += '</div>';
+	return html;
+}
+function render_node_cards_html(nodeH, noserver, hasLatency) {
+	var html = '';
+	var currentNodeId = String(get_saved_current_node_id() || "");
+	var currentEnabled = !!(E("ss_basic_enable") && E("ss_basic_enable").checked);
+	var sections = get_node_card_sections();
+	html += '<div class="nodeTable node-card-shell" style="height:' + nodeH + 'px;">';
+	html += '<div id="ss_node_list_table_main" class="node-card-sections" style="height:' + nodeH + 'px;overflow:hidden scroll;">';
+	if (!node_nu) {
+		html += '<div class="node-card-empty">当前没有可显示的节点。<br />点击下方“添加节点”开始创建。</div>';
+	} else {
+		for (var s = 0; s < sections.length; s++) {
+			var section = sections[s];
+			var collapsed = nodeCardCollapseState[section.key] == 1;
+			html += '<div class="node-card-section' + (collapsed ? ' is-collapsed' : '') + '">';
+			html += '<div class="node-card-section-head" onclick="toggle_node_card_section(\'' + section.key + '\')">';
+			html += '<div class="node-card-section-title">' + htmlEscape(section.label) + '</div>';
+			html += '<div class="node-card-section-meta">';
+			html += '<span class="node-card-section-count">' + section.nodes.length + '</span>';
+			html += '<span class="node-card-section-arrow">▾</span>';
+			html += '</div>';
+			html += '</div>';
+			if (!collapsed) {
+				html += '<div class="node-card-grid">';
+				for (var n = 0; n < section.nodes.length; n++) {
+					var entry = section.nodes[n];
+					var c = entry.conf;
+					var isCurrent = currentEnabled && String(currentNodeId) == String(c["node"]);
+					var typeLabel = get_node_display_type_label(c);
+					var typeClass = get_node_card_protocol_class(c);
+					html += '<div class="node-card' + (isCurrent ? ' is-current' : '') + '" id="node_' + c["node"] + '" onclick="select_node_card(\'' + c["node"] + '\')">';
+					html += '<a href="javascript:void(0);" class="node-card-delete" id="td_node_' + c["node"] + '" onclick="event.stopPropagation();remove_conf_table(this);return false;" title="删除节点">&times;</a>';
+					html += '<div class="node-card-head">';
+					html += '<div class="node-card-status">';
+					html += '<span class="node-card-dot"></span>';
+					html += '<div class="node-card-name" title="' + htmlEscape(c["group"] || "") + '&#10;' + htmlEscape(c["name"] || "") + '">' + htmlEscape(c["name"] || "") + '</div>';
+					html += '</div>';
+					html += '</div>';
+						html += '<div class="node-card-subrow">';
+						html += '<span class="node-card-type ' + typeClass + (isCurrent ? ' current' : '') + '">' + htmlEscape(typeLabel) + '</span>';
+						if (hasLatency) {
+							html += '<div id="ss_node_lt_' + c["node"] + '" class="latency node-card-latency latency_btn" data-node="' + c["node"] + '" title="点击测试此节点延迟" onclick="event.stopPropagation();test_latency_single(' + c["node"] + ');return false;">';
+							html += '<img class="node-card-latency-icon" src="/res/speed.png" alt="" />';
+							html += '<span class="latency_val"></span></div>';
+						} else {
+							html += '<div class="node-card-latency"><span class="latency_val">-</span></div>';
+						}
+					html += '<div class="node-card-actions">';
+						html += '<a href="javascript:void(0);" class="node-card-tool node-card-qrcode" title="二维码" onclick="event.stopPropagation();open_node_card_qrcode(\'' + c["node"] + '\');return false;"><img src="/res/qrcode.png" alt="" /></a>';
+						html += '<a href="javascript:void(0);" class="node-card-tool node-card-edit" title="编辑节点" onclick="event.stopPropagation();open_node_card_editor(\'' + c["node"] + '\');return false;"><img src="/res/edit.png" alt="" /></a>';
+					html += '<div class="deactivate_icon" style="display:none;" id="apply_ss_node_' + c["node"] + '" onclick="event.stopPropagation();apply_this_ss_node(this);"></div>';
+					html += '</div>';
+					html += '</div>';
+					html += '</div>';
+				}
+				html += '</div>';
+			}
+			html += '</div>';
+		}
+	}
+	html += '</div>';
+	html += '</div>';
+	html += render_node_list_footer_html();
+	return html;
 }
 function refresh_html() {
 	var pageH = parseInt(E("FormTitle").style.height.split("px")[0]);
@@ -6948,6 +9883,44 @@ function refresh_html() {
 
 	// define col width in different situation
 	var noserver = parseInt(E("ss_basic_noserver").checked ? "1":"0");
+	var cardMode = get_node_view_prefers_cards();
+	var hasLatency = node_nu && db_ss["ss_basic_latency_val"] != "0";
+	if (cardMode) {
+		nodeH = Math.max(240, Math.min(pageH - nodeT - 40, 720));
+		$('.nodeTable').remove();
+		$('#ss_list_table').before(render_node_cards_html(nodeH, noserver, hasLatency));
+		schedule_node_card_view_height_adjust(8);
+		update_latency_action_links();
+		if(db_ss["ss_basic_latency_val"] && db_ss["ss_basic_lt_cru_opts"] != "1" && db_ss["ss_basic_lt_web_time"] != "0"){
+			if(suppressLatencyCacheReloadOnce){
+				suppressLatencyCacheReloadOnce = false;
+			}else{
+				load_latency_cache();
+			}
+		}
+		select_default_node(2);
+		if(node_nu){
+			const dropdownBtn = E("dropdownbtn");
+			const dropdownMenu = E("dropdown");
+			const toggleDropdown = function () {
+			  var lef = $('#dropdownbtn').offset().left;
+			  var top = $('#dropdownbtn').offset().top;
+			  var eleh = $("#dropdown").height();
+			  $('#dropdown').offset({left: lef, top: (top - eleh)});
+			  dropdownMenu.classList.toggle("show");
+			};
+			dropdownBtn.addEventListener("click", function (e) {
+			  e.stopPropagation();
+			  toggleDropdown();
+			});
+			E("app").addEventListener("click", function () {
+			  if (dropdownMenu.classList.contains("show")) {
+			    toggleDropdown();
+			  }
+			});
+		}
+		return;
+	}
 	if(node_nu && db_ss["ss_basic_latency_val"] != "0"){
 		//开启延迟测试
 		if(noserver == "1"){
@@ -6978,7 +9951,7 @@ function refresh_html() {
 		html += '<th style="width:' + width[3] + ';cursor:pointer" onclick="hide_server();" title="点我隐藏服务器信息!" >服务器地址</th>'
 	}
 	html += '<th style="width:' + width[4] + ';">类型</th>'
-	if(node_nu && db_ss["ss_basic_latency_val"] != "0"){
+	if(hasLatency){
 		html += '<th style="width:' + width[5] + ';" id="depay_th">web落地延迟</th>'
 	}
 	html += '<th style="width:' + width[6] + ';">操作</th>'
@@ -7093,12 +10066,12 @@ function refresh_html() {
 		
 		html +='</td>';
 		//webtest
-		if(node_nu && db_ss["ss_basic_latency_val"] != "0"){
+		if(hasLatency){
 			html += '<td style="width:' + width[5] + ';overflow:hidden;text-overflow:clip;" id="ss_node_lt_' + c["node"] + '" class="latency"><span class="latency_val"></span></td>';
 		}
 		//节点操作
 		html += '<td style="width:' + width[6] + ';white-space:nowrap;">'
-		if(node_nu && db_ss["ss_basic_latency_val"] != "0"){
+		if(hasLatency){
 			html += '<img src="/res/speed.png" class="latency_btn" data-node="' + c["node"] + '" style="width:22px;height:22px;cursor:pointer;vertical-align:middle;margin:-2px 0px 0px 0px;" title="点击后将测试此节点的web落地延迟！" onmouseover="this.src=\'/res/speed_blue.png\';" onmouseout="this.src=\'/res/speed.png\';" onclick="test_latency_single(' + c["node"] + ');return false;" />'
 		}
 		html += '<input style="margin:-2px 0px -4px -2px;" id="dd_node_' + c["node"] + '" class="edit_btn" type="button" onclick="edit_conf_table(this);" value="">'
@@ -7111,32 +10084,7 @@ function refresh_html() {
 	html += '</div>'
 	html += '</div>'
 	// botton region
-	html += '<div align="center" class="nodeTable" id="node_button" style="width: 750px;margin-top:20px">'
-	if(node_nu){
-		html += '<input class="button_gen" id="dropdownbtn" type="button" value="延迟测试">'
-		html += '<div class="dropdown" id="dropdown">'
-		if(db_ss["ss_basic_latency_batch"] == "1"){
-			html += '<a id="start_latency_batch" onclick="test_latency_now(2);return false;" href="javascript:void(0);"></lable>开始批量延迟测试<lable id="ss_wts_show"></lable></a>'
-			html += '<a id="stop_latency_batch" onclick="stop_latency_batch();return false;" href="javascript:void(0);">停止批量测速</a>'
-		}else{
-			html += '<a id="start_latency_batch" href="javascript:void(0);" style="color:#999;cursor:not-allowed"></lable>批量测速已关闭</a>'
-			html += '<a id="stop_latency_batch" href="javascript:void(0);" style="color:#999;cursor:not-allowed">停止批量测速</a>'
-		}
-		if(db_ss["ss_basic_latency_val"] == "0"){
-			html += '<a onclick="enable_latency_feature()" href="javascript:void(0);"></lable>开启延迟测试功能</a>'
-		}else{
-			html += '<a onclick="test_latency_now(0)" href="javascript:void(0);"></lable>关闭延迟测试功能</a>'
-		}
-		html += '<a onclick="clear_latency_cache()" href="javascript:void(0);"></lable>清空延迟测试结果</a>'
-		html += '<a onclick="open_latency_sett()" href="javascript:void(0);"></lable>设置</a>'
-		html += '</div>'
-	}
-	html += '<input style="margin-left:10px" id="add_ss_node" class="button_gen" onClick="Add_profile()" type="button" value="添加节点"/>'
-	if(node_nu){
-		html += '<input style="margin-left:10px" class="button_gen" type="button" onclick="save()" value="保存&应用">'
-	}
-	html += '<input id="reset_select" style="margin-left:10px; display:none" class="button_gen" onClick="select_default_node(1)" type="button" value="取消"/>'
-	html += '</div>'
+	html += render_node_list_footer_html();
 	// remove dynamic table
 	$('.nodeTable').remove();
 	// add dynamic table
@@ -7149,7 +10097,11 @@ function refresh_html() {
 	}
 	// ask or not ask for webtest
 	if(db_ss["ss_basic_latency_val"] && db_ss["ss_basic_lt_cru_opts"] != "1" && db_ss["ss_basic_lt_web_time"] != "0"){
-		latency_test(db_ss["ss_basic_latency_val"]);
+		if(suppressLatencyCacheReloadOnce){
+			suppressLatencyCacheReloadOnce = false;
+		}else{
+			load_latency_cache();
+		}
 	}
 	// select default node
 	select_default_node(2);
@@ -7300,7 +10252,7 @@ function save_new_order(){
 	}
 	var dbus_tmp = {};
 	var perf = "ssconf_basic_"
-	var temp = ["name", "server", "server_ip", "mode", "port", "password", "method", "rss_protocol", "rss_protocol_param", "rss_obfs", "rss_obfs_param", "ss_obfs", "ss_obfs_host", "latency", "group", "v2ray_uuid", "v2ray_alterid", "v2ray_security", "v2ray_network", "v2ray_headtype_tcp", "v2ray_headtype_kcp", "v2ray_kcp_seed", "v2ray_headtype_quic", "v2ray_grpc_mode", "v2ray_grpc_authority", "v2ray_network_path", "v2ray_network_host", "v2ray_network_security", "v2ray_network_security_ai", "v2ray_network_security_alpn_h2", "v2ray_network_security_alpn_http", "v2ray_network_security_sni", "v2ray_mux_concurrency", "v2ray_json", "v2ray_use_json", "v2ray_mux_enable", "xray_uuid", "xray_alterid", "xray_prot", "xray_encryption", "xray_flow", "xray_network", "xray_headtype_tcp", "xray_headtype_kcp", "xray_kcp_seed", "xray_headtype_quic", "xray_grpc_mode", "xray_grpc_authority", "xray_xhttp_mode", "xray_network_path", "xray_network_host", "xray_network_security", "xray_network_security_ai", "xray_network_security_alpn_h2", "xray_network_security_alpn_http", "xray_network_security_sni", "xray_pcs", "xray_vcn", "xray_fingerprint", "xray_publickey", "xray_shortid", "xray_spiderx","xray_show", "xray_json", "tuic_json", "xray_use_json", "type", "trojan_ai", "trojan_uuid", "trojan_sni", "trojan_pcs", "trojan_vcn", "trojan_tfo", "naive_prot", "naive_server", "naive_port", "naive_user", "naive_pass", "hy2_server", "hy2_port", "hy2_up", "hy2_dl", "hy2_obfs", "hy2_obfs_pass", "hy2_pass", "hy2_sni", "hy2_pcs", "hy2_vcn", "hy2_ai", "hy2_tfo", "hy2_cg"];
+	var temp = ["name", "server", "mode", "port", "password", "method", "rss_protocol", "rss_protocol_param", "rss_obfs", "rss_obfs_param", "ss_obfs", "ss_obfs_host", "latency", "group", "v2ray_uuid", "v2ray_alterid", "v2ray_security", "v2ray_network", "v2ray_headtype_tcp", "v2ray_headtype_kcp", "v2ray_kcp_seed", "v2ray_headtype_quic", "v2ray_grpc_mode", "v2ray_grpc_authority", "v2ray_network_path", "v2ray_network_host", "v2ray_network_security", "v2ray_network_security_ai", "v2ray_network_security_alpn_h2", "v2ray_network_security_alpn_http", "v2ray_network_security_sni", "v2ray_mux_concurrency", "v2ray_json", "v2ray_use_json", "v2ray_mux_enable", "xray_uuid", "xray_alterid", "xray_prot", "xray_encryption", "xray_flow", "xray_network", "xray_headtype_tcp", "xray_headtype_kcp", "xray_kcp_seed", "xray_headtype_quic", "xray_grpc_mode", "xray_grpc_authority", "xray_xhttp_mode", "xray_network_path", "xray_network_host", "xray_network_security", "xray_network_security_ai", "xray_network_security_alpn_h2", "xray_network_security_alpn_http", "xray_network_security_sni", "xray_pcs", "xray_vcn", "xray_fingerprint", "xray_publickey", "xray_shortid", "xray_spiderx","xray_show", "xray_json", "tuic_json", "xray_use_json", "type", "trojan_ai", "trojan_uuid", "trojan_sni", "trojan_pcs", "trojan_vcn", "trojan_tfo", "naive_prot", "naive_server", "naive_port", "naive_user", "naive_pass", "hy2_server", "hy2_port", "hy2_up", "hy2_dl", "hy2_obfs", "hy2_obfs_pass", "hy2_pass", "hy2_sni", "hy2_pcs", "hy2_vcn", "hy2_ai", "hy2_tfo", "hy2_cg"];
 	//first: mark all node from ss_nodes data as empty
 	for (var i = 0; i < tr.length; i++) {
 		var rowid = tr[i].getAttribute("id").split("_")[1];
@@ -7415,14 +10367,15 @@ function select_default_node(o){
 	if(node_max == 0){
 		E("reset_select").style.display = "none";
 	}
-	if(o == 1){
-		//定义取消按钮点击行为
-		if(db_ss["ss_basic_enable"] == "1"){
-			//开启开关，节点选择为db_ss["ssconf_basic_node"]
-			E("ss_basic_enable").checked = true;
+		if(o == 1){
+			//定义取消按钮点击行为
+			if(db_ss["ss_basic_enable"] == "1"){
+				//开启开关，节点选择为db_ss["ssconf_basic_node"]
+				E("ssconf_basic_node").value = get_saved_current_node_id();
+				E("ss_basic_enable").checked = true;
 			$("#apply_ss_node_" + get_saved_current_node_id()).addClass("activate_icon");
 			$("#apply_ss_node_" + get_saved_current_node_id()).removeClass("deactivate_icon");
-			if(node_idx && node_nu > nodeN){
+			if(!scroll_current_node_into_view(get_saved_current_node_id()) && node_idx && node_nu > nodeN){
 				var rows2scroll = parseInt(((node_idx*trsH - nodeH*0.5)/trsH));
 				E("ss_node_list_table_main").scrollTop = rows2scroll*trsH;
 			}
@@ -7437,7 +10390,7 @@ function select_default_node(o){
 			//用户点击开启了总开关，节点选择为db_ss["ssconf_basic_node"]，没有就默认选1
 			$("#apply_ss_node_" + sel_node).addClass("activate_icon");
 			$("#apply_ss_node_" + sel_node).removeClass("deactivate_icon");
-			if(node_idx && node_nu > nodeN){
+			if(!scroll_current_node_into_view(sel_node) && node_idx && node_nu > nodeN){
 				var rows2scroll = parseInt(((node_idx*trsH - nodeH*0.5)/trsH));
 				E("ss_node_list_table_main").scrollTop = rows2scroll*trsH;
 			}
@@ -7448,12 +10401,13 @@ function select_default_node(o){
 			$("#apply_ss_node_" + sel_node).addClass("activate_icon");
 			$("#apply_ss_node_" + sel_node).removeClass("deactivate_icon");
 			node_idx_1 = $.inArray(E("ssconf_basic_node").value, ss_nodes) + 1;
-			if(node_idx_1 && node_nu > nodeN){
+			if(!scroll_current_node_into_view(sel_node) && node_idx_1 && node_nu > nodeN){
 				var rows2scroll = parseInt(((node_idx_1*trsH - nodeH*0.5)/trsH));
 				E("ss_node_list_table_main").scrollTop = rows2scroll*trsH;
 			}
 		}
 	}
+	sync_node_card_current_state(E("ss_basic_enable").checked ? sel_node : "");
 }
 function apply_this_ss_node(rowdata) {
 	cancel_add_node();
@@ -7471,6 +10425,9 @@ function apply_this_ss_node(rowdata) {
 	}else {
 		$activateItem.addClass("activate_icon");
 		$activateItem.removeClass("deactivate_icon");
+		if (E("ss_basic_mode") && E("ss_basic_mode").value == "7") {
+			enable_id = sync_shunt_current_node_selection(enable_id) || enable_id;
+		}
 		if (get_node_storage_schema() == 2) {
 			dbus["fss_node_current"] = enable_id;
 			dbus["fss_node_current_identity"] = get_node_identity(enable_id) || "";
@@ -7486,6 +10443,7 @@ function apply_this_ss_node(rowdata) {
 	}
 	E("ssconf_basic_node").value = enable_id;
 	ss_node_sel();
+	sync_node_card_current_state(E("ss_basic_enable").checked ? enable_id : "");
 }
 function render_allow_insecure_notice(showExpr) {
 	return '&nbsp;&nbsp;<span data-show="' + showExpr + '" style="font-size:11px;color:#FFB300;line-height:1.8;">' + ALLOW_INSECURE_NOTICE + '</span>';
@@ -7998,7 +10956,6 @@ function save_latency_sett(){
 	var post_para = 0;
 	dbus_post["ss_basic_furl"] = E("ss_basic_furl").value;
 	dbus_post["ss_basic_curl"] = E("ss_basic_curl").value;
-	dbus_post["ss_basic_latency_batch"] = E("ss_basic_latency_batch").value;
 	dbus_post["ss_basic_lt_web_time"] = E("ss_basic_lt_web_time").value;
 	dbus_post["ss_basic_lt_cru_opts"] = E("ss_basic_lt_cru_opts").value;
 	dbus_post["ss_basic_lt_cru_time"] = E("ss_basic_lt_cru_time").value;
@@ -8060,9 +11017,29 @@ function close_single_latency_ws() {
 		} catch (e) {}
 		singleLatencySocket = null;
 	}
+	if (singleLatencyWsOpenTimer) {
+		clearTimeout(singleLatencyWsOpenTimer);
+		singleLatencyWsOpenTimer = null;
+	}
+	if (singleLatencyWsWatchdogTimer) {
+		clearInterval(singleLatencyWsWatchdogTimer);
+		singleLatencyWsWatchdogTimer = null;
+	}
+}
+function fallback_single_latency_ws(node) {
+	if (singleLatencyWsFallbackStarted) {
+		return;
+	}
+	if (!should_run_node_latency_live()) {
+		return;
+	}
+	singleLatencyWsFallbackStarted = true;
+	close_single_latency_ws();
+	singleLatencyPollSeq += 1;
+	get_latency_data_single(node, 0, singleLatencyPollSeq);
 }
 function latency_table_is_fresh() {
-	var latencyCells = document.querySelectorAll('td.latency .latency_val').length;
+	var latencyCells = document.querySelectorAll('[id^="ss_node_lt_"] .latency_val').length;
 	if (!node_nu || db_ss["ss_basic_latency_val"] == "0") {
 		return false;
 	}
@@ -8128,6 +11105,130 @@ function send_webtest_ws_command(command, onDone, onBusy, onError) {
 	};
 	return true;
 }
+function read_webtest_file_ws(path, onSuccess, onError) {
+	var now = Date.now();
+	var cached = webtestFileWsCache[path];
+	if (cached && (now - cached.ts) < 2000) {
+		if (typeof onSuccess === "function") onSuccess(cached.data);
+		return true;
+	}
+	if (webtestFileWsPending[path]) {
+		webtestFileWsPending[path].push({success: onSuccess, error: onError});
+		return true;
+	}
+	if (ws_flag != 1 || window.location.protocol != "http:" || !ws_host_allowed(hostname)) {
+		if (typeof onError === "function") onError();
+		return false;
+	}
+	webtestFileWsPending[path] = [{success: onSuccess, error: onError}];
+	var flush_pending = function(ok, data) {
+		var pending = webtestFileWsPending[path] || [];
+		delete webtestFileWsPending[path];
+		if (ok) {
+			webtestFileWsCache[path] = {ts: Date.now(), data: data};
+		}
+		for (var i = 0; i < pending.length; i++) {
+			var cb = ok ? pending[i].success : pending[i].error;
+			if (typeof cb === "function") cb(data);
+		}
+	};
+	var ctl = new WebSocket("ws://" + hostname + ":803/");
+	var finished = false;
+	var buffer = "";
+	var quietTimer = null;
+	var timer = setTimeout(function() {
+		if (!finished) {
+			finished = true;
+			if (quietTimer) {
+				clearTimeout(quietTimer);
+			}
+			try { ctl.close(); } catch (e) {}
+			flush_pending(false);
+		}
+	}, 1800);
+	var finish_ok = function() {
+		clearTimeout(timer);
+		if (!finished) {
+			finished = true;
+			if (quietTimer) {
+				clearTimeout(quietTimer);
+			}
+			try { ctl.close(); } catch (e) {}
+			flush_pending(true, buffer);
+		}
+	};
+	ctl.onopen = function() {
+		try {
+			ctl.send("cat " + path);
+		} catch (e) {
+			clearTimeout(timer);
+			if (!finished) {
+				finished = true;
+				if (quietTimer) {
+					clearTimeout(quietTimer);
+				}
+				flush_pending(false);
+			}
+		}
+	};
+	ctl.onerror = function() {
+		clearTimeout(timer);
+		if (!finished) {
+			finished = true;
+			if (quietTimer) {
+				clearTimeout(quietTimer);
+			}
+			flush_pending(false);
+		}
+	};
+	ctl.onmessage = function(event) {
+		var msg = String(event.data || "");
+		buffer += msg;
+		if (msg && msg.charAt(msg.length - 1) != "\n") {
+			buffer += "\n";
+		}
+		if (quietTimer) {
+			clearTimeout(quietTimer);
+		}
+		quietTimer = setTimeout(finish_ok, 120);
+	};
+	ctl.onclose = function() {
+		clearTimeout(timer);
+		if (!finished) {
+			finished = true;
+			if (quietTimer) {
+				clearTimeout(quietTimer);
+			}
+			if (buffer.length > 0) {
+				flush_pending(true, buffer);
+			} else {
+				flush_pending(false);
+			}
+		}
+	};
+	return true;
+}
+function ensure_single_latency_poll(node, delayMs) {
+	node = String(node || "");
+	delayMs = parseInt(delayMs || 0, 10) || 0;
+	if (!node) {
+		return;
+	}
+	setTimeout(function() {
+		if (!single_test_running || String(single_test_node || "") != node) {
+			return;
+		}
+		if (!should_run_node_latency_live()) {
+			return;
+		}
+		if (String(singleLatencyPollingNode || "") == node) {
+			return;
+		}
+		singleLatencyPollingNode = node;
+		singleLatencyPollSeq += 1;
+		get_latency_data_single(node, 0, singleLatencyPollSeq);
+	}, delayMs);
+}
 function update_latency_finish_time() {
 	$.ajax({
 		type: "GET",
@@ -8157,10 +11258,9 @@ function is_latency_terminal_state(value){
 	return $.isNumeric(value) || value == "failed" || value == "timeout" || value == "ns" || value == "stopped" || value == "canceled";
 }
 function update_latency_action_links() {
-	var batchEnabled = db_ss["ss_basic_latency_batch"] == "1";
 	var running = batch_test_running;
-	var startEnabled = batchEnabled && !running;
-	var stopEnabled = batchEnabled && running && !batch_stop_pending;
+	var startEnabled = !running;
+	var stopEnabled = running && !batch_stop_pending;
 	var $start = $("#start_latency_batch");
 	var $stop = $("#stop_latency_batch");
 	if($start.length){
@@ -8181,6 +11281,7 @@ function update_latency_action_links() {
 			$stop.css({"color":"#999","cursor":"not-allowed"});
 		}
 	}
+	update_node_delete_buttons_state();
 }
 function parse_webtest_lines(res){
 	const array = [];
@@ -8201,43 +11302,48 @@ function parse_webtest_lines(res){
 	});
 	return array;
 }
-function fetch_latency_snapshot_once(cb){
-	$.ajax({
-		url: '/_temp/webtest.txt',
-		type: 'GET',
-		cache:false,
-		dataType: 'text',
-		success: function(res) {
-			var array = parse_webtest_lines(res);
+function consume_webtest_snapshot_payload(payload) {
+	var text = String(payload || "");
+	if (text == "__FSS_WEBTEST_SNAPSHOT_BEGIN__") {
+		webtestSnapshotActive = true;
+		webtestSnapshotBuffer = text;
+		return true;
+	}
+	if (webtestSnapshotActive || text.indexOf("__FSS_WEBTEST_SNAPSHOT_CHUNK__") !== -1 || text.indexOf("__FSS_WEBTEST_SNAPSHOT_END__") !== -1) {
+		if (!webtestSnapshotActive) {
+			webtestSnapshotActive = true;
+			webtestSnapshotBuffer = "";
+		}
+		webtestSnapshotBuffer += text;
+		if (webtestSnapshotBuffer.indexOf("__FSS_WEBTEST_SNAPSHOT_END__") !== -1) {
+			var snapshot = webtestSnapshotBuffer
+				.replace(/__FSS_WEBTEST_SNAPSHOT_BEGIN__/g, "")
+				.replace(/__FSS_WEBTEST_SNAPSHOT_CHUNK__/g, "")
+				.replace(/__FSS_WEBTEST_SNAPSHOT_END__/g, "")
+				.split("__FSS_NL__").join("\n")
+				.replace(/\n+$/, "");
+			webtestSnapshotActive = false;
+			webtestSnapshotBuffer = "";
+			var array = parse_webtest_lines(snapshot);
 			write_webtest(array);
 			if(array.some(function(item) { return item[0] == "stop"; })){
 				batch_ws_completed = true;
 				close_latency_ws(false);
 				finish_latency_batch();
 			}
-			if(typeof cb === "function"){ cb(true); }
-		},
-		error: function() {
-			if(typeof cb === "function"){ cb(false); }
 		}
-	});
+		return true;
+	}
+	return false;
 }
 function handle_latency_ws_payload(payload) {
+	batch_ws_last_message_at = Date.now();
+	if (consume_webtest_snapshot_payload(payload)) {
+		return;
+	}
 	var array = parse_webtest_lines(payload);
 	if(!array.length){
 		return;
-	}
-	var hasRefresh = array.some(function(item) {
-		return item[0] == "refresh" && item[1] == "snapshot";
-	});
-	if(hasRefresh){
-		fetch_latency_snapshot_once();
-		array = array.filter(function(item) {
-			return item[0] != "refresh";
-		});
-		if(!array.length){
-			return;
-		}
 	}
 	write_webtest(array);
 	batch_ws_last_message_at = Date.now();
@@ -8254,12 +11360,16 @@ function fallback_latency_ws(action) {
 	if(batch_ws_fallback_started || batch_ws_completed){
 		return;
 	}
+	if (!should_run_node_latency_live()) {
+		return;
+	}
 	batch_ws_fallback_started = true;
 	close_latency_ws(false);
-	get_latency_data(action);
+	batchLatencyPollSeq += 1;
+	get_latency_data(action, batchLatencyPollSeq);
 }
 function start_latency_ws(action) {
-	if (ws_flag != 1){
+	if (ws_flag != 1 || !should_run_node_latency_live()){
 		return false;
 	}
 	close_latency_ws();
@@ -8271,12 +11381,11 @@ function start_latency_ws(action) {
 		if (!batch_test_running || batch_ws_completed) {
 			return;
 		}
-		if ((Date.now() - batch_ws_last_message_at) >= 2500) {
-			fetch_latency_snapshot_once(function(ok) {
-				if (ok) {
-					batch_ws_last_message_at = Date.now();
-				}
-			});
+		if (batch_ws_fallback_started) {
+			return;
+		}
+		if ((Date.now() - batch_ws_last_message_at) >= 3000) {
+			fallback_latency_ws(action);
 		}
 	}, 1500);
 	var ws_opened = false;
@@ -8290,7 +11399,7 @@ function start_latency_ws(action) {
 		batch_ws_last_message_at = Date.now();
 		clearTimeout(ws_open_timer);
 		try {
-			wswt.send("follow_webtest");
+			wswt.send("sh /koolshare/scripts/ss_webtest.sh follow_webtest_ws");
 		} catch (ex) {
 			fallback_latency_ws(action);
 		}
@@ -8313,47 +11422,103 @@ function start_latency_ws(action) {
 	return true;
 }
 function start_single_latency_ws(node) {
-	if (ws_flag != 1){
+	if (ws_flag != 1 || !should_run_node_latency_live()){
 		return false;
 	}
 	close_single_latency_ws();
+	singleLatencyWsFallbackStarted = false;
 	singleLatencySocket = new WebSocket("ws://" + hostname + ":803/");
+	var socketRef = singleLatencySocket;
+	var wsOpened = false;
+	singleLatencyWsLastMessageAt = Date.now();
+	singleLatencyWsOpenTimer = setTimeout(function() {
+		if (singleLatencySocket !== socketRef) {
+			return;
+		}
+		if (!wsOpened && single_test_running && String(single_test_node || "") == String(node)) {
+			fallback_single_latency_ws(node);
+		}
+	}, 1200);
+	singleLatencyWsWatchdogTimer = setInterval(function() {
+		if (singleLatencySocket !== socketRef) {
+			return;
+		}
+		if (!single_test_running || String(single_test_node || "") != String(node) || singleLatencyWsFallbackStarted) {
+			return;
+		}
+		if ((Date.now() - singleLatencyWsLastMessageAt) >= 2500) {
+			fallback_single_latency_ws(node);
+		}
+	}, 1000);
 	singleLatencySocket.onopen = function() {
+		if (singleLatencySocket !== socketRef) {
+			return;
+		}
+		wsOpened = true;
+		if (singleLatencyWsOpenTimer) {
+			clearTimeout(singleLatencyWsOpenTimer);
+			singleLatencyWsOpenTimer = null;
+		}
 		try {
-			singleLatencySocket.send("follow_webtest");
+			singleLatencySocket.send("sh /koolshare/scripts/ss_webtest.sh follow_webtest_single_ws " + String(node));
 		} catch (ex) {
-			get_latency_data_single(node, 0);
+			fallback_single_latency_ws(node);
 		}
 	};
 	singleLatencySocket.onerror = function() {
-		close_single_latency_ws();
-		get_latency_data_single(node, 0);
+		if (singleLatencySocket !== socketRef) {
+			return;
+		}
+		if (singleLatencyWsOpenTimer) {
+			clearTimeout(singleLatencyWsOpenTimer);
+			singleLatencyWsOpenTimer = null;
+		}
+		if (single_test_running && String(single_test_node || "") == String(node)) {
+			fallback_single_latency_ws(node);
+		}
 	};
 	singleLatencySocket.onclose = function() {
+		if (singleLatencySocket !== socketRef) {
+			return;
+		}
+		if (singleLatencyWsOpenTimer) {
+			clearTimeout(singleLatencyWsOpenTimer);
+			singleLatencyWsOpenTimer = null;
+		}
 		singleLatencySocket = null;
+		if (single_test_running && String(single_test_node || "") == String(node) && !singleLatencyWsFallbackStarted) {
+			fallback_single_latency_ws(node);
+		}
 	};
 	singleLatencySocket.onmessage = function(event) {
+		if (singleLatencySocket !== socketRef) {
+			return;
+		}
+		singleLatencyWsLastMessageAt = Date.now();
 		const array = parse_webtest_lines(event.data);
+		if (!array.length) {
+			return;
+		}
 		for (var i = 0; i < array.length; i++) {
 			var item = array[i];
-			if (item[0] != String(node)) continue;
+			if (item[0] != String(node)) {
+				continue;
+			}
 			write_webtest([[String(node), item[1]]]);
-			if(!is_latency_transient_state(item[1])){
+			if (!is_latency_transient_state(item[1])) {
 				single_test_wait[node] = false;
 				single_test_running = false;
 				single_test_node = null;
+				singleLatencyWsFallbackStarted = false;
 				enable_latency_buttons();
 				close_single_latency_ws();
+				break;
 			}
 		}
 	};
 	return true;
 }
 function test_latency_now(test_flag) {
-	if(test_flag == 2 && db_ss["ss_basic_latency_batch"] != "1"){
-		layer.msg("批量测速已关闭");
-		return;
-	}
 	if(test_flag == 2){
 		cancel_schema2_postchange_jobs();
 	}
@@ -8371,7 +11536,7 @@ function test_latency_now(test_flag) {
 			batch_test_running = true;
 			batch_stop_pending = false;
 			var startFollow = function() {
-				$(".latency .latency_val").html("waiting...");
+				$(".latency .latency_val").html("waiting");
 				$("#ss_wts_show").html("<em>【测速中...】</em>");
 				$("#dropdown").width(240);
 				update_latency_action_links();
@@ -8413,10 +11578,6 @@ function test_latency_now(test_flag) {
 		data: JSON.stringify(postData),
 		dataType: "json",
 		success: function(response) {
-			if(response.result == "batch_disabled"){
-				layer.msg("批量测速已关闭");
-				return;
-			}
 			if (response.result == id){
 				$(".show-btn1").trigger("click");
 				if(test_flag == 0){
@@ -8434,11 +11595,13 @@ function test_latency_now(test_flag) {
 					close_latency_flag = 0;
 					batch_test_running = true;
 					batch_stop_pending = false;
-					refresh_table(function() {
-						$(".latency .latency_val").html("waiting...");
+				refresh_table(function() {
+						$(".latency .latency_val").html("waiting");
 						$("#ss_wts_show").html("<em>【测速中...】</em>");
 						$("#dropdown").width(240);
 						update_latency_action_links();
+						batchLatencyPollSeq += 1;
+						get_latency_data(2, batchLatencyPollSeq);
 					});
 				}
 			}
@@ -8446,7 +11609,7 @@ function test_latency_now(test_flag) {
 	});
 }
 function stop_latency_batch() {
-	if(db_ss["ss_basic_latency_batch"] != "1" || !batch_test_running || batch_stop_pending){
+	if(!batch_test_running || batch_stop_pending){
 		return;
 	}
 	if(ws_flag == 1){
@@ -8545,8 +11708,11 @@ function enable_latency_feature() {
 	});
 }
 function normalize_latency_val(){
-	if(db_ss["ss_basic_latency_val"] === undefined || db_ss["ss_basic_latency_val"] === null || db_ss["ss_basic_latency_val"] === ""){
-		db_ss["ss_basic_latency_val"] = "0";
+	if(db_ss["ss_basic_latency_val"] === undefined || db_ss["ss_basic_latency_val"] === null || db_ss["ss_basic_latency_val"] === "" || db_ss["ss_basic_latency_val"] == "0"){
+		db_ss["ss_basic_latency_val"] = "2";
+	}
+	if(db_ss["ss_basic_latency_batch"] === undefined || db_ss["ss_basic_latency_batch"] === null || db_ss["ss_basic_latency_batch"] === ""){
+		db_ss["ss_basic_latency_batch"] = "1";
 	}
 	if(db_ss["ss_basic_lt_web_time"] === undefined || db_ss["ss_basic_lt_web_time"] === null || db_ss["ss_basic_lt_web_time"] === ""){
 		db_ss["ss_basic_lt_web_time"] = "30";
@@ -8555,29 +11721,18 @@ function normalize_latency_val(){
 function test_latency_single(node){
 	if(!node) return;
 	cancel_schema2_postchange_jobs();
-	if(batch_test_running){
-		check_batch_status(function(done){
-			if(done){
-				test_latency_single(node);
-			}else{
-				layer.msg("后台正在进行批量测速（新增或变更节点后会自动触发），请稍后再试");
-			}
-		});
+	if(batch_test_running || batch_stop_pending || schema2NodeDeleteInFlight || schema2NodeDeleteQueue.length > 0){
 		return;
 	}
 	if(single_test_running){
-		if(String(single_test_node) != String(node)){
-			layer.msg("请等待当前测试完成");
-			return;
-		}else{
-			return;
-		}
+		return;
 	}
 	var cell = $("#ss_node_lt_" + node + " .latency_val");
 	single_test_wait[node] = true;
 	single_test_running = true;
 	single_test_node = node;
-	write_webtest([[String(node), "waiting..."]]);
+	singleLatencyPollingNode = null;
+	write_webtest([[String(node), "waiting"]]);
 	disable_latency_buttons(node);
 	if(ws_flag == 1){
 		send_webtest_ws_command("sh /koolshare/scripts/ss_webtest.sh ws_single_test " + String(node), function() {
@@ -8589,10 +11744,12 @@ function test_latency_single(node){
 			layer.msg("后台正在进行批量测速，请稍后再试");
 			single_test_running = false;
 			single_test_node = null;
+			singleLatencyPollingNode = null;
 			enable_latency_buttons();
 		}, function() {
 			single_test_running = false;
 			single_test_node = null;
+			singleLatencyPollingNode = null;
 			enable_latency_buttons();
 		});
 		return;
@@ -8613,20 +11770,24 @@ function test_latency_single(node){
 				layer.msg("后台正在进行批量测速（新增或变更节点后会自动触发），请稍后再试");
 				single_test_running = false;
 				single_test_node = null;
+				singleLatencyPollingNode = null;
 				enable_latency_buttons();
 				return;
 			}
 			if (response.result == id){
-				setTimeout(function() { get_latency_data_single(node, 0); }, 300);
+				singleLatencyPollSeq += 1;
+				setTimeout(function() { get_latency_data_single(node, 0, singleLatencyPollSeq); }, 300);
 			}else{
 				single_test_running = false;
 				single_test_node = null;
+				singleLatencyPollingNode = null;
 				enable_latency_buttons();
 			}
 		},
 		error: function() {
 			single_test_running = false;
 			single_test_node = null;
+			singleLatencyPollingNode = null;
 			enable_latency_buttons();
 		}
 	});
@@ -8655,7 +11816,6 @@ function check_batch_status(cb){
 }
 function latency_test(action) {
 	if(action == "0") return;
-	if(db_ss["ss_basic_latency_batch"] != "1") return;
 	//console.log("start latency test")
 	
 	if(action == "2"){
@@ -8678,18 +11838,11 @@ function latency_test(action) {
 		dataType: "json",
 		success: function(response) {
 			var result = String(response.result || "");
-			if(result == "batch_disabled"){
-				batch_test_running = false;
-				batch_stop_pending = false;
-				close_latency_ws();
-				update_latency_action_links();
-				return;
-			}
 			if(action == "2"){
 				if(result.indexOf("ok1") === 0 || result.indexOf("ok4") === 0 || result.indexOf("ok5") === 0){
 					batch_test_running = true;
 					batch_stop_pending = false;
-					$(".latency .latency_val").html("waiting...");
+					$(".latency .latency_val").html("waiting");
 					if(result.indexOf("ok5") === 0){
 						$("#ss_wts_show").html("<em>【节点配置缓存重建中...】</em>");
 						$("#dropdown").width(320);
@@ -8703,7 +11856,8 @@ function latency_test(action) {
 					if(start_latency_ws(action)){
 						return;
 					}
-					get_latency_data(action);
+					batchLatencyPollSeq += 1;
+					get_latency_data(action, batchLatencyPollSeq);
 					return;
 				}
 				batch_test_running = false;
@@ -8713,7 +11867,8 @@ function latency_test(action) {
 				load_latency_cache();
 				return;
 			}
-			get_latency_data(action);
+			batchLatencyPollSeq += 1;
+			get_latency_data(action, batchLatencyPollSeq);
 		},
 		error: function(XmlHttpRequest, textStatus, errorThrown){
 			$(".latency .latency_val").html("失败!");
@@ -8725,8 +11880,14 @@ function latency_test(action) {
 		timeout: 60000
 	});
 }
-function get_latency_data_single(node, retry){
+function get_latency_data_single(node, retry, pollSeq){
+	pollSeq = parseInt(pollSeq || singleLatencyPollSeq, 10) || 0;
+	if (pollSeq !== singleLatencyPollSeq || !should_run_node_latency_live()) {
+		singleLatencyPollingNode = null;
+		return false;
+	}
 	if(retry > 40){
+		singleLatencyPollingNode = null;
 		write_webtest([[String(node), "timeout"]]);
 		single_test_wait[node] = false;
 		single_test_running = false;
@@ -8741,32 +11902,53 @@ function get_latency_data_single(node, retry){
 		cache:false,
 		dataType: 'text',
 		success: function(res) {
+			if (pollSeq !== singleLatencyPollSeq || !should_run_node_latency_live()) {
+				singleLatencyPollingNode = null;
+				return;
+			}
 			const lines = res.split('\n');
 			var value = null;
+			var stopAfterNode = false;
 			for(var i=lines.length - 1; i >= 0; i--){
 				const parts = lines[i].split('>').map(part => part.trim());
+				if(parts.length >= 2 && parts[0] == "stop" && value === null){
+					stopAfterNode = true;
+					continue;
+				}
 				if(parts.length >= 2 && parts[0] == String(node)){
 					value = parts[1];
 					break;
 				}
 			}
 			if(!value){
-				setTimeout(function() { get_latency_data_single(node, retry + 1); }, 800);
+				setTimeout(function() { get_latency_data_single(node, retry + 1, pollSeq); }, 200);
 				return;
 			}
 			write_webtest([[String(node), value]]);
 			if(is_latency_transient_state(value)){
 				single_test_wait[node] = false;
-				setTimeout(function() { get_latency_data_single(node, retry + 1); }, 800);
+				setTimeout(function() { get_latency_data_single(node, retry + 1, pollSeq); }, 200);
 			}else{
+				if(!stopAfterNode){
+					setTimeout(function() { get_latency_data_single(node, retry + 1, pollSeq); }, 200);
+					return;
+				}
 				single_test_wait[node] = false;
 				single_test_running = false;
 				single_test_node = null;
+				singleLatencyPollingNode = null;
 				enable_latency_buttons();
 			}
 		},
 		error: function(){
-			setTimeout(function() { get_latency_data_single(node, retry + 1); }, 800);
+			if (pollSeq !== singleLatencyPollSeq || !should_run_node_latency_live()) {
+				singleLatencyPollingNode = null;
+				return;
+			}
+			if (!single_test_running || String(single_test_node || "") != String(node)) {
+				singleLatencyPollingNode = null;
+			}
+			setTimeout(function() { get_latency_data_single(node, retry + 1, pollSeq); }, 250);
 		},
 	});
 }
@@ -8792,7 +11974,11 @@ function enable_latency_buttons(){
 		$(this).css({"opacity":"1","cursor":"pointer"});
 	});
 }
-function get_latency_data(action){
+function get_latency_data(action, pollSeq){
+	pollSeq = parseInt(pollSeq || batchLatencyPollSeq, 10) || 0;
+	if (pollSeq !== batchLatencyPollSeq || !should_run_node_latency_live()) {
+		return false;
+	}
 	if(close_latency_flag == 1) return false;
 	var URL = '/_temp/webtest.txt'
 	$.ajax({
@@ -8801,6 +11987,9 @@ function get_latency_data(action){
 		cache:false,
 		dataType: 'text',
 		success: function(res) {
+			if (pollSeq !== batchLatencyPollSeq || !should_run_node_latency_live()) {
+				return;
+			}
 			const array = parse_webtest_lines(res);
 			write_webtest(array);
 			const hasStop = array.some(function(item) {
@@ -8810,58 +11999,76 @@ function get_latency_data(action){
 				finish_latency_batch();
 			}else{
 				//console.log("getting webtest result...");
-					setTimeout(function() { get_latency_data(action); }, 1000);
+					setTimeout(function() { get_latency_data(action, pollSeq); }, 1000);
 			}
 		},
 		error: function(XmlHttpRequest, textStatus, errorThrown){
-				setTimeout(function() { get_latency_data(action); }, 1000);
+			if (pollSeq !== batchLatencyPollSeq || !should_run_node_latency_live()) {
+				return;
+			}
+			setTimeout(function() { get_latency_data(action, pollSeq); }, 1000);
 		},
 	});
 }
 function load_latency_cache(){
-	var URL = '/_temp/webtest.txt';
-	$.ajax({
-		url: URL,
-		type: 'GET',
-		cache:false,
-		dataType: 'text',
-		success: function(res) {
-			const data = parse_webtest_complete(res);
-			const usable = count_usable_webtest(data.list);
-			const threshold = Math.max(1, Math.floor(node_nu * 0.5));
-			if(usable > 0){
-				write_webtest(data.list);
-			}
-			if(data.complete && usable >= threshold){
-				batch_test_running = false;
-				batch_stop_pending = false;
-				update_latency_action_links();
-				return;
-			}
-			load_latency_backup(usable);
-		},
-		error: function() {
-			load_latency_backup(0);
+	if (!should_run_node_latency_live()) {
+		return false;
+	}
+	var handle_cache = function(res) {
+		const data = parse_webtest_complete(res || "");
+		const usable = count_usable_webtest(data.list);
+		const threshold = Math.max(1, Math.floor(node_nu * 0.5));
+		if(usable > 0){
+			write_webtest(data.list);
 		}
-	});
+		if(data.complete && usable >= threshold){
+			batch_test_running = false;
+			batch_stop_pending = false;
+			update_latency_action_links();
+			return;
+		}
+		load_latency_backup(usable);
+	};
+	var fallback_http = function() {
+		$.ajax({
+			url: '/_temp/webtest.txt',
+			type: 'GET',
+			cache:false,
+			dataType: 'text',
+			success: handle_cache,
+			error: function() {
+				load_latency_backup(0);
+			}
+		});
+	};
+	read_webtest_file_ws('/tmp/upload/webtest.txt', handle_cache, fallback_http);
 }
 function load_latency_backup(minCount){
-	var URL = '/_temp/webtest_bakcup.txt';
-	$.ajax({
-		url: URL,
-		type: 'GET',
-		cache:false,
-		dataType: 'text',
-		success: function(res) {
-			const data = parse_webtest_complete(res);
-			const usable = count_usable_webtest(data.list);
-			if(usable >= Math.max(1, minCount || 0)){
-				write_webtest(data.list);
-			}else if(usable > 0){
-				write_webtest(data.list);
-			}
+	var handle_backup = function(res) {
+		const data = parse_webtest_complete(res || "");
+		const usable = count_usable_webtest(data.list);
+		if(usable >= Math.max(1, minCount || 0)){
+			write_webtest(data.list);
+		}else if(usable > 0){
+			write_webtest(data.list);
 		}
-	});
+	};
+	var fallback_http = function() {
+		$.ajax({
+			url: '/_temp/webtest_bakcup.txt',
+			type: 'GET',
+			cache:false,
+			dataType: 'text',
+			success: handle_backup
+		});
+	};
+	read_webtest_file_ws('/tmp/upload/webtest_bakcup.txt', function(res) {
+		if (String(res || "").indexOf("cat:") === 0) {
+			fallback_http();
+			return;
+		}
+		handle_backup(res);
+	}, fallback_http);
 }
 function parse_webtest_complete(res){
 	const lines = res.split('\n');
@@ -8912,19 +12119,19 @@ function write_webtest(ps){
 			continue;
 		}
 		if(typeof lag === "string"){
-			lag = lag.replace(/\.{3,}/, "...");
+			lag = lag.replace(/\.{3,}/, "");
 			if(lag.indexOf("testing") === 0){
-				lag = "testing...";
+				lag = "testing";
 			}else if(lag.indexOf("waiting") === 0){
-				lag = "waiting...";
+				lag = "waiting";
 			}else if(lag.indexOf("loading") === 0){
-				lag = "loading...";
+				lag = "loading";
 			}else if(lag.indexOf("booting") === 0){
-				lag = "booting...";
+				lag = "booting";
 			}else if(lag.indexOf("queued") === 0){
-				lag = "queued...";
+				lag = "queued";
 			}else if(lag.indexOf("warming") === 0){
-				lag = "warming...";
+				lag = "warming";
 			}
 		}
 		var cellElem = document.getElementById('ss_node_lt_' + nu);
@@ -8956,18 +12163,18 @@ function write_webtest(ps){
 				test_result = '<font color="#FF0000">timeout!</font>';
 			}else if(lag == "ns"){
 				test_result = '<font color="#FF0000">不支持!</font>';
-			}else if(lag == "waiting..."){
-				test_result = '<font color="#999999">waiting...</font>';
-			}else if(lag == "loading..."){
-				test_result = '<font color="#66CCFF">loading...</font>';
-			}else if(lag == "booting..."){
-				test_result = '<font color="#FFAA33">booting...</font>';
-			}else if(lag == "queued..."){
-				test_result = '<font color="#CC99FF">queued...</font>';
-			}else if(lag == "testing..."){
-				test_result = '<font color="#00FFCC">testing...</font>';
-			}else if(lag == "warming..."){
-				test_result = '<font color="#00FFCC">warming...</font>';
+			}else if(lag == "waiting"){
+				test_result = '<font color="#999999">waiting</font>';
+			}else if(lag == "loading"){
+				test_result = '<font color="#66CCFF">loading</font>';
+			}else if(lag == "booting"){
+				test_result = '<font color="#FFAA33">booting</font>';
+			}else if(lag == "queued"){
+				test_result = '<font color="#CC99FF">queued</font>';
+			}else if(lag == "testing"){
+				test_result = '<font color="#00FFCC">testing</font>';
+			}else if(lag == "warming"){
+				test_result = '<font color="#00FFCC">warming</font>';
 			}else if(lag == "stopped"){
 				test_result = '<font color="#999999">stopped</font>';
 			}else if(lag == "canceled"){
@@ -9182,11 +12389,7 @@ function restore_ss_conf() {
 }
 function remove_SS_node() {
 	db_ss["ss_basic_action"] = "10";
-	if(ws_flag == 1){
-		push_data_ws("ss_conf.sh", "3", {});
-	}else{
-		push_data("ss_conf.sh", "3",  "");
-	}
+	push_data("ss_conf.sh", "3",  "");
 }
 function restart_dnsmaq() {
 	db_ss["ss_basic_action"] = "21";
@@ -9321,6 +12524,7 @@ function tabSelect(w) {
 		$('.show-btn' + i).removeClass('active');
 		$('#tablet_' + i).hide();
 	}
+	hide_log_switch_panel();
 	$('.show-btn' + w).addClass('active');
 	$('#tablet_' + w).show();	
 }
@@ -9338,6 +12542,14 @@ var tab_actions = {
 		$('#apply_button').hide();
 		$(".nodeTable").show();
 		select_default_node(3);
+		if (get_node_view_prefers_cards()) {
+			var $nodeCardContainer = $("#ss_node_list_table_main");
+			if ($nodeCardContainer.length) {
+				$nodeCardContainer.scrollTop(0);
+			}
+			schedule_node_card_view_height_adjust(8);
+		}
+		resume_node_latency_live_runtime();
 	},
 	2: function() {
 		$('#apply_button').show();
@@ -9391,12 +12603,14 @@ var tab_actions = {
 		$('#apply_button').show();
 		$('#ss_failover_save').hide();
 		refresh_shunt_ui();
+		resume_node_latency_live_runtime();
 	},
 	7: function() {
 		$('#apply_button').hide();
 		$('#ss_failover_save').hide();
 		verifyFields();
 		update_visibility();
+		init_subscription_manager_entry();
 	},
 	8: function() {
 		$('#apply_button').show();
@@ -9412,6 +12626,7 @@ var tab_actions = {
 	10: function() {
 		$('#apply_button').hide();
 		$('#ss_failover_save').hide();
+		show_log_switch_panel();
 		get_log();
 	}
 };
@@ -9422,6 +12637,9 @@ function handle_tab_click() {
 	var idx = parseInt(match[1], 10);
 	if (idx !== 5) {
 		stop_shunt_stats_runtime();
+	}
+	if (idx !== 1 && idx !== 5) {
+		stop_node_latency_live_runtime();
 	}
 	tabSelect(idx);
 	if (tab_actions[idx]) {
@@ -9453,6 +12671,7 @@ function toggle_func() {
 	});
 	bind_tab_handlers();
 	bind_shunt_mode_sync();
+	bind_page_live_runtime();
 	$("#log_content2").click(
 		function() {
 			x = -1;
@@ -9812,6 +13031,10 @@ function get_ss_status(use_ws) {
 	if (typeof use_ws == "undefined"){
 		use_ws = (ws_flag == 1);
 	}
+	if (!should_run_front_status_live()) {
+		stop_front_status_runtime();
+		return false;
+	}
 	set_ss_status_waiting("Waiting..");
 	if (db_ss['ss_basic_enable'] != "1") {
 		return false;
@@ -9841,6 +13064,10 @@ function get_ss_status_front() {
 }
 
 function get_ss_status_front_httpd() {
+	if (!should_run_front_status_live()) {
+		stop_front_status_runtime();
+		return false;
+	}
 	if (submit_flag == "1") {
 		schedule_next_front_status_poll(5000);
 		return false;
@@ -9874,6 +13101,10 @@ function get_ss_status_front_httpd() {
 	schedule_next_front_status_poll(get_status_refresh_delay_ms());
 }
 function get_ss_status_front_websocket() {
+	if (!should_run_front_status_live()) {
+		stop_front_status_runtime();
+		return false;
+	}
 	if (submit_flag == "1") {
 		schedule_next_front_status_poll(5000);
 		return false;
@@ -9893,6 +13124,10 @@ function get_ss_status_front_websocket() {
 	});
 }
 function get_ss_status_back() {
+	if (!should_run_front_status_live()) {
+		stop_front_status_runtime();
+		return false;
+	}
 	if (E("ss_basic_interval").value == "1"){
 		var time_wait = 3000;
 	}else if(E("ss_basic_interval").value == "2"){
@@ -9909,6 +13144,10 @@ function get_ss_status_back() {
 	setup_status_ws(get_ss_status_back_httpd, true, get_ss_status_back_websocket);
 }
 function get_ss_status_back_websocket() {
+	if (!should_run_front_status_live()) {
+		stop_front_status_runtime();
+		return false;
+	}
 	try {
 		if (!wss || wss.readyState !== 1) {
 			wss_open = 0;
@@ -9923,6 +13162,10 @@ function get_ss_status_back_websocket() {
 	}
 }
 function get_ss_status_back_httpd() {
+	if (!should_run_front_status_live()) {
+		stop_front_status_runtime();
+		return false;
+	}
 	if (db_ss['ss_basic_enable'] != "1") {
 		set_ss_status_waiting("Waiting.....");
 		return false;
@@ -10164,7 +13407,9 @@ function get_status_log_ws(s) {
 	retArea.value = "";
 	statusHistorySocket = new WebSocket("ws://" + hostname + ":803/");
 	statusHistorySocket.onopen = function() {
-		statusHistorySocket.send(s == 1 ? "follow_ssf_status" : "follow_ssc_status");
+		statusHistorySocket.send(s == 1
+			? "sh /koolshare/scripts/ss_status_ws.sh follow_ssf_status"
+			: "sh /koolshare/scripts/ss_status_ws.sh follow_ssc_status");
 	};
 	statusHistorySocket.onmessage = function(event) {
 		if (STATUS_FLAG != 1 || statusHistoryType != s) {
@@ -10260,6 +13505,36 @@ function get_status_log_httpd(s) {
 		}
 	});
 }
+function get_current_log_ws_file() {
+	return current_log_view == "subscribe" ? "/tmp/upload/ss_subscribe_log.txt" : "/tmp/upload/ss_log.txt";
+}
+function get_current_log_http_path() {
+	return current_log_view == "subscribe" ? "/_temp/ss_subscribe_log.txt" : "/_temp/ss_log.txt";
+}
+function get_current_log_empty_text() {
+	return current_log_view == "subscribe" ? "暂无任何订阅日志，获取日志失败！" : "获取日志失败！";
+}
+function update_log_switch_buttons() {
+	var isSubscribe = current_log_view == "subscribe";
+	$("#log_switch_plugin").toggleClass("active", !isSubscribe);
+	$("#log_switch_subscribe").toggleClass("active", isSubscribe);
+}
+function show_log_switch_panel() {
+	$("#log_switch_panel").show();
+	update_log_switch_buttons();
+}
+function hide_log_switch_panel() {
+	$("#log_switch_panel").hide();
+}
+function switch_log_view(type) {
+	current_log_view = type == "subscribe" ? "subscribe" : "plugin";
+	update_log_switch_buttons();
+	if (E("log_content1")) {
+		E("log_content1").value = "";
+	}
+	get_log();
+	return false;
+}
 function get_log() {
 	if (ws_flag != 1){
 		get_log_httpd();
@@ -10269,7 +13544,7 @@ function get_log() {
 	wsl.onopen = function() {
 		//console.log('wsl：成功建立websocket链接，开始获取日志...');
 		E('log_content1').value = "";
-		wsl.send("cat /tmp/upload/ss_log.txt");
+		wsl.send("cat " + get_current_log_ws_file());
 	};
 	//wsl.onclose = function() {
 	//	console.log('wsl： DISCONNECT');
@@ -10291,7 +13566,7 @@ function get_log_httpd() {
 	poll_text_file({
 		key: "main_log",
 		reset: true,
-		url: '/_temp/ss_log.txt',
+		url: get_current_log_http_path(),
 		dataType: 'html',
 		onSuccess: function(response, state) {
 			var retArea = E("log_content1");
@@ -10313,7 +13588,7 @@ function get_log_httpd() {
 			return {done: false, delay: 100};
 		},
 		onError: function(xhr) {
-			E("log_content1").value = "获取日志失败！";
+			E("log_content1").value = get_current_log_empty_text();
 			return {done: true};
 		}
 	});
@@ -11162,9 +14437,19 @@ function bind_acl_mode_sync() {
 	});
 }
 function bind_shunt_mode_sync() {
+	$("#ss_basic_mode").data("prev-mode", $("#ss_basic_mode").val() || get_selected_main_mode());
 	$("#ss_basic_mode").off("change.shunt_sync").on("change.shunt_sync", function() {
+		var nextMode = String($(this).val() || "");
+		var prevMode = String($(this).data("prev-mode") || get_selected_main_mode());
+		var nodeId = resolve_node_id(E("ssconf_basic_node").value, true);
+		if (nextMode == "7" && nodeId && !is_shunt_supported_node(nodeId)) {
+			show_shunt_node_block_layer(nodeId);
+			rollback_shunt_mode_selection(prevMode);
+			return false;
+		}
+		$(this).data("prev-mode", nextMode);
 		refresh_shunt_ui();
-		if (String($(this).val() || "") == "7") {
+		if (nextMode == "7") {
 			$(".show-btn5").trigger("click");
 		}
 	});
@@ -11538,11 +14823,7 @@ function save_online_nodes(action) {
 		dbus_post["ss_basic_hy2_cg_opt"] = E("ss_basic_hy2_cg_opt").value;
 	}
 
-	if(ws_flag == 1){
-		push_data_ws("ss_node_subscribe.sh", action,  dbus_post);
-	}else{
-		push_data("ss_node_subscribe.sh", action,  dbus_post);
-	}
+	push_subscription_data(action, dbus_post, action == "4" ? "分享链接导入日志" : "订阅更新日志", "", true);
 }
 function xray_binary_update(){
 	var dbus_post = {};
@@ -11634,6 +14915,7 @@ function toggleKeyMask(o, show){
 		</tr>
 	</table>
 	</div>
+	<div id="node_editor_overlay" class="popup_bar_bg_ks" style="display:none;z-index:199;"></div>
 	<!--============================this is the popup area for latency settings========================================-->
 	<div id="latency_test_settings" class="fancyss_qis pop_div_bg">
 		<table class="QISform_wireless" border="0" align="center" cellpadding="5" cellspacing="0">
@@ -11671,25 +14953,20 @@ function toggleKeyMask(o, show){
 											["0", "关闭定时测试"],
 											["1", "定时测试web延迟"]
 										   ]
-								var lt_batch = [
-											["0", "关闭批量测速"],
-											["1", "开启批量测速"]
-										   ]
-								var lt_web = [
-											["0", "关闭自动刷新"],
-											["15", "15分钟"],
+									var lt_web = [
+												["0", "关闭自动刷新"],
+												["15", "15分钟"],
 											["20", "20分钟"],
 											["30", "30分钟"],
 											["60", "60分钟"]
 										   ]
 								var lt_time = [["15", "每隔15分钟"], ["20", "每隔20分钟"], ["30", "每隔30分钟"], ["60", "每隔60分钟"]];
-								$('#table_test').forms([
-									{ title: '延迟测试设置', thead:'1'},
-									{ title: '<a onmouseover="mOver(this, 147)" onmouseout="RunmOut(this)" class="hintstyle" style="color:#03a9f4;" href="javascript:void(0);">web延迟测试网址 - 国外</a>', id:'ss_basic_furl', type:'select', style:'width:auto', options:furl, value:''},
-									{ title: '<a onmouseover="mOver(this, 148)" onmouseout="RunmOut(this)" class="hintstyle" style="color:#03a9f4;" href="javascript:void(0);">web延迟测试网址 - 国内</a>', id:'ss_basic_curl', type:'select', style:'width:auto', options:curl, value:''},
-									{ title: '批量测速开关', id:'ss_basic_latency_batch', type:'select', style:'width:auto', options:lt_batch, value:''},
-									{ title: '定时测试节点延迟', multi: [
-										{id:'ss_basic_lt_cru_opts', type:'select', style:'width:auto', func:'u', options:lt_cru, value:'0'},
+									$('#table_test').forms([
+										{ title: '延迟测试设置', thead:'1'},
+										{ title: '<a onmouseover="mOver(this, 147)" onmouseout="RunmOut(this)" class="hintstyle" style="color:#03a9f4;" href="javascript:void(0);">web延迟测试网址 - 国外</a>', id:'ss_basic_furl', type:'select', style:'width:auto', options:furl, value:''},
+										{ title: '<a onmouseover="mOver(this, 148)" onmouseout="RunmOut(this)" class="hintstyle" style="color:#03a9f4;" href="javascript:void(0);">web延迟测试网址 - 国内</a>', id:'ss_basic_curl', type:'select', style:'width:auto', options:curl, value:''},
+										{ title: '定时测试节点延迟', multi: [
+											{id:'ss_basic_lt_cru_opts', type:'select', style:'width:auto', func:'u', options:lt_cru, value:'0'},
 										{id:'ss_basic_lt_cru_time', type:'select', style:'width:auto', options:lt_time, value:'0'},
 									]},
 									{ title: '测速结果自动刷新', rid:'ss_basic_lt_web_time_row', hint:'156', id:'ss_basic_lt_web_time', type:'select', style:'width:auto', options:lt_web, value:'30'},
@@ -12746,16 +16023,6 @@ function toggleKeyMask(o, show){
 														]);
 													</script>
 												</table>
-												<table id="table_link" style="margin:8px 0px 0px 0px;" width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable">
-													<script type="text/javascript">
-														var ph1 = "填入以ss://、ssr://、vmess://、vless://、trojan://、hysteria2://、hy2://、tuic://、naive+https://、naive+quic://开头的链接，多个链接请分行填写";
-														$('#table_subscribe').forms([
-															{ title: '通过分享链接添加节点', thead:'1'},
-															{ title: '分享链接', id:'ss_base64_links', type:'textarea', hint:117, rows:'11', ph:ph1},
-															{ title: '操作', suffix:'<a type="button" class="ss_btn" style="cursor:pointer" onclick="get_online_nodes(4)">解析并保存为节点</a>'},
-														]);
-													</script>
-												</table>
 											</div>
 											<div id="tablet_8" style="display: none;">
 												<div id="ss_acl_table"></div>
@@ -12839,6 +16106,7 @@ function toggleKeyMask(o, show){
 															{ title: '节点列表最大显示行数', id:'ss_basic_row', type:'select', func:'onchange="save_row();"', style:'width:auto', options:[]},
 															{ title: '开启生成二维码功能', id:'ss_basic_qrcode', func:'v', type:'checkbox', value:true},
 															{ title: '开启节点排序功能', id:'ss_basic_dragable', func:'v', type:'checkbox', value:true},
+															{ title: '节点管理使用卡片视图', id:'ss_basic_node_cards', func:'v', type:'checkbox', value:true},
 															{ title: '节点管理页面设为默认标签页', id:'ss_basic_tablet', func:'v', type:'checkbox', value:false},
 															{ title: '节点管理页面隐藏服务器地址', id:'ss_basic_noserver', func:'v', type:'checkbox', value:false},
 															{ td: '<tr><td class="smth" style="font-weight: bold;" colspan="2">代理行为</td></tr>'},
@@ -12860,6 +16128,12 @@ function toggleKeyMask(o, show){
 											<div id="tablet_10" style="display: none;">
 												<div id="log_content" style="overflow:hidden;">
 													<textarea cols="63" rows="36" wrap="on" readonly="readonly" id="log_content1" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
+												</div>
+											</div>
+											<div class="apply_gen" id="log_switch_panel" style="display:none;padding-top:10px;">
+												<div class="log-switch-bar">
+													<a href="javascript:void(0);" id="log_switch_plugin" class="log-switch-btn active" onclick="return switch_log_view('plugin');">插件日志</a>
+													<a href="javascript:void(0);" id="log_switch_subscribe" class="log-switch-btn" onclick="return switch_log_view('subscribe');">订阅日志</a>
 												</div>
 											</div>
 											<div class="apply_gen" id="loading_icon">
