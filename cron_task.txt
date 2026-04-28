@@ -11,7 +11,7 @@ done
 
 cru a rclone_guard "*/10 * * * * /jffs/scripts/rclone_webdav.sh >> /tmp/rclone_guard.log 2>&1"
 
-cru a ss_update_daily "30 4 * * * sh /jffs/.koolshare/scripts/ss_update.sh update >> /jffs/scripts/ss_update.log 2>&1"
+cru a ss_update_daily "50 4 * * * sh /jffs/.koolshare/scripts/ss_update.sh update >> /jffs/scripts/ss_update.log 2>&1"
 
 cru a clean_logs "0 3 * * * /jffs/scripts/clean_logs.sh >> /jffs/scripts/clean_logs.txt 2>&1"
 
