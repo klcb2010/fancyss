@@ -84,6 +84,7 @@ SUB_TOOL_DIFF_SUMMARY_FILE_CURRENT=""
 SUB_TOOL_PARSE_SUMMARY_FILE_CURRENT=""
 SUB_NODE_TOOL_PLAN_FILE_CURRENT=""
 SUB_REFERENCE_RESOLVED_IDENTITY=""
+SUB_AIRPORT_SPECIAL_CHANGED=0
 SUB_ACTIVE_PROFILE_ID=""
 SUB_ACTIVE_PROFILE_NAME=""
 SUB_ACTIVE_UA_MODE=""
@@ -1093,25 +1094,63 @@ sub_refresh_airport_special_conf(){
 	local extractor=""
 	local preferred_dns_plan=""
 	local urls_file="${payload_file}.airport_dns_urls.$$"
+	local before_sig=""
+	local after_sig=""
 	[ -n "${airport_identity}" ] || return 0
+	before_sig="$(fss_airport_special_conf_signature "${airport_identity}" 2>/dev/null)"
 	if ! sub_airport_profile_match_node_domain_dns "${airport_identity}" "${payload_kind}";then
 		fss_remove_airport_special_conf "${airport_identity}" >/dev/null 2>&1 || true
+		after_sig="$(fss_airport_special_conf_signature "${airport_identity}" 2>/dev/null)"
+		[ "${before_sig}" != "${after_sig}" ] && SUB_AIRPORT_SPECIAL_CHANGED=1
 		return 0
 	fi
 	extractor="$(sub_airport_profile_get_node_domain_dns_value "${airport_identity}" "${payload_kind}" "extractor" 2>/dev/null)"
 	preferred_dns_plan="$(sub_airport_profile_get_node_domain_dns_value "${airport_identity}" "${payload_kind}" "preferred_dns_plan" 2>/dev/null)"
 	[ -n "${extractor}" ] || {
 		fss_remove_airport_special_conf "${airport_identity}" >/dev/null 2>&1 || true
+		after_sig="$(fss_airport_special_conf_signature "${airport_identity}" 2>/dev/null)"
+		[ "${before_sig}" != "${after_sig}" ] && SUB_AIRPORT_SPECIAL_CHANGED=1
 		return 0
 	}
 	[ -n "${preferred_dns_plan}" ] || preferred_dns_plan="smartdns"
 	if ! sub_extract_airport_dns_urls_to_file "${payload_file}" "${extractor}" "${urls_file}" >/dev/null 2>&1;then
 		rm -f "${urls_file}"
 		fss_remove_airport_special_conf "${airport_identity}" >/dev/null 2>&1 || true
+		after_sig="$(fss_airport_special_conf_signature "${airport_identity}" 2>/dev/null)"
+		[ "${before_sig}" != "${after_sig}" ] && SUB_AIRPORT_SPECIAL_CHANGED=1
 		return 0
 	fi
 	sub_write_airport_special_conf "${airport_identity}" "${airport_label}" "${payload_kind}" "${preferred_dns_plan}" "${urls_file}" >/dev/null 2>&1 || true
 	rm -f "${urls_file}"
+	after_sig="$(fss_airport_special_conf_signature "${airport_identity}" 2>/dev/null)"
+	[ "${before_sig}" != "${after_sig}" ] && SUB_AIRPORT_SPECIAL_CHANGED=1
+}
+
+sub_refresh_airport_special_conf_from_cached_source(){
+	local sub_hash="$1"
+	local parsed_file="$2"
+	local payload_kind="$3"
+	local payload_file="$4"
+	local sep="$(printf '\037')"
+	local first_meta=""
+	local airport_identity=""
+	local _source_scope=""
+	local _source_hash=""
+	local group_label=""
+	local airport_label=""
+	[ -n "${sub_hash}" ] || return 0
+	[ -f "${parsed_file}" ] || return 0
+	[ -f "${payload_file}" ] || return 0
+	first_meta="$(sub_first_line_meta_tsv "${parsed_file}" 2>/dev/null)" || first_meta=""
+	IFS="${sep}" read -r airport_identity _source_scope _source_hash group_label <<-EOF
+	${first_meta}
+	EOF
+	[ -n "${airport_identity}" ] || return 0
+	[ "${airport_identity}" = "local" ] && return 0
+	airport_label="$(normalize_group_name "${group_label}" 2>/dev/null)"
+	[ -n "${airport_label}" ] || airport_label="$(get_sub_group_fallback_by_hash "${sub_hash}" 2>/dev/null)"
+	[ -n "${airport_label}" ] || airport_label="${airport_identity}"
+	sub_refresh_airport_special_conf "${airport_identity}" "${airport_label}" "${payload_kind}" "${payload_file}"
 }
 
 sub_resolve_redirect_url(){
@@ -2121,6 +2160,8 @@ sub_restore_from_parsed_cache(){
 	local sub_hash="$1"
 	local short_hash="$2"
 	local sub_count="$3"
+	local payload_kind="$4"
+	local payload_file="$5"
 	local parsed_cache local_file parsed_md5 local_md5 sub_tool compare_file compare_summary_file
 
 	[ -n "${sub_hash}" ] || return 1
@@ -2131,6 +2172,9 @@ sub_restore_from_parsed_cache(){
 	if ! sub_parsed_cache_meta_matches "${sub_hash}";then
 		echo_date "♻️检测到订阅筛选条件或默认参数发生变化，需要重新解析并重写节点。"
 		return 1
+	fi
+	if [ -n "${payload_kind}" ] && [ -n "${payload_file}" ];then
+		sub_refresh_airport_special_conf_from_cached_source "${short_hash}" "${parsed_cache}" "${payload_kind}" "${payload_file}" >/dev/null 2>&1 || true
 	fi
 	local_file=$(find "${DIR}" -name "local_*_${short_hash}.txt" | head -n1)
 	parsed_md5=$(sub_nodes_file_md5 "${parsed_cache}")
@@ -2671,6 +2715,104 @@ sub_prepare_current_nodes_identity_export(){
 		return 1
 	}
 	rm -f "${tmp_export}"
+}
+
+keyword_filter_alias_tokens(){
+	case "$1" in
+	*香港*|*[Hh][Oo][Nn][Gg]*|HK|hk|Hk|hK)
+		printf '%s\n' '香港|[Hh][Oo][Nn][Gg][[:space:]]*[Kk][Oo][Nn][Gg]|[Hh][Oo][Nn][Gg]|(^|[^[:alnum:]])[Hh][Kk]([0-9]|[^[:alpha:]]|$)'
+		;;
+	*新加坡*|*[Ss][Ii][Nn][Gg]*|SG|sg|Sg|sG)
+		printf '%s\n' '新加坡|[Ss][Ii][Nn][Gg][Aa][Pp][Oo][Rr][Ee]|[Ss][Ii][Nn][Gg]|(^|[^[:alnum:]])[Ss][Gg]([0-9]|[^[:alpha:]]|$)'
+		;;
+	*美国*|*美國*|*[Uu][Nn][Ii][Tt][Ee][Dd]*[Ss][Tt][Aa][Tt][Ee][Ss]*|*[Aa][Mm][Ee][Rr][Ii][Cc][Aa]*|USA|usa|US|us)
+		printf '%s\n' '美国|美國|[Uu][Nn][Ii][Tt][Ee][Dd][[:space:]]*[Ss][Tt][Aa][Tt][Ee][Ss]|USA|usa|(^|[^[:alnum:]])[Uu][Ss]([0-9]|[^[:alpha:]]|$)|[Aa][Mm][Ee][Rr][Ii][Cc][Aa]'
+		;;
+	*日本*|*[Jj][Aa][Pp][Aa][Nn]*|JP|jp)
+		printf '%s\n' '日本|[Jj][Aa][Pp][Aa][Nn]|(^|[^[:alnum:]])[Jj][Pp]([0-9]|[^[:alpha:]]|$)'
+		;;
+	*台湾*|*台灣*|*[Tt][Aa][Ii][Ww][Aa][Nn]*|TW|tw)
+		printf '%s\n' '台湾|台灣|[Tt][Aa][Ii][Ww][Aa][Nn]|(^|[^[:alnum:]])[Tt][Ww]([0-9]|[^[:alpha:]]|$)'
+		;;
+	*韩国*|*韓國*|*[Kk][Oo][Rr][Ee][Aa]*|KR|kr)
+		printf '%s\n' '韩国|韓國|[Kk][Oo][Rr][Ee][Aa]|(^|[^[:alnum:]])[Kk][Rr]([0-9]|[^[:alpha:]]|$)'
+		;;
+	*英国*|*英國*|*[Uu][Nn][Ii][Tt][Ee][Dd]*[Kk][Ii][Nn][Gg][Dd][Oo][Mm]*|*[Bb][Rr][Ii][Tt][Aa][Ii][Nn]*|UK|uk|GB|gb)
+		printf '%s\n' '英国|英國|[Uu][Nn][Ii][Tt][Ee][Dd][[:space:]]*[Kk][Ii][Nn][Gg][Dd][Oo][Mm]|[Bb][Rr][Ii][Tt][Aa][Ii][Nn]|(^|[^[:alnum:]])([Uu][Kk]|[Gg][Bb])([0-9]|[^[:alpha:]]|$)'
+		;;
+	*德国*|*德國*|*[Gg][Ee][Rr][Mm][Aa][Nn][Yy]*|DE|de)
+		printf '%s\n' '德国|德國|[Gg][Ee][Rr][Mm][Aa][Nn][Yy]|(^|[^[:alnum:]])[Dd][Ee]([0-9]|[^[:alpha:]]|$)'
+		;;
+	*法国*|*法國*|*[Ff][Rr][Aa][Nn][Cc][Ee]*|FR|fr)
+		printf '%s\n' '法国|法國|[Ff][Rr][Aa][Nn][Cc][Ee]|(^|[^[:alnum:]])[Ff][Rr]([0-9]|[^[:alpha:]]|$)'
+		;;
+	*荷兰*|*荷蘭*|*[Nn][Ee][Tt][Hh][Ee][Rr][Ll][Aa][Nn][Dd][Ss]*|*[Hh][Oo][Ll][Ll][Aa][Nn][Dd]*|NL|nl)
+		printf '%s\n' '荷兰|荷蘭|[Nn][Ee][Tt][Hh][Ee][Rr][Ll][Aa][Nn][Dd][Ss]|[Hh][Oo][Ll][Ll][Aa][Nn][Dd]|(^|[^[:alnum:]])[Nn][Ll]([0-9]|[^[:alpha:]]|$)'
+		;;
+	*加拿大*|*[Cc][Aa][Nn][Aa][Dd][Aa]*|CA|ca)
+		printf '%s\n' '加拿大|[Cc][Aa][Nn][Aa][Dd][Aa]|(^|[^[:alnum:]])[Cc][Aa]([0-9]|[^[:alpha:]]|$)'
+		;;
+	*澳大利亚*|*澳大利亞*|*澳洲*|*[Aa][Uu][Ss][Tt][Rr][Aa][Ll][Ii][Aa]*|AU|au)
+		printf '%s\n' '澳大利亚|澳大利亞|澳洲|[Aa][Uu][Ss][Tt][Rr][Aa][Ll][Ii][Aa]|(^|[^[:alnum:]])[Aa][Uu]([0-9]|[^[:alpha:]]|$)'
+		;;
+	*俄罗斯*|*俄羅斯*|*[Rr][Uu][Ss][Ss][Ii][Aa]*|RU|ru)
+		printf '%s\n' '俄罗斯|俄羅斯|[Rr][Uu][Ss][Ss][Ii][Aa]|(^|[^[:alnum:]])[Rr][Uu]([0-9]|[^[:alpha:]]|$)'
+		;;
+	*)
+		return 1
+		;;
+	esac
+}
+
+keyword_filter_short_ascii_code(){
+	case "$1" in
+	[A-Za-z][A-Za-z])
+		return 0
+		;;
+	*)
+		return 1
+		;;
+	esac
+}
+
+keyword_filter_match_token_text(){
+	local text="$1"
+	local token="$2"
+	local alias_pattern=""
+	[ -n "${token}" ] || return 1
+	if keyword_filter_short_ascii_code "${token}";then
+		if printf '%s' "${text}" | grep -Eiq "(^|[^[:alnum:]])${token}([0-9]|[^[:alpha:]]|$)" 2>/dev/null;then
+			printf '%s' "${text}" | grep -Eio "(^|[^[:alnum:]])${token}([0-9]|[^[:alpha:]]|$)" 2>/dev/null | sed -n '1p'
+			return 0
+		fi
+	else
+		if printf '%s' "${text}" | grep -Eiq "${token}" 2>/dev/null; then
+			printf '%s' "${text}" | grep -Eio "${token}" 2>/dev/null | sed -n '1p'
+			return 0
+		fi
+	fi
+	alias_pattern="$(keyword_filter_alias_tokens "${token}" 2>/dev/null)" || alias_pattern=""
+	[ -n "${alias_pattern}" ] || return 1
+	if printf '%s' "${text}" | grep -Eiq "${alias_pattern}" 2>/dev/null; then
+		printf '%s' "${text}" | grep -Eio "${alias_pattern}" 2>/dev/null | sed -n '1p'
+		return 0
+	fi
+	return 1
+}
+
+keyword_filter_match_text(){
+	local text="$1"
+	local pattern="$2"
+	local token=""
+	[ -n "${pattern}" ] || return 1
+	while IFS= read -r token
+	do
+		[ -n "${token}" ] || continue
+		keyword_filter_match_token_text "${text}" "${token}" && return 0
+	done <<EOF
+$(printf '%s' "${pattern}" | tr '|' '\n')
+EOF
+	return 1
 }
 
 sub_filter_offline_duplicate_nodes(){
@@ -3448,6 +3590,16 @@ sub_after_nodes_written(){
 	local input_file="$1"
 	sub_run_reference_postwrite_steps "${input_file}"
 	sub_run_cache_postwrite_steps
+}
+
+sub_refresh_runtime_dns_after_airport_special_change(){
+	[ "${SUB_AIRPORT_SPECIAL_CHANGED}" = "1" ] || return 0
+	echo_date "⚙️机场专属节点DNS配置已更新，刷新节点域名解析运行态..."
+	if [ "$(dbus get ss_basic_enable)" = "1" ];then
+		sh /koolshare/ss/ssconfig.sh refresh_node_direct_dns >/dev/null 2>&1 || true
+	else
+		fss_refresh_node_direct_cache >/dev/null 2>&1 || true
+	fi
 }
 
 sub_resolve_reference_from_plan(){
@@ -5299,6 +5451,9 @@ filter_nodes(){
 	local _type=$1
 	local remarks=$2
 	local server=$3
+	local keyword_text="${remarks} ${server}"
+	local KEY_MATCH_1=""
+	local KEY_MATCH_2=""
 	if [ "${SUB_KEEP_INFO_NODE}" != "1" ] && printf '%s' "${remarks}" | grep -Eiq '^(Expire|Traffic|Sync)[:：]|^(剩余流量|套餐到期|订阅到期|到期时间|流量重置|更新于|更新时间)[:：]'; then
 		echo_date "⚪${_type}节点：【${remarks}】，不添加，因为是订阅信息节点"
 		let exclude+=1
@@ -5307,8 +5462,8 @@ filter_nodes(){
 	if [ -z "${KEY_WORDS_1}" -a -z "${KEY_WORDS_2}" ];then
 		return 0
 	fi
-	[ -n "${KEY_WORDS_1}" ] && local KEY_MATCH_1=$(echo ${remarks} ${server} | grep -Eo "${KEY_WORDS_1}")
-	[ -n "${KEY_WORDS_2}" ] && local KEY_MATCH_2=$(echo ${remarks} ${server} | grep -Eo "${KEY_WORDS_2}")
+	[ -n "${KEY_WORDS_1}" ] && KEY_MATCH_1=$(keyword_filter_match_text "${keyword_text}" "${KEY_WORDS_1}")
+	[ -n "${KEY_WORDS_2}" ] && KEY_MATCH_2=$(keyword_filter_match_text "${keyword_text}" "${KEY_WORDS_2}")
 	if [ -n "${KEY_WORDS_1}" -a -z "${KEY_WORDS_2}" ]; then
 		# 排除节点：yes，包括节点：no
 		if [ -n "${KEY_MATCH_1}" ]; then
@@ -7194,7 +7349,7 @@ get_online_rule_now(){
 	local decoded_file="${DIR}/sub_file_decode_${decoded_hash}.txt"
 	sub_prepare_decoded_file "${decoded_hash}" || return 1
 	if sub_raw_cache_same_as_current "${SUB_LINK_HASH}" "${source_hash}" "${decoded_file}";then
-		sub_restore_from_parsed_cache "${SUB_LINK_HASH}" "${source_hash}" "${sub_count}" && return 0
+		sub_restore_from_parsed_cache "${SUB_LINK_HASH}" "${source_hash}" "${sub_count}" "${SUB_PAYLOAD_KIND}" "${decoded_file}" && return 0
 	fi
 	echo_date "🔍开始解析节点信息..."
 	local NODE_NU_RAW="0"
@@ -7454,6 +7609,7 @@ start_node_subscribe(){
 	echo_date "✈️开始订阅！"
 	SUB_LOCAL_CHANGED=0
 	SUB_HAS_FAILURE=0
+	SUB_AIRPORT_SPECIAL_CHANGED=0
 
 	# 2. 创建临时文件夹，用于存放订阅过程中的临时文件
 	mkdir -p $DIR
@@ -7574,6 +7730,7 @@ start_node_subscribe(){
 	# 5. 写入所有节点
 	if [ "${SUB_LOCAL_CHANGED}" != "1" ];then
 		echo_date "ℹ️本次订阅没有任何节点发生变化，不进行写入，继续！"
+		sub_refresh_runtime_dns_after_airport_special_change
 		echo_date "🧹一点点清理工作..."
 		echo_date "🎉所有订阅任务完成，请等待6秒，或者手动关闭本窗口！"
 		echo_date "==================================================================="

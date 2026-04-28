@@ -5,17 +5,39 @@
 source /koolshare/scripts/base.sh
 NEW_PATH=$(echo $PATH|tr ':' '\n'|sed '/opt/d;/mmc/d'|awk '!a[$0]++'|tr '\n' ':'|sed '$ s/:$//')
 export PATH=${NEW_PATH}
-alias echo_date='echo 【$(TZ=UTC-8 date -R +%Y%m%d\ %X)】:'
 MODEL=
 FW_TYPE_NAME=
 DIR=$(cd $(dirname $0); pwd)
 [ -f "${DIR}/scripts/ss_node_common.sh" ] && source "${DIR}/scripts/ss_node_common.sh"
 [ -f "${DIR}/scripts/ss_subscribe_profile_lib.sh" ] && source "${DIR}/scripts/ss_subscribe_profile_lib.sh"
+unalias echo_date >/dev/null 2>&1
+echo_date(){
+	echo "【$(TZ=UTC-8 date -R "+%Y%m%d %X")】: $*"
+}
 module=${DIR##*/}
 LINUX_VER=$(uname -r|awk -F"." '{print $1$2}')
 
 run_bg(){
 	env -i PATH=${PATH} "$@" >/dev/null 2>&1 &
+}
+
+version_ge() {
+	local current="$1"
+	local required="$2"
+	local current_major current_minor current_patch required_major required_minor required_patch
+	current="$(printf '%s' "${current}" | sed 's/^v//' | sed 's/[^0-9.].*$//')"
+	required="$(printf '%s' "${required}" | sed 's/^v//' | sed 's/[^0-9.].*$//')"
+	current_major="$(printf '%s' "${current}" | awk -F. '{print $1 + 0}')"
+	current_minor="$(printf '%s' "${current}" | awk -F. '{print $2 + 0}')"
+	current_patch="$(printf '%s' "${current}" | awk -F. '{print $3 + 0}')"
+	required_major="$(printf '%s' "${required}" | awk -F. '{print $1 + 0}')"
+	required_minor="$(printf '%s' "${required}" | awk -F. '{print $2 + 0}')"
+	required_patch="$(printf '%s' "${required}" | awk -F. '{print $3 + 0}')"
+	[ "${current_major}" -gt "${required_major}" ] && return 0
+	[ "${current_major}" -lt "${required_major}" ] && return 1
+	[ "${current_minor}" -gt "${required_minor}" ] && return 0
+	[ "${current_minor}" -lt "${required_minor}" ] && return 1
+	[ "${current_patch}" -ge "${required_patch}" ]
 }
 
 invalidate_runtime_caches_after_install() {
@@ -81,6 +103,78 @@ restart_websocketd_async() {
 				/koolshare/bin/websocketd --port=803 /koolshare/ss/websocket >/tmp/upload/websocketd.log 2>&1 &
 				echo $! > "${WS_PIDFILE}"
 			fi
+		fi
+		rm -f "$0" >/dev/null 2>&1
+	EOF
+	chmod +x "${helper}" >/dev/null 2>&1
+	sh "${helper}" >/dev/null 2>&1 &
+}
+
+restart_status_runtime_async() {
+	local helper="/tmp/fancyss_restart_status_runtime.sh"
+	cat > "${helper}" <<-'EOF'
+		#!/bin/sh
+		LOG_FILE="/tmp/upload/status-runtime-helper.log"
+		log_status_runtime() {
+			mkdir -p /tmp/upload
+			printf '【%s】: %s\n' "$(TZ=UTC-8 date -R "+%Y%m%d %X")" "$*" >> "${LOG_FILE}" 2>/dev/null
+		}
+		start_status_serve_direct() {
+			[ -x "/koolshare/bin/status-tool" ] || return 1
+			chn="$(dbus get ss_basic_curl)"
+			frn="$(dbus get ss_basic_furl)"
+			ipv6="$(dbus get ss_basic_proxy_ipv6)"
+			[ -n "${chn}" ] || chn="http://connectivitycheck.platform.hicloud.com/generate_204"
+			[ -n "${frn}" ] || frn="http://www.google.com/generate_204"
+			ps w | grep -E '(^| )/koolshare/bin/status-tool serve( |$)' | grep -v grep | while read -r pid rest
+			do
+				[ -n "${pid}" ] && kill "${pid}" >/dev/null 2>&1 || true
+			done
+			rm -f /tmp/status-tool.sock /var/run/status-tool-serve.pid >/dev/null 2>&1
+			log_status_runtime "starting status-tool serve"
+			env -i PATH="/koolshare/bin:/usr/sbin:/usr/bin:/sbin:/bin" /koolshare/bin/status-tool serve \
+				--socket-path /tmp/status-tool.sock \
+				--china-url "${chn}" \
+				--foreign-url "${frn}" \
+				--proxy-ipv6 "${ipv6:-0}" \
+				--foreign-proxy "socks5://127.0.0.1:23456" \
+				--state-file /tmp/upload/ss_status_daemon.json \
+				--legacy-file /tmp/upload/ss_status_front.txt >/tmp/upload/status-tool-serve.log 2>&1 &
+			echo "$!" >/var/run/status-tool-serve.pid
+			sleep 1
+			if [ -S /tmp/status-tool.sock ] && ps w | grep -E '(^| )/koolshare/bin/status-tool serve( |$)' | grep -v grep >/dev/null 2>&1; then
+				log_status_runtime "status-tool serve started"
+			else
+				log_status_runtime "status-tool serve did not stay alive"
+			fi
+		}
+		status_serve_alive() {
+			[ -S /tmp/status-tool.sock ] && ps w | grep -E '(^| )/koolshare/bin/status-tool serve( |$)' | grep -v grep >/dev/null 2>&1
+		}
+		wait_status_preready() {
+			local waited=0
+			while ps w | grep -F "/koolshare/ss/ssconfig.sh" | grep -v grep >/dev/null 2>&1
+			do
+				[ "${waited}" -ge 20 ] && break
+				sleep 1
+				waited=$((waited + 1))
+			done
+			waited=0
+			while ! netstat -nlp 2>/dev/null | grep -w "23456" | grep -Eq "xray|v2ray|naive|tuic|rss-local"
+			do
+				[ "${waited}" -ge 15 ] && break
+				sleep 1
+				waited=$((waited + 1))
+			done
+		}
+		sleep 2
+		log_status_runtime "checking status runtime"
+		[ "$(dbus get ss_basic_enable)" = "1" ] && wait_status_preready && start_status_serve_direct
+		sleep 3
+		if [ "$(dbus get ss_basic_enable)" = "1" ] && ! status_serve_alive; then
+			log_status_runtime "status runtime missing, retry"
+			wait_status_preready
+			start_status_serve_direct
 		fi
 		rm -f "$0" >/dev/null 2>&1
 	EOF
@@ -189,6 +283,7 @@ schema2_secret_decode_candidate() {
 
 normalize_schema2_secret_fields_after_install() {
 	local reason="$1"
+	local force_scan="$2"
 	local node_id=""
 	local field=""
 	local raw_value=""
@@ -204,6 +299,9 @@ normalize_schema2_secret_fields_after_install() {
 	local fields="password naive_pass"
 
 	[ "$(fss_detect_storage_schema 2>/dev/null)" = "2" ] || return 0
+	if [ "${force_scan}" != "1" ] && [ "$(dbus get fss_data_secret_mode 2>/dev/null)" = "raw" ];then
+		return 0
+	fi
 	total_nodes="$(fss_list_node_ids | awk 'NF{c++} END{print c+0}')"
 	[ -n "${total_nodes}" ] || total_nodes=0
 	echo_date "开始校正 schema2 密码字段（${reason}），共 ${total_nodes} 个节点..."
@@ -1475,8 +1573,59 @@ install_now(){
 		ss_basic_score=0
 	fi
 
+	local MIGRATED_SUB_PROFILES=""
+	if subprof_migrate_legacy_profiles_if_needed >/tmp/sub_profile_migrate.count 2>/dev/null; then
+		MIGRATED_SUB_PROFILES="$(cat /tmp/sub_profile_migrate.count 2>/dev/null)"
+		subprof_rebuild_cron_jobs >/dev/null 2>&1 || true
+		rm -f /tmp/sub_profile_migrate.count >/dev/null 2>&1
+	fi
+
 	# 节点存储自动迁移：升级到支持 schema 2 的版本后，直接切换到新结构。
 	export PATH=/koolshare/bin:${PATH}
+	if [ -x "/koolshare/bin/node-tool" ];then
+		FSS_NODE_TOOL_PICKED="/koolshare/bin/node-tool"
+		FSS_NODE_TOOL_TRUST_PICKED=1
+		export FSS_NODE_TOOL_PICKED FSS_NODE_TOOL_TRUST_PICKED
+	elif [ -x "${DIR}/bin/node-tool" ];then
+		FSS_NODE_TOOL_PICKED="${DIR}/bin/node-tool"
+		FSS_NODE_TOOL_TRUST_PICKED=1
+		export FSS_NODE_TOOL_PICKED FSS_NODE_TOOL_TRUST_PICKED
+	else
+		unset FSS_NODE_TOOL_PICKED
+		unset FSS_NODE_TOOL_TRUST_PICKED
+	fi
+	if [ -n "${FSS_NODE_TOOL_PICKED:-}" ];then
+		echo_date "节点数据升级将优先使用 node-tool：${FSS_NODE_TOOL_PICKED}"
+		local NODE_TOOL_VERSION_OUTPUT=""
+		local NODE_TOOL_MIN_VERSION="0.1.8"
+		NODE_TOOL_VERSION_OUTPUT="$("${FSS_NODE_TOOL_PICKED}" version 2>&1)"
+		local NODE_TOOL_VERSION_RC="$?"
+		if [ "${NODE_TOOL_VERSION_RC}" != "0" ];then
+			NODE_TOOL_VERSION_OUTPUT="$(env -i PATH="/koolshare/bin:/usr/sbin:/usr/bin:/sbin:/bin" "${FSS_NODE_TOOL_PICKED}" version 2>&1)"
+			NODE_TOOL_VERSION_RC="$?"
+			if [ "${NODE_TOOL_VERSION_RC}" = "0" ];then
+				FSS_NODE_TOOL_CLEAN_ENV=1
+				export FSS_NODE_TOOL_CLEAN_ENV
+				echo_date "node-tool 版本：${NODE_TOOL_VERSION_OUTPUT}（安装环境较大，迁移时使用干净环境执行）"
+			else
+				echo_date "node-tool 版本探测失败（退出码 ${NODE_TOOL_VERSION_RC}），后续将自动回退 shell 迁移流程。"
+				if [ -n "${NODE_TOOL_VERSION_OUTPUT}" ];then
+					echo_date "node-tool 版本探测输出：${NODE_TOOL_VERSION_OUTPUT}"
+				fi
+				unset FSS_NODE_TOOL_PICKED
+				unset FSS_NODE_TOOL_TRUST_PICKED
+				unset FSS_NODE_TOOL_CLEAN_ENV
+			fi
+		else
+			echo_date "node-tool 版本：${NODE_TOOL_VERSION_OUTPUT}"
+		fi
+		if [ -n "${FSS_NODE_TOOL_PICKED:-}" ] && ! version_ge "${NODE_TOOL_VERSION_OUTPUT}" "${NODE_TOOL_MIN_VERSION}";then
+			echo_date "node-tool 版本低于 ${NODE_TOOL_MIN_VERSION}，旧版 schema1 迁移可能丢失默认字段，回退 shell 迁移流程。"
+			unset FSS_NODE_TOOL_PICKED
+			unset FSS_NODE_TOOL_TRUST_PICKED
+			unset FSS_NODE_TOOL_CLEAN_ENV
+		fi
+	fi
 	local STORAGE_SCHEMA_BEFORE="$(fss_detect_storage_schema 2>/dev/null)"
 	fss_auto_migrate_if_needed 1 report_install_migration_progress
 	case "$?" in
@@ -1497,17 +1646,27 @@ install_now(){
 
 	if [ "$(fss_detect_storage_schema 2>/dev/null)" = "2" ];then
 		if [ "${STORAGE_SCHEMA_BEFORE}" != "2" ];then
-			normalize_schema2_secret_fields_after_install "schema1 -> schema2 升级"
+			if [ "$(dbus get fss_data_secret_mode 2>/dev/null)" = "raw" ];then
+				echo_date "schema1 -> schema2 升级已使用 raw 密码字段，跳过密码字段二次校正。"
+			else
+				normalize_schema2_secret_fields_after_install "schema1 -> schema2 升级"
+			fi
 		elif [ "${FORCE_SCHEMA2_SECRET_NORMALIZE}" = "1" ]; then
-			normalize_schema2_secret_fields_after_install "旧版 schema2 数据纠偏"
+			normalize_schema2_secret_fields_after_install "旧版 schema2 数据纠偏" "1"
 		fi
 	fi
 
-	if subprof_migrate_legacy_profiles_if_needed >/tmp/sub_profile_migrate.count 2>/dev/null; then
-		local migrated_profiles="$(cat /tmp/sub_profile_migrate.count 2>/dev/null)"
-		[ -n "${migrated_profiles}" ] && echo_date "旧版订阅地址已迁移为 ${migrated_profiles} 个独立订阅配置。"
-		subprof_rebuild_cron_jobs >/dev/null 2>&1 || true
-		rm -f /tmp/sub_profile_migrate.count >/dev/null 2>&1
+	if [ -n "${MIGRATED_SUB_PROFILES}" ]; then
+		echo_date "旧版订阅地址已迁移为 ${MIGRATED_SUB_PROFILES} 个独立订阅配置。"
+	fi
+
+	if [ "$(fss_detect_storage_schema 2>/dev/null)" = "2" ] && [ "$(dbus get fss_data_source_meta_repaired 2>/dev/null)" != "1" ];then
+		echo_date "检查旧版订阅节点来源归属..."
+		local repaired_sub_nodes="$(fss_repair_legacy_subscribe_source_meta 2>/dev/null)"
+		if [ "${repaired_sub_nodes:-0}" -gt 0 ] 2>/dev/null;then
+			echo_date "已修复 ${repaired_sub_nodes} 个旧版订阅节点的来源归属。"
+		fi
+		dbus set fss_data_source_meta_repaired=1
 	fi
 
 	if [ "${FORCE_LEGACY_CACHE_RESET}" = "1" ];then
@@ -1628,6 +1787,7 @@ install_now(){
 	if [ "${ENABLE}" == "1" -a -f "/koolshare/ss/ssconfig.sh" ];then
 		echo_date 重启科学上网插件！
 		sh /koolshare/ss/ssconfig.sh restart
+		restart_status_runtime_async
 	else
 		restart_websocketd_async
 	fi

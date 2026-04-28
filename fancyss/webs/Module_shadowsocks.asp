@@ -707,6 +707,7 @@ var refreshRate;
 var ph_v2ray = "# 填入v2ray json配置，内容可以是标准的也可以是压缩的&#10;# 此处的配置可以支持v2ray运行更多协议，比如ss/vless/socks等xray支持的协议&#10;# 请保证你json内的outbound/outbounds部分配置正确！！！"
 var ph_xray = "# 填入xray json配置，内容可以是标准的也可以是压缩的&#10;# 此处的配置可以支持xray运行更多协议，比如ss/vmess/trojan/socks等xray支持的协议&#10;# 请保证你json内的outbound/outbounds部分配置正确！！！"
 var ph_tuic = "# 填入tuic client json配置，内容可以是标准的也可以是压缩的&#10;# 请保证你json内的relay部分的配置正确！！！" 	//fancyss-full
+var mainPanelNodeId = "";
 var option_proxy_modes = [["1", "gfw黑名单模式"], ["2", "大陆白名单模式"], ["3", "游戏模式"], ["5", "全局代理模式"]];
 var option_main_modes = [["1", "gfw黑名单模式"], ["2", "大陆白名单模式"], ["3", "游戏模式"], ["5", "全局代理模式"], ["7", "xray分流模式"]];
 var option_modes = option_proxy_modes;
@@ -852,6 +853,16 @@ var smartdnsIpv6ServiceEnabled = ('<% nvram_get("ipv6_service"); %>' != "disable
 var NODE_BOOL_FIELDS = ["v2ray_use_json", "v2ray_mux_enable", "v2ray_network_security_ai", "v2ray_network_security_alpn_h2", "v2ray_network_security_alpn_http", "xray_use_json", "xray_network_security_ai", "xray_network_security_alpn_h2", "xray_network_security_alpn_http", "xray_show", "trojan_ai", "trojan_tfo", "hy2_ai", "hy2_tfo"];
 var NODE_B64_FIELDS = ["password", "naive_pass", "v2ray_json", "xray_json", "tuic_json"];
 var NODE_RUNTIME_FIELDS = ["latency", "ping"];
+var NODE_EMPTY_DEFAULT_FIELDS_BY_TYPE = {
+	"0": {"mode": "2", "ss_obfs": "0"},
+	"1": {"mode": "2", "rss_protocol": "origin", "rss_obfs": "plain"},
+	"3": {"mode": "2", "v2ray_alterid": "0", "v2ray_security": "auto", "v2ray_network": "tcp", "v2ray_headtype_tcp": "none", "v2ray_headtype_kcp": "none", "v2ray_headtype_quic": "none", "v2ray_grpc_mode": "multi", "v2ray_network_security": "none"},
+	"4": {"mode": "2", "xray_alterid": "0", "xray_encryption": "none", "xray_network": "tcp", "xray_headtype_tcp": "none", "xray_headtype_kcp": "none", "xray_headtype_quic": "none", "xray_grpc_mode": "gun", "xray_xhttp_mode": "auto", "xray_network_security": "none"},
+	"5": {"mode": "2"},
+	"6": {"mode": "2", "naive_prot": "https"},
+	"7": {"mode": "2"},
+	"8": {"mode": "2", "hy2_obfs": "0"}
+};
 var NODE_STORAGE_COMMON_FIELDS = ["group", "name", "mode", "type"];
 var NODE_STORAGE_FIELDS_BY_TYPE = {
 	"0": ["server", "port", "method", "password", "ss_obfs", "ss_obfs_host"],
@@ -1420,6 +1431,39 @@ function is_node_b64_field(field) {
 function is_node_runtime_field(field) {
 	return $.inArray(field, NODE_RUNTIME_FIELDS) !== -1;
 }
+function get_node_empty_default_map(type) {
+	return NODE_EMPTY_DEFAULT_FIELDS_BY_TYPE[String(type || "")] || {};
+}
+function get_node_empty_default(type, field) {
+	var defaults = get_node_empty_default_map(type);
+	return Object.prototype.hasOwnProperty.call(defaults, field) ? defaults[field] : null;
+}
+function normalize_node_empty_default(type, field, value) {
+	var defaultValue = get_node_empty_default(type, field);
+	if ((value === "" || typeof value == "undefined" || value === null) && defaultValue !== null) {
+		return defaultValue;
+	}
+	return value;
+}
+function set_node_table_field_value(node, field) {
+	var el = E("ss_node_table_" + field);
+	var value = "";
+	var defaultValue = null;
+	if (!el) {
+		return;
+	}
+	if (node && typeof node[field] != "undefined" && node[field] !== null) {
+		value = String(node[field]);
+	}
+	value = normalize_node_empty_default(node ? node["type"] : "", field, value);
+	el.value = value;
+	if (el.tagName && el.tagName.toLowerCase() == "select" && el.value !== value) {
+		defaultValue = get_node_empty_default(node ? node["type"] : "", field);
+		if (defaultValue !== null) {
+			el.value = defaultValue;
+		}
+	}
+}
 function get_schema2_allowed_field_map(type) {
 	var map = {};
 	var nodeType = String(type || "");
@@ -1442,6 +1486,13 @@ function prune_schema2_node_payload(payload) {
 	}
 	if (pruned["type"] == "4" && !pruned["xray_prot"]) {
 		pruned["xray_prot"] = "vless";
+	}
+	for (var defaultField in get_node_empty_default_map(pruned["type"])) {
+		if (allowed[defaultField]) {
+			pruned[defaultField] = normalize_node_empty_default(pruned["type"], defaultField, pruned[defaultField]);
+		} else {
+			delete pruned[defaultField];
+		}
 	}
 	for (var i = 0; i < NODE_BOOL_FIELDS.length; i++) {
 		var boolField = NODE_BOOL_FIELDS[i];
@@ -1715,12 +1766,15 @@ function normalize_fss_node_for_ui(nodeId, raw) {
 		} else if (is_node_bool_field(field)) {
 			obj[field] = value == "1" ? "1" : "0";
 		} else {
-			obj[field] = value;
+			obj[field] = normalize_node_empty_default(obj["type"], field, value);
 		}
 	}
 	for (var i = 0; i < NODE_BOOL_FIELDS.length; i++) {
 		var boolField = NODE_BOOL_FIELDS[i];
 		obj[boolField] = obj[boolField] == "1" ? "1" : "0";
+	}
+	for (var defaultField in get_node_empty_default_map(obj["type"])) {
+		obj[defaultField] = normalize_node_empty_default(obj["type"], defaultField, obj[defaultField]);
 	}
 	obj["server"] = typeof raw["server"] == "undefined" ? "" : String(raw["server"]);
 	if (!obj["xray_prot"] && obj["type"] == "4") {
@@ -2799,7 +2853,9 @@ function get_shunt_ingress_mode_text(mode) {
 	return normalize_shunt_ingress_mode(mode) == "5" ? "全量引流" : "大陆白名单引流";
 }
 function update_shunt_ingress_mode(mode) {
-	db_ss["ss_basic_shunt_ingress_mode"] = normalize_shunt_ingress_mode(mode);
+	if (E("ss_basic_shunt_ingress_mode")) {
+		E("ss_basic_shunt_ingress_mode").value = normalize_shunt_ingress_mode(mode);
+	}
 	refresh_shunt_ui();
 }
 function render_shunt_ingress_select(selectedValue, elementId, extraAttr) {
@@ -3904,8 +3960,28 @@ function sync_shunt_current_node_selection(nodeId) {
 	if (E("ssconf_basic_node")) {
 		E("ssconf_basic_node").value = resolved;
 	}
-	shuntFallbackNodeId = resolved;
 	return resolved;
+}
+function sync_shunt_fallback_with_current_node(nodeId) {
+	var resolved = resolve_node_id(nodeId || "", true);
+	if (!resolved || !current_mode_is_shunt() || !is_shunt_supported_node(resolved)) {
+		return false;
+	}
+	if (is_shunt_direct_target(shuntFallbackNodeId)) {
+		return false;
+	}
+	shuntFallbackNodeId = resolved;
+	return true;
+}
+function should_save_main_panel_node(nodeId) {
+	nodeId = resolve_node_id(nodeId || "", true);
+	if (!nodeId) {
+		return false;
+	}
+	if (!mainPanelNodeId) {
+		return false;
+	}
+	return String(mainPanelNodeId) == String(nodeId);
 }
 function get_failover_node_id() {
 	if (get_node_storage_schema() == 2) {
@@ -4063,6 +4139,8 @@ function build_schema2_node_payload(fieldBag, nodeId, source, preserveExisting, 
 		if (rawValue === "" || typeof rawValue == "undefined" || rawValue === null) {
 			if (is_node_bool_field(field)) {
 				payload[field] = "0";
+			} else if (get_node_empty_default(payload["type"], field) !== null) {
+				payload[field] = get_node_empty_default(payload["type"], field);
 			} else {
 				delete payload[field];
 			}
@@ -4117,14 +4195,18 @@ function get_schema2_touch_timestamp() {
 	return String(Date.now());
 }
 function get_schema2_compare_field_value(raw, field) {
+	var type = "";
 	var value = "";
 	if (raw && typeof raw[field] != "undefined" && raw[field] !== null) {
 		value = String(raw[field]);
 	}
+	if (raw && typeof raw["type"] != "undefined" && raw["type"] !== null) {
+		type = String(raw["type"]);
+	}
 	if (is_node_bool_field(field)) {
 		return value == "1" ? "1" : "0";
 	}
-	return value;
+	return normalize_node_empty_default(type, field, value);
 }
 function decode_schema2_node_payload_value(value) {
 	if (!value) {
@@ -6334,15 +6416,20 @@ function ssconf_node2obj(node_sel) {
 function ss_node_sel() {
 	var node_sel = resolve_node_id(E("ssconf_basic_node").value);
 	var prevNodeId = get_saved_current_node_id();
+	var prevMainPanelNodeId = mainPanelNodeId;
 	if (!node_sel) {
 		return;
 	}
 	E("ssconf_basic_node").value = node_sel;
 	var obj = ssconf_node2obj(node_sel);
 	conf2obj(obj, 1);
+	mainPanelNodeId = node_sel;
 	verifyFields();
 	refresh_basic_method_width();
 	refresh_basic_input_width();
+	if (current_mode_is_shunt() && prevMainPanelNodeId && String(prevMainPanelNodeId) != String(node_sel)) {
+		sync_shunt_fallback_with_current_node(node_sel);
+	}
 	refresh_shunt_ui();
 	if (current_mode_is_shunt() && !is_shunt_supported_node(node_sel)) {
 		show_shunt_node_block_layer(node_sel);
@@ -6438,11 +6525,13 @@ function refresh_options() {
 function save() {
 	var dbus = {};
 	var node_sel = resolve_node_id(E("ssconf_basic_node").value);
+	var saveMainPanelNode = false;
 	var shuntDefaultNodeId = "";
 	var shuntRuntimeNodeId = "";
 	if (node_sel) {
 		E("ssconf_basic_node").value = node_sel;
 	}
+	saveMainPanelNode = should_save_main_panel_node(node_sel);
 	var node_type = get_node_type(node_sel);
 	submit_flag="1";
 	if (E("ss_basic_mode") && E("ss_basic_mode").value == "7") {
@@ -6451,6 +6540,9 @@ function save() {
 			return false;
 		}
 		node_sel = sync_shunt_current_node_selection(node_sel) || node_sel;
+		if (String(node_sel) != String(get_saved_current_node_id() || "")) {
+			sync_shunt_fallback_with_current_node(node_sel);
+		}
 		shuntDefaultNodeId = get_shunt_default_node_id();
 		shuntRuntimeNodeId = get_shunt_runtime_node_id();
 		if (is_shunt_direct_target(shuntDefaultNodeId) && !shuntRulesState.length) {
@@ -6686,6 +6778,7 @@ function save() {
 		}
 	}
 	// node data: write node data under using from the main pannel incase of data change
+	if (saveMainPanelNode) {
 	dbus["ssconf_basic_mode_" + node_sel] = E("ss_basic_mode").value == "7" ? get_node_persistent_mode(node_sel) : E("ss_basic_mode").value;
 	// ss
 	if (node_type == "0" ){
@@ -6926,6 +7019,7 @@ function save() {
 		dbus["ssconf_basic_hy2_ai_" + node_sel] = E("ss_basic_hy2_ai").checked ? '1' : '';
 		dbus["ssconf_basic_hy2_tfo_" + node_sel] = E("ss_basic_hy2_tfo").checked ? '1' : '';
 	}
+	}
 	// show different title when subscribe
 	if(E("ss_basic_enable").checked){
 		var sel_mode = E("ss_basic_mode").value;
@@ -6951,7 +7045,9 @@ function save() {
 		dbus["fss_node_failover_backup"] = failoverNodeId || "";
 		dbus["fss_node_failover_identity"] = get_node_identity(failoverNodeId) || "";
 		delete dbus["ss_failover_s4_3"];
-		dbus = $.extend(dbus, build_schema2_upsert_fields(dbus, node_sel, "manual", true));
+		if (saveMainPanelNode) {
+			dbus = $.extend(dbus, build_schema2_upsert_fields(dbus, node_sel, "manual", true));
+		}
 		strip_legacy_node_fields(dbus, node_sel);
 	}
 	var post_dbus = compfilter(get_compare_store(), dbus);
@@ -6982,10 +7078,15 @@ function push_data_ws(script, arg, obj, flag, ws_cmd){
 	var id = parseInt(Math.random() * 100000000);
 	var postData;
 	var resolvedWsCmd = ws_cmd || "";
+	var fallbackToHttp = function() {
+		push_data(script, arg, obj, flag);
+	};
 	if (script == "ss_config.sh") {
 		attach_schema2_postsave_marker(obj);
+		postData = {"id": id, "method": "dummy_script.sh", "params":[], "fields": obj};
+	} else {
+		postData = build_schema2_postsave_request(id, obj) || {"id": id, "method": "dummy_script.sh", "params":[], "fields": obj};
 	}
-	postData = build_schema2_postsave_request(id, obj) || {"id": id, "method": "dummy_script.sh", "params":[], "fields": obj};
 	$.ajax({
 		type: "POST",
 		cache:false,
@@ -7037,7 +7138,12 @@ function push_data_ws(script, arg, obj, flag, ws_cmd){
 					}
 					E("log_content3").scrollTop = E("log_content3").scrollHeight;
 				};
+			}else{
+				fallbackToHttp();
 			}
+		},
+		error: function() {
+			fallbackToHttp();
 		}
 	});
 }
@@ -7051,6 +7157,8 @@ function should_use_shunt_hot_reload(post_dbus){
 	var allowed = {
 		"ss_basic_shunt_rules": 1,
 		"ss_basic_shunt_default_node": 1,
+		"ss_basic_shunt_default_node_identity": 1,
+		"ss_basic_shunt_ingress_mode": 1,
 		"ss_basic_shunt_custom_presets": 1,
 		"ss_basic_shunt_rule_ts": 1
 	};
@@ -7424,11 +7532,25 @@ function start_subscription_log_http() {
 	close_subscription_log_ws();
 	poll_subscription_log(true);
 }
-function start_subscription_log_stream(action, profileId) {
+function start_subscription_log_stream(action, profileId, fallbackRunner) {
 	var retArea = E("submgr_log_textarea");
 	var statusEl = E("submgr_log_status");
-	if (ws_flag != 1 || window.location.protocol != "http:" || !ws_host_allowed(hostname)) {
+	var commandSent = false;
+	var fallbackStarted = false;
+	function fallback_to_http() {
+		if (fallbackStarted) {
+			return;
+		}
+		fallbackStarted = true;
+		if (!commandSent && typeof fallbackRunner == "function") {
+			close_subscription_log_ws();
+			fallbackRunner();
+			return;
+		}
 		start_subscription_log_http();
+	}
+	if (ws_flag != 1 || window.location.protocol != "http:" || !ws_host_allowed(hostname)) {
+		fallback_to_http();
 		return;
 	}
 	close_subscription_log_ws();
@@ -7438,7 +7560,7 @@ function start_subscription_log_stream(action, profileId) {
 	subscribeLogWs = new WebSocket("ws://" + hostname + ":803/");
 	subscribeLogWsFallbackTimer = setTimeout(function() {
 		if (subscribeLogWs) {
-			start_subscription_log_http();
+			fallback_to_http();
 		}
 	}, 2500);
 	subscribeLogWs.onopen = function() {
@@ -7450,13 +7572,15 @@ function start_subscription_log_stream(action, profileId) {
 			statusEl.innerHTML = "订阅任务运行中...";
 		}
 		try {
+			commandSent = true;
 			subscribeLogWs.send("env LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 sh /koolshare/scripts/ss_node_subscribe.sh " + String(action || "3") + (profileId ? (" " + String(profileId)) : ""));
 		} catch (e) {
-			start_subscription_log_http();
+			commandSent = false;
+			fallback_to_http();
 		}
 	};
 	subscribeLogWs.onerror = function() {
-		start_subscription_log_http();
+		fallback_to_http();
 	};
 	subscribeLogWs.onmessage = function(event) {
 		var msg = String(event.data || "");
@@ -7493,21 +7617,20 @@ function push_subscription_data(action, obj, title, profileId, affectsNodeList) 
 	var id = parseInt(Math.random() * 100000000);
 	var useWsLog = ws_flag == 1 && window.location.protocol == "http:" && ws_host_allowed(hostname);
 	var postData = {"id": id, "method": "ss_node_subscribe.sh", "params": [action], "fields": obj || {}};
+	var fields = obj || {};
 	clear_text_file_poll_state("subscribe_log");
 	subscribeLogRefreshNodesAfterDone = !!affectsNodeList;
-	if (useWsLog) {
-		open_subscription_log_layer(title || "订阅更新日志");
-			start_subscription_log_stream(action, profileId || "");
-		return;
-	}
-	$.ajax({
+	function begin_http_subscription(skipOpen) {
+		$.ajax({
 		type: "POST",
 		cache: false,
 		url: "/_api/",
 		data: JSON.stringify(postData),
 		dataType: "json",
 		beforeSend: function() {
-			open_subscription_log_layer(title || "订阅更新日志");
+			if (!skipOpen) {
+				open_subscription_log_layer(title || "订阅更新日志");
+			}
 		},
 		success: function(response) {
 			var statusEl = E("submgr_log_status");
@@ -7534,7 +7657,67 @@ function push_subscription_data(action, obj, title, profileId, affectsNodeList) 
 			}
 			unlock_subscription_log_close_button();
 		}
-	});
+		});
+	}
+	function has_fields(fields) {
+		for (var key in fields) {
+			if (fields.hasOwnProperty(key)) {
+				return true;
+			}
+		}
+		return false;
+	}
+	function prepare_ws_fields(next) {
+		if (!has_fields(fields)) {
+			next();
+			return;
+		}
+		var writeId = parseInt(Math.random() * 100000000);
+		var statusEl = E("submgr_log_status");
+		var retArea = E("submgr_log_textarea");
+		if (statusEl) {
+			statusEl.innerHTML = "正在提交订阅参数...";
+		}
+		$.ajax({
+			type: "POST",
+			cache: false,
+			url: "/_api/",
+			data: JSON.stringify({"id": writeId, "method": "dummy_script.sh", "params": [], "fields": fields}),
+			dataType: "json",
+			success: function(response) {
+				if (response && String(response.result) == String(writeId)) {
+					next();
+					return;
+				}
+				if (retArea) {
+					retArea.value += (retArea.value ? "\n" : "") + "订阅参数提交异常，已停止任务。";
+				}
+				if (statusEl) {
+					statusEl.innerHTML = "订阅参数提交异常";
+				}
+				unlock_subscription_log_close_button();
+			},
+			error: function() {
+				if (retArea) {
+					retArea.value += (retArea.value ? "\n" : "") + "订阅参数提交失败，请检查软件中心接口。";
+				}
+				if (statusEl) {
+					statusEl.innerHTML = "订阅参数提交失败";
+				}
+				unlock_subscription_log_close_button();
+			}
+		});
+	}
+	if (useWsLog) {
+		open_subscription_log_layer(title || "订阅更新日志");
+		prepare_ws_fields(function() {
+			start_subscription_log_stream(action, profileId || "", function() {
+				begin_http_subscription(true);
+			});
+		});
+		return;
+	}
+	begin_http_subscription(false);
 }
 function persist_shunt_local_fields(fields, successText) {
 	var id = parseInt(Math.random() * 100000000);
@@ -8828,9 +9011,7 @@ function edit_conf_table(o) {
 		}
 	}
 	for (var i = 0; i < params1_input.length; i++) {
-		if(c[params1_input[i]]){
-			E("ss_node_table_" + params1_input[i]).value = c[params1_input[i]];
-		}
+		set_node_table_field_value(c, params1_input[i]);
 	}
 	E("cancel_Btn").style.display = "";
 	E("add_node").style.display = "none";
@@ -9285,6 +9466,9 @@ function generate_node_info() {
 				obj[params_sp[i]] = db_ss[p + "_" + params_sp[i] + "_" + idx];
 			}
 		}
+		for (var defaultField in get_node_empty_default_map(obj["type"])) {
+			obj[defaultField] = normalize_node_empty_default(obj["type"], defaultField, obj[defaultField]);
+		}
 
 		if (typeof db_ss[p + "_server_" + idx] != "undefined") {
 			obj["server"] = db_ss[p + "_server_" + idx];
@@ -9566,32 +9750,53 @@ function get_node_card_section_display_label(label) {
 	}
 	return text;
 }
+function get_node_card_section_meta(c) {
+	var nodeId = c && c["node"] ? String(c["node"]) : "";
+	var raw = nodeId ? get_fss_raw_node(nodeId) : null;
+	var isSubscribe = raw && String(raw["_source"] || "") == "subscribe";
+	var label = get_node_display_source_label(c);
+	var identity = (isSubscribe ? "subscribe:" : "local:") + label;
+	return {
+		label: label,
+		displayLabel: get_node_card_section_display_label(label),
+		identity: identity,
+		key: get_node_card_section_key(identity),
+		priority: isSubscribe ? 1 : 0
+	};
+}
 function get_node_card_sections() {
 	var sections = [];
 	var sectionMap = {};
-	var label = "";
-	var displayLabel = "";
+	var meta = null;
+	var section = null;
 	for (var i = 0; i < ss_nodes.length; i++) {
 		var nodeId = ss_nodes[i];
 		var conf = confs[nodeId];
 		if (!conf) {
 			continue;
 		}
-		label = get_node_display_source_label(conf);
-		displayLabel = get_node_card_section_display_label(label);
-		if (!sectionMap[label]) {
-			sectionMap[label] = {
-				label: displayLabel,
-				key: get_node_card_section_key(label),
+		meta = get_node_card_section_meta(conf);
+		if (!sectionMap[meta.identity]) {
+			sectionMap[meta.identity] = {
+				label: meta.displayLabel,
+				key: meta.key,
+				priority: meta.priority,
+				firstOrder: i,
 				nodes: []
 			};
-			sections.push(sectionMap[label]);
+			sections.push(sectionMap[meta.identity]);
 		}
-		sectionMap[label].nodes.push({
+		sectionMap[meta.identity].nodes.push({
 			conf: conf,
 			order: i + 1
 		});
 	}
+	sections.sort(function(a, b) {
+		if (a.priority != b.priority) {
+			return a.priority - b.priority;
+		}
+		return a.firstOrder - b.firstOrder;
+	});
 	return sections;
 }
 function get_node_card_grid_columns($grid) {
@@ -13100,6 +13305,26 @@ function get_ss_status_front_httpd() {
 	});
 	schedule_next_front_status_poll(get_status_refresh_delay_ms());
 }
+function get_ss_status_front_cache_once() {
+	if (!should_run_front_status_live()) {
+		return false;
+	}
+	$.ajax({
+		url: "/_temp/ss_status_front.txt?_=" + new Date().getTime(),
+		type: "GET",
+		dataType: "text",
+		async: true,
+		cache: false,
+		timeout: 2500,
+		success: function(response) {
+			var text = String(response || "");
+			if (!status_payload_is_waiting(text)) {
+				apply_ss_status(text, false);
+			}
+		}
+	});
+	return true;
+}
 function get_ss_status_front_websocket() {
 	if (!should_run_front_status_live()) {
 		stop_front_status_runtime();
@@ -13110,14 +13335,15 @@ function get_ss_status_front_websocket() {
 		return false;
 	}
 	statusFrontPending = true;
+	get_ss_status_front_cache_once();
 	clear_front_status_ws_watchdog();
 	statusFrontWsWatchdog = setTimeout(function() {
 		statusFrontPending = false;
 		get_ss_status_front_httpd();
-	}, Math.max(15000, get_status_refresh_delay_ms() + 5000));
+	}, 3000);
 	setup_status_ws(get_ss_status_front_httpd, false, function() {
 		try {
-			wss.send("/koolshare/bin/statusctl --socket-path /tmp/status-tool.sock probe-once");
+			wss.send("/koolshare/scripts/ss_status.sh ws");
 		} catch (ex) {
 			throw ex;
 		}
