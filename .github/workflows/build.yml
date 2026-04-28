@@ -2,7 +2,7 @@ name: FancySS Mod Build by klcb2010
 
 on:
   schedule:
-    - cron: '10 19 * * *' # 每天凌晨3点自动运行（北京时间3:10点）
+    - cron: "10 19 * * *"
   workflow_dispatch:
 
 jobs:
@@ -12,104 +12,102 @@ jobs:
       contents: write
 
     steps:
-      # 1. 拉取仓库代码
+      # =========================
+      # 1. Checkout
+      # =========================
       - name: Checkout source
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: false
 
+      # =========================
+      # 2. Fix submodules
+      # =========================
       - name: Fix all submodule URLs
         run: |
           rm -rf .git/modules
           git submodule deinit -f --all || true
+
           git config -f .gitmodules submodule.tool/geotool.url https://github.com/hq450/geotool.git
           git config -f .gitmodules submodule.tool/xapi-tool.url https://github.com/hq450/xapi-tool.git
           git config -f .gitmodules submodule.tool/node-tool.url https://github.com/hq450/node-tool.git
           git config -f .gitmodules submodule.tool/sub-tool.url https://github.com/hq450/sub-tool.git
+
           git submodule sync --recursive
           git -c protocol.file.allow=always submodule update --init --depth=1 || true
 
-      # 2. git config
+      # =========================
+      # 3. git config
+      # =========================
       - name: Configure git user
         run: |
           git config user.name "GitHub Actions Bot"
           git config user.email "actions@github.com"
 
-      # 3. upstream
+      # =========================
+      # 4. upstream
+      # =========================
       - name: Add upstream and fetch
         run: |
           git remote add upstream https://github.com/hq450/fancyss.git || true
           git fetch upstream --no-tags
 
-      # ==================== 新增：对比 version.json.js 版本号 ====================
-      - name: Compare version.json.js (local vs upstream)
+      # =========================
+      # 5. version compare
+      # =========================
+      - name: Compare version.json.js
         id: compare_version
         run: |
           set -e
 
-          # 下载上游的 version.json.js（临时保存）
-          curl -sL https://raw.githubusercontent.com/hq450/fancyss/3.0/packages/version.json.js -o /tmp/upstream_version.json.js
+          curl -sL https://raw.githubusercontent.com/hq450/fancyss/3.0/packages/version.json.js \
+            -o /tmp/upstream_version.json.js
 
-          # 提取版本号
           LOCAL_VERSION=$(jq -r '.version' packages/version.json.js)
           UPSTREAM_VERSION=$(jq -r '.version' /tmp/upstream_version.json.js)
 
-          echo "本地版本: $LOCAL_VERSION"
-          echo "上游版本: $UPSTREAM_VERSION"
+          echo "local=$LOCAL_VERSION"
+          echo "upstream=$UPSTREAM_VERSION"
 
-          # 使用 sort -V 进行语义化版本比较
-          if [ "$(printf '%s\n%s' "$LOCAL_VERSION" "$UPSTREAM_VERSION" | sort -V | head -n1)" = "$LOCAL_VERSION" ] && \
-             [ "$LOCAL_VERSION" != "$UPSTREAM_VERSION" ]; then
+          if [ "$(printf '%s\n%s' "$LOCAL_VERSION" "$UPSTREAM_VERSION" | sort -V | head -n1)" = "$LOCAL_VERSION" ] \
+            && [ "$LOCAL_VERSION" != "$UPSTREAM_VERSION" ]; then
             echo "needs_sync=true" >> $GITHUB_OUTPUT
-            echo "本地版本低于上游，需要同步"
           else
             echo "needs_sync=false" >> $GITHUB_OUTPUT
-            echo "本地已是最新或版本相同，无需同步"
           fi
-      # ==================== 对比结束 ====================
 
-      # 5. skip if no update
+      # =========================
+      # 6. skip
+      # =========================
       - name: Skip if no update
         if: steps.compare_version.outputs.needs_sync == 'false'
         run: |
-          echo "上游 fancyss version.json.js 无新版本，流程结束"
+          echo "已是最新，无需同步"
           exit 0
 
-      # 6. Sync upstream repository and push
-      - name: Sync upstream repository and push
+      # =========================
+      # 7. merge upstream
+      # =========================
+      - name: Sync upstream repository
         if: steps.compare_version.outputs.needs_sync == 'true'
         run: |
           git checkout ${{ github.ref_name }}
           OLD_HEAD=$(git rev-parse HEAD)
-          echo ">>> 开始合并上游代码..."
 
-          # 提前解决常见冲突文件
-          git checkout --ours .gitmodules || true
-          git checkout --ours build-custom.sh || true
-          git add .gitmodules build-custom.sh || true
-
-          # 执行合并（优先使用上游 theirs）
           if ! git merge upstream/3.0 -X theirs --no-edit --allow-unrelated-histories; then
-            echo ">>> merge 产生冲突，强制使用本地版本..."
             git checkout --ours .gitmodules build-custom.sh || true
             git add .gitmodules build-custom.sh || true
 
             git ls-files -u | cut -f2 | sort -u | while read file; do
-              git checkout --ours "$file" 2>/dev/null || true
-              git add "$file" 2>/dev/null || true
+              git checkout --ours "$file" || true
+              git add "$file" || true
             done
 
-            git -c core.editor=true merge --continue || {
-              echo "❌ 无法解决冲突，终止流程"
-              exit 1
-            }
+            git commit -m "resolve conflicts"
           fi
 
-          # 强制恢复所有自定义保护文件
-          echo ">>> 恢复本地保护文件..."
           git restore --source=$OLD_HEAD \
-            README.md \
             .gitmodules \
             .github/workflows/ \
             cron_task.txt \
@@ -117,33 +115,35 @@ jobs:
             white_list.txt \
             black_list.txt \
             ss_update.sh \
-            clear.py || echo "部分文件恢复完成"
+            clear.py || true
 
-          # 提交并推送
-          git add .
-          if ! git diff --cached --quiet; then
-            git commit -m "Sync upstream hq450/fancyss@3.0 (resolved conflicts + protected custom files)"
-            git push origin HEAD:${{ github.ref_name }} --force-with-lease
-            echo "✅ 同步并推送成功"
-          else
-            echo "已是最新，无需提交推送"
-          fi
-
-      # 后续构建步骤（仅在需要同步时执行）
+      # =========================
+      # 8. jq
+      # =========================
       - name: Install jq
         if: steps.compare_version.outputs.needs_sync == 'true'
         run: sudo apt-get update && sudo apt-get install -y jq
 
+      # =========================
+      # 9. patch
+      # =========================
       - name: Patch ss_rule_update.sh
         if: steps.compare_version.outputs.needs_sync == 'true'
         run: |
-          sed -i '9s|.*|URL_MAIN="https://raw.githubusercontent.com/qxzg/Actions/3.0/fancyss_rules"|' fancyss/scripts/ss_rule_update.sh
+          sed -i '9s|.*|URL_MAIN="https://raw.githubusercontent.com/qxzg/Actions/3.0/fancyss_rules"|' \
+            fancyss/scripts/ss_rule_update.sh
 
+      # =========================
+      # 10. append cron
+      # =========================
       - name: Append cron_task.txt to ssconfig.sh
         if: steps.compare_version.outputs.needs_sync == 'true'
         run: |
           cat cron_task.txt >> fancyss/ss/ssconfig.sh
 
+      # =========================
+      # 11. build
+      # =========================
       - name: Make build-custom.sh executable
         if: steps.compare_version.outputs.needs_sync == 'true'
         run: chmod +x build-custom.sh
@@ -153,6 +153,9 @@ jobs:
         run: |
           ./build-custom.sh
 
+      # =========================
+      # 12. release info
+      # =========================
       - name: Generate release body and tag
         if: steps.compare_version.outputs.needs_sync == 'true'
         id: release_info
@@ -160,11 +163,16 @@ jobs:
           UPSTREAM_VERSION=$(jq -r '.version' packages/version.json.js)
           TAG_NAME="v${UPSTREAM_VERSION}"
           BUILD_TIME=$(TZ='Asia/Shanghai' date +"%Y-%m-%d %H:%M:%S")
-          echo "构建时间（北京时间）：${BUILD_TIME}" > release_body.txt
+
+          echo "构建时间：${BUILD_TIME}" > release_body.txt
+
           echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
           echo "release_name=FancySS v${UPSTREAM_VERSION}" >> $GITHUB_OUTPUT
           echo "body=$(cat release_body.txt)" >> $GITHUB_OUTPUT
 
+      # =========================
+      # 13. release
+      # =========================
       - name: Create/Update Release
         if: steps.compare_version.outputs.needs_sync == 'true'
         uses: softprops/action-gh-release@v2.6.1
@@ -178,3 +186,22 @@ jobs:
           generate_release_notes: false
           files: packages/*.tar.gz
           overwrite_files: true
+
+      # =========================
+      # 14. commit fix（核心修复）
+      # =========================
+      - name: Commit & Push (fixed)
+        if: steps.compare_version.outputs.needs_sync == 'true'
+        run: |
+          # 关键修复点：
+          # 不再用 git diff --cached
+          # 改用工作区真实状态，避免 add/restore 影响判断
+
+          if git status --porcelain | grep .; then
+            git add -A
+            git commit -m "Sync upstream hq450/fancyss@3.0"
+            git push origin HEAD:${{ github.ref_name }} --force-with-lease
+            echo "已提交并推送"
+          else
+            echo "已是最新，无需提交推送"
+          fi
