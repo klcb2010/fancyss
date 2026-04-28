@@ -41,7 +41,23 @@ start_service_soft "/jffs/scripts/SSH_helper.sh"
 
 # 启动 frpc (内部已带“存在即跳过”逻辑)
 # [ -f "/jffs/scripts/frpc_start.sh" ] && /bin/sh /jffs/scripts/frpc_start.sh
+# ==============================
+# WebDAV Port Allow (idempotent)
+# ==============================
 
+allow_port() {
+    PORT=$1
+
+    iptables -C INPUT -p tcp --dport $PORT -j ACCEPT 2>/dev/null || \
+    iptables -I INPUT -p tcp --dport $PORT -j ACCEPT
+
+    ip6tables -C INPUT -p tcp --dport $PORT -j ACCEPT 2>/dev/null || \
+    ip6tables -I INPUT -p tcp --dport $PORT -j ACCEPT
+}
+
+allow_port 8180
+allow_port 8181
+allow_port 2525
 
 echo "$LOG_TIME: ======================= 自定义任务启动完毕 =========================== "
 
