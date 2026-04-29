@@ -7,10 +7,12 @@
 # - 自动解压执行 install.sh
 # - BusyBox / curl / wget 兼容
 
-run() { "$@"; }
+run() {
+    "$@"
+}
 
 echo_date() {
-    echo "【$(TZ=UTC-8 date +%Y年%m月%d日\ %H:%M:%S)】: $*"
+    TZ=Asia/Shanghai date "+【%Y%m%d %H:%M:%S】: $*"
 }
 
 # 根据 CPU 架构选择包（默认 full，不自动切换 lite）
