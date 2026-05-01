@@ -5,15 +5,185 @@
 source /koolshare/scripts/base.sh
 NEW_PATH=$(echo $PATH|tr ':' '\n'|sed '/opt/d;/mmc/d'|awk '!a[$0]++'|tr '\n' ':'|sed '$ s/:$//')
 export PATH=${NEW_PATH}
-alias echo_date='echo 【$(TZ=UTC-8 date -R +%Y年%m月%d日\ %X)】:'
 MODEL=
 FW_TYPE_NAME=
 DIR=$(cd $(dirname $0); pwd)
+[ -f "${DIR}/scripts/ss_node_common.sh" ] && source "${DIR}/scripts/ss_node_common.sh"
+[ -f "${DIR}/scripts/ss_subscribe_profile_lib.sh" ] && source "${DIR}/scripts/ss_subscribe_profile_lib.sh"
+unalias echo_date >/dev/null 2>&1
+echo_date(){
+	echo "【$(TZ=UTC-8 date -R "+%Y%m%d %X")】: $*"
+}
 module=${DIR##*/}
 LINUX_VER=$(uname -r|awk -F"." '{print $1$2}')
 
 run_bg(){
 	env -i PATH=${PATH} "$@" >/dev/null 2>&1 &
+}
+
+version_ge() {
+	local current="$1"
+	local required="$2"
+	local current_major current_minor current_patch required_major required_minor required_patch
+	current="$(printf '%s' "${current}" | sed 's/^v//' | sed 's/[^0-9.].*$//')"
+	required="$(printf '%s' "${required}" | sed 's/^v//' | sed 's/[^0-9.].*$//')"
+	current_major="$(printf '%s' "${current}" | awk -F. '{print $1 + 0}')"
+	current_minor="$(printf '%s' "${current}" | awk -F. '{print $2 + 0}')"
+	current_patch="$(printf '%s' "${current}" | awk -F. '{print $3 + 0}')"
+	required_major="$(printf '%s' "${required}" | awk -F. '{print $1 + 0}')"
+	required_minor="$(printf '%s' "${required}" | awk -F. '{print $2 + 0}')"
+	required_patch="$(printf '%s' "${required}" | awk -F. '{print $3 + 0}')"
+	[ "${current_major}" -gt "${required_major}" ] && return 0
+	[ "${current_major}" -lt "${required_major}" ] && return 1
+	[ "${current_minor}" -gt "${required_minor}" ] && return 0
+	[ "${current_minor}" -lt "${required_minor}" ] && return 1
+	[ "${current_patch}" -ge "${required_patch}" ]
+}
+
+invalidate_runtime_caches_after_install() {
+	rm -rf /koolshare/configs/fancyss/node_json_cache >/dev/null 2>&1
+	rm -f /koolshare/configs/fancyss/node_json_cache.meta >/dev/null 2>&1
+	fss_clear_node_env_cache_artifacts >/dev/null 2>&1 || true
+	fss_clear_webtest_cache_all >/dev/null 2>&1 || true
+	fss_clear_webtest_runtime_results >/dev/null 2>&1 || true
+	rm -rf /tmp/fancyss_webtest >/dev/null 2>&1
+	rm -rf /tmp/fancyss_cache_state >/dev/null 2>&1
+}
+
+refresh_runtime_caches_after_install() {
+	invalidate_runtime_caches_after_install
+	fss_refresh_node_json_cache >/dev/null 2>&1 || true
+	fss_schedule_webtest_cache_warm >/dev/null 2>&1 || true
+}
+
+restart_websocketd_async() {
+	local helper="/tmp/fancyss_restart_websocketd.sh"
+	cat > "${helper}" <<-'EOF'
+		#!/bin/sh
+		WS_PIDFILE="/var/run/fancyss-websocketd.pid"
+		SSD=""
+		for candidate in /sbin/start-stop-daemon /usr/sbin/start-stop-daemon /bin/start-stop-daemon /usr/bin/start-stop-daemon
+		do
+			[ -x "${candidate}" ] || continue
+			SSD="${candidate}"
+			break
+		done
+		sleep 2
+		if [ -f "${WS_PIDFILE}" ]; then
+			if [ -n "${SSD}" ]; then
+				"${SSD}" -K -q -p "${WS_PIDFILE}" >/dev/null 2>&1 || true
+			fi
+			pid="$(cat "${WS_PIDFILE}" 2>/dev/null)"
+			if [ -n "${pid}" ]; then
+				kill "${pid}" >/dev/null 2>&1 || true
+				sleep 1
+				kill -9 "${pid}" >/dev/null 2>&1 || true
+			fi
+		fi
+		killall websocketd >/dev/null 2>&1 || true
+		ps w | grep -F "/koolshare/bin/websocketd --port=803 /koolshare/ss/websocket" | grep -v grep | awk '{print $1}' | while read -r pid
+		do
+			[ -n "${pid}" ] || continue
+			kill "${pid}" >/dev/null 2>&1 || true
+			sleep 1
+			kill -9 "${pid}" >/dev/null 2>&1 || true
+		done
+		ps w | grep -F "/koolshare/ss/websocket" | grep -v grep | awk '{print $1}' | while read -r pid
+		do
+			[ -n "${pid}" ] || continue
+			kill "${pid}" >/dev/null 2>&1 || true
+			sleep 1
+			kill -9 "${pid}" >/dev/null 2>&1 || true
+		done
+		rm -f "${WS_PIDFILE}" >/dev/null 2>&1 || true
+		if [ -x "/koolshare/bin/websocketd" ] && [ -f "/koolshare/ss/websocket" ]; then
+			if [ -n "${SSD}" ]; then
+				"${SSD}" -S -q -b -m -p "${WS_PIDFILE}" -x /koolshare/bin/websocketd -- --port=803 /koolshare/ss/websocket >/tmp/upload/websocketd.log 2>&1
+			else
+				/koolshare/bin/websocketd --port=803 /koolshare/ss/websocket >/tmp/upload/websocketd.log 2>&1 &
+				echo $! > "${WS_PIDFILE}"
+			fi
+		fi
+		rm -f "$0" >/dev/null 2>&1
+	EOF
+	chmod +x "${helper}" >/dev/null 2>&1
+	sh "${helper}" >/dev/null 2>&1 &
+}
+
+restart_status_runtime_async() {
+	local helper="/tmp/fancyss_restart_status_runtime.sh"
+	cat > "${helper}" <<-'EOF'
+		#!/bin/sh
+		LOG_FILE="/tmp/upload/status-runtime-helper.log"
+		log_status_runtime() {
+			mkdir -p /tmp/upload
+			printf '【%s】: %s\n' "$(TZ=UTC-8 date -R "+%Y%m%d %X")" "$*" >> "${LOG_FILE}" 2>/dev/null
+		}
+		start_status_serve_direct() {
+			[ -x "/koolshare/bin/status-tool" ] || return 1
+			chn="$(dbus get ss_basic_curl)"
+			frn="$(dbus get ss_basic_furl)"
+			ipv6="$(dbus get ss_basic_proxy_ipv6)"
+			[ -n "${chn}" ] || chn="http://connectivitycheck.platform.hicloud.com/generate_204"
+			[ -n "${frn}" ] || frn="http://www.google.com/generate_204"
+			ps w | grep -E '(^| )/koolshare/bin/status-tool serve( |$)' | grep -v grep | while read -r pid rest
+			do
+				[ -n "${pid}" ] && kill "${pid}" >/dev/null 2>&1 || true
+			done
+			rm -f /tmp/status-tool.sock /var/run/status-tool-serve.pid >/dev/null 2>&1
+			log_status_runtime "starting status-tool serve"
+			env -i PATH="/koolshare/bin:/usr/sbin:/usr/bin:/sbin:/bin" /koolshare/bin/status-tool serve \
+				--socket-path /tmp/status-tool.sock \
+				--china-url "${chn}" \
+				--foreign-url "${frn}" \
+				--proxy-ipv6 "${ipv6:-0}" \
+				--foreign-proxy "socks5://127.0.0.1:23456" \
+				--state-file /tmp/upload/ss_status_daemon.json \
+				--legacy-file /tmp/upload/ss_status_front.txt >/tmp/upload/status-tool-serve.log 2>&1 &
+			echo "$!" >/var/run/status-tool-serve.pid
+			sleep 1
+			if [ -S /tmp/status-tool.sock ] && ps w | grep -E '(^| )/koolshare/bin/status-tool serve( |$)' | grep -v grep >/dev/null 2>&1; then
+				log_status_runtime "status-tool serve started"
+			else
+				log_status_runtime "status-tool serve did not stay alive"
+			fi
+		}
+		status_serve_alive() {
+			[ -S /tmp/status-tool.sock ] && ps w | grep -E '(^| )/koolshare/bin/status-tool serve( |$)' | grep -v grep >/dev/null 2>&1
+		}
+		wait_status_preready() {
+			local waited=0
+			while ps w | grep -F "/koolshare/ss/ssconfig.sh" | grep -v grep >/dev/null 2>&1
+			do
+				[ "${waited}" -ge 20 ] && break
+				sleep 1
+				waited=$((waited + 1))
+			done
+			waited=0
+			while ! netstat -nlp 2>/dev/null | grep -w "23456" | grep -Eq "xray|v2ray|naive|tuic|rss-local"
+			do
+				[ "${waited}" -ge 15 ] && break
+				sleep 1
+				waited=$((waited + 1))
+			done
+		}
+		sleep 2
+		log_status_runtime "checking status runtime"
+		[ "$(dbus get ss_basic_enable)" = "1" ] && wait_status_preready && start_status_serve_direct
+		sleep 3
+		if [ "$(dbus get ss_basic_enable)" = "1" ] && ! status_serve_alive; then
+			log_status_runtime "status runtime missing, retry"
+			wait_status_preready
+			start_status_serve_direct
+		fi
+		rm -f "$0" >/dev/null 2>&1
+	EOF
+	chmod +x "${helper}" >/dev/null 2>&1
+	sh "${helper}" >/dev/null 2>&1 &
+}
+
+report_install_migration_progress() {
+	echo_date "$1"
 }
 
 get_model(){
@@ -43,6 +213,170 @@ get_fw_type() {
 	fi
 }
 
+get_pkg_field_from_file() {
+	local file_path="$1"
+	local field="$2"
+	[ -f "${file_path}" ] || return 1
+	tr -d '\r' < "${file_path}" | grep -Eo "PKG_${field}=.+" | awk -F "=" '{print $2}' | sed 's/"//g' | sed -n '1p'
+}
+
+sync_pkg_meta_runtime() {
+	local pkg_file="$1"
+	local pkg_name=""
+	local pkg_arch=""
+	local pkg_type=""
+	local pkg_exta=""
+
+	pkg_name="$(get_pkg_field_from_file "${pkg_file}" "NAME")"
+	pkg_arch="$(get_pkg_field_from_file "${pkg_file}" "ARCH")"
+	pkg_type="$(get_pkg_field_from_file "${pkg_file}" "TYPE")"
+	pkg_exta="$(get_pkg_field_from_file "${pkg_file}" "EXTA")"
+
+	[ -n "${pkg_name}" ] && dbus set ss_basic_pkg_name="${pkg_name}"
+	[ -n "${pkg_arch}" ] && dbus set ss_basic_pkg_arch="${pkg_arch}"
+	[ -n "${pkg_type}" ] && dbus set ss_basic_pkg_type="${pkg_type}"
+	dbus set ss_basic_pkg_exta="${pkg_exta}"
+
+	if [ -n "${pkg_arch}" ];then
+		echo "${pkg_arch}" > /koolshare/.valid
+	fi
+
+	if [ -f "/koolshare/webs/Module_shadowsocks.asp" ];then
+		[ -n "${pkg_name}" ] && sed -i "s/^var PKG_NAME=.*/var PKG_NAME=\"${pkg_name}\"/" /koolshare/webs/Module_shadowsocks.asp
+		[ -n "${pkg_arch}" ] && sed -i "s/^var PKG_ARCH=.*/var PKG_ARCH=\"${pkg_arch}\"/" /koolshare/webs/Module_shadowsocks.asp
+		[ -n "${pkg_type}" ] && sed -i "s/^var PKG_TYPE=.*/var PKG_TYPE=\"${pkg_type}\"/" /koolshare/webs/Module_shadowsocks.asp
+		sed -i "s/^var PKG_EXTA=.*/var PKG_EXTA=\"${pkg_exta}\"/" /koolshare/webs/Module_shadowsocks.asp
+	fi
+}
+
+version_to_num() {
+	local version="$1"
+	echo "${version}" | awk -F'[^0-9]+' '{printf("%d%03d%03d\n", $1+0, $2+0, $3+0)}'
+}
+
+version_lt() {
+	local left="$1"
+	local right="$2"
+	[ -n "${left}" ] || return 0
+	[ "$(version_to_num "${left}")" -lt "$(version_to_num "${right}")" ]
+}
+
+schema2_secret_decode_candidate() {
+	local value="$1"
+	local decoded=""
+	local normalized=""
+
+	[ -n "${value}" ] || return 1
+	printf '%s' "${value}" | grep -Eq '^[A-Za-z0-9+/=]+$' || return 1
+	[ $(( ${#value} % 4 )) -eq 0 ] || return 1
+
+	decoded="$(printf '%s' "${value}" | base64_decode 2>/dev/null)" || return 1
+	[ -n "${decoded}" ] || return 1
+
+	normalized="$(printf '%s' "${decoded}" | base64_encode 2>/dev/null)"
+	[ -n "${normalized}" ] || return 1
+	[ "${normalized}" = "${value}" ] || return 1
+	[ "${decoded}" != "${value}" ] || return 1
+
+	printf '%s' "${decoded}"
+}
+
+normalize_schema2_secret_fields_after_install() {
+	local reason="$1"
+	local force_scan="$2"
+	local node_id=""
+	local field=""
+	local raw_value=""
+	local plain_value=""
+	local decoded=""
+	local node_json=""
+	local updated_json=""
+	local updated_at=""
+	local changed_nodes=0
+	local changed_fields=0
+	local scanned_nodes=0
+	local total_nodes=0
+	local fields="password naive_pass"
+
+	[ "$(fss_detect_storage_schema 2>/dev/null)" = "2" ] || return 0
+	if [ "${force_scan}" != "1" ] && [ "$(dbus get fss_data_secret_mode 2>/dev/null)" = "raw" ];then
+		return 0
+	fi
+	total_nodes="$(fss_list_node_ids | awk 'NF{c++} END{print c+0}')"
+	[ -n "${total_nodes}" ] || total_nodes=0
+	echo_date "开始校正 schema2 密码字段（${reason}），共 ${total_nodes} 个节点..."
+
+	for node_id in $(fss_list_node_ids)
+	do
+		[ -n "${node_id}" ] || continue
+		scanned_nodes=$((scanned_nodes + 1))
+		node_json="$(fss_v2_get_node_json_by_id "${node_id}" 2>/dev/null)" || continue
+		updated_json="${node_json}"
+		updated_at="$(fss_now_ts_ms)"
+		local node_changed=0
+
+		for field in ${fields}
+		do
+			raw_value="$(printf '%s' "${updated_json}" | jq -r --arg f "${field}" '.[$f] // empty' 2>/dev/null)"
+			[ -n "${raw_value}" ] || continue
+
+			plain_value="$(fss_get_node_field_plain "${node_id}" "${field}" 2>/dev/null)"
+			decoded=""
+
+			if [ -n "${plain_value}" ] && [ "${plain_value}" != "${raw_value}" ]; then
+				decoded="${plain_value}"
+			else
+				decoded="$(schema2_secret_decode_candidate "${raw_value}")" || decoded=""
+			fi
+
+			[ -n "${decoded}" ] || continue
+			[ "${decoded}" != "${raw_value}" ] || continue
+
+			updated_json="$(printf '%s' "${updated_json}" | jq -c \
+				--arg f "${field}" \
+				--arg v "${decoded}" \
+				--argjson updated_at "${updated_at}" \
+				'.[$f] = $v
+				| ._b64_mode = "raw"
+				| ._rev = (((._rev // 0) | tonumber? // 0) + 1)
+				| ._updated_at = $updated_at' 2>/dev/null)" || continue
+			node_changed=1
+			changed_fields=$((changed_fields + 1))
+			echo_date "校正 schema2 节点 ${node_id} 的 ${field} 字段：base64 -> raw（${reason}）"
+		done
+
+		if [ "${node_changed}" = "1" ]; then
+			dbus set fss_node_${node_id}="$(fss_b64_encode "${updated_json}")"
+			changed_nodes=$((changed_nodes + 1))
+		fi
+		if [ "${scanned_nodes}" = "1" ] || [ $((scanned_nodes % 20)) -eq 0 ] || [ "${scanned_nodes}" = "${total_nodes}" ]; then
+			echo_date "schema2 密码字段校正进度：${scanned_nodes}/${total_nodes}"
+		fi
+	done
+
+	if [ "${changed_nodes}" -gt 0 ]; then
+		fss_touch_node_catalog_ts >/dev/null 2>&1 || true
+		fss_touch_node_config_ts >/dev/null 2>&1 || true
+		echo_date "已完成 schema2 密码字段校正：节点 ${changed_nodes} 个，字段 ${changed_fields} 项。"
+	else
+		echo_date "schema2 密码字段校正完成：未发现需要修正的节点。"
+	fi
+}
+
+cleanup_legacy_smartdns_user_configs() {
+	local old_ver="$1"
+	[ -n "${old_ver}" ] || return 0
+	if ! version_lt "${old_ver}" "3.5.6"; then
+		return 0
+	fi
+	if [ -n "$(find /koolshare/ss/rules -maxdepth 1 -type f -name 'smartdns_smrt_*_user.conf' 2>/dev/null)" ];then
+		echo_date "检测到旧版 fancyss（${old_ver}）的自定义 smartdns 配置。"
+		echo_date "3.5.6 起 smartdns 改为由 fancyss 按前端设置动态生成配置。"
+		echo_date "旧版 smartdns 自定义模板将被移除，升级后请在 smartdns 的 chn / gfw DNS 选择界面重新调整上游。"
+		find /koolshare/ss/rules -maxdepth 1 -type f -name 'smartdns_smrt_*_user.conf' -delete 2>/dev/null
+	fi
+}
+
 platform_test(){
 	# 带koolshare文件夹，有httpdb和skipdb的固件位支持固件
 	if [ -d "/koolshare" -a -x "/koolshare/bin/httpdb" -a -x "/usr/bin/skipd" ];then
@@ -55,225 +389,433 @@ platform_test(){
 	PKG_ARCH=$(cat ${DIR}/.valid)
 	ROT_ARCH=$(uname -m)
 	KEL_VERS=$(uname -r)
-	PKG_NAME=$(cat /tmp/shadowsocks/webs/Module_shadowsocks.asp | tr -d '\r' | grep -Eo "PKG_NAME=.+" | awk -F"=" '{print $2}' | sed 's/"//g')
-	PKG_ARCH=$(cat /tmp/shadowsocks/webs/Module_shadowsocks.asp | tr -d '\r' | grep -Eo "PKG_ARCH=.+" | awk -F"=" '{print $2}' | sed 's/"//g')
-	PKG_TYPE=$(cat /tmp/shadowsocks/webs/Module_shadowsocks.asp | tr -d '\r' | grep -Eo "PKG_TYPE=.+" | awk -F"=" '{print $2}' | sed 's/"//g')
+	PKG_NAME=$(get_pkg_field_from_file /tmp/shadowsocks/webs/Module_shadowsocks.asp "NAME")
+	PKG_ARCH=$(get_pkg_field_from_file /tmp/shadowsocks/webs/Module_shadowsocks.asp "ARCH")
+	PKG_TYPE=$(get_pkg_field_from_file /tmp/shadowsocks/webs/Module_shadowsocks.asp "TYPE")
 
 	# fancyss_arm
-	if [ "${PKG_ARCH}" == "arm" ];then
-		if [ "${LINUX_VER}" == "26" ];then
-			if [ "${ROT_ARCH}" == "armv7l" ];then
-				# ok
-				echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，安装fancyss_${PKG_ARCH}_${PKG_TYPE}！"
-			else
-				# maybe mipsel, RT-AC66U... 
-				echo_date "架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该架构！退出！"
-				exit_install 1
-			fi
-		elif [ "${LINUX_VER}" == "41" -o "${LINUX_VER}" == "419" ];then
-			if [ "${ROT_ARCH}" == "armv7l" ];then
-				# RT-AX56U RT-AX56U_V2 TUF-AX3000 TUF-AX3000_V2 TUF-AX5400 TUF-AX5400_V2 XT8
+	if [ "${PKG_ARCH}" == "arm" ]; then
+		case "${LINUX_VER}" in
+			"26")
+				if [ "${ROT_ARCH}" == "armv7l" ]; then
+					echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，安装fancyss_${PKG_ARCH}_${PKG_TYPE}！"
+				else
+					echo_date "架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该架构！退出！"
+					exit_install 1
+				fi
+				;;
+			"41"|"419")
+				if [ "${ROT_ARCH}" == "armv7l" ]; then
+					echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
+					echo_date "建议使用fancyss_hnd_full或者fancyss_hnd_lite！"
+					echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_hnd"
+					exit_install 1
+				elif [ "${ROT_ARCH}" == "aarch64" ]; then
+					echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
+					echo_date "建议使用fancyss_hnd_v8_full或者fancyss_hnd_v8_lite！"
+					echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_hnd"
+					exit_install 1
+				else
+					echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该架构！退出！"
+					exit_install 1
+				fi
+				;;
+			"44")
 				echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
-				echo_date "建议使用fancyss_hnd_full或者fancyss_hnd_lite！"
-				echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_hnd"
+				echo_date "建议使用fancyss_qca_full或者fancyss_qca_lite！"		
+				echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_qca"
 				exit_install 1
-			elif  [ "${ROT_ARCH}" == "aarch64" ];then
+				;;
+			"54")
 				echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
-				echo_date "建议使用fancyss_hnd_v8_full或者fancyss_hnd_v8_lite！"
-				echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_hnd"
+				case "${MODEL}" in
+					"ZenWiFi_BD4")
+						echo_date "建议使用fancyss_ipq32_full或者fancyss_ipq32_lite！"		
+						echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_ipq32"
+						exit_install 1
+						;;
+					"TUF_6500")
+						echo_date "建议使用fancyss_ipq64_full或者fancyss_ipq64_lite！"		
+						echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_ipq64"
+						exit_install 1
+						;;
+					"TX-AX6000"|"TUF-AX4200Q"|"RT-AX57_Go"|"GS7"|"ZenWiFi_BT8P"|"GS7_Air")
+						echo_date "建议使用fancyss_mtk_full或者fancyss_mtk_lite！"		
+						echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_mtk"
+						exit_install 1
+						;;
+					*)
+						echo_date "原因：暂不支持你的路由器型号：${MODEL}，请联系插件作者！"		
+						exit_install 1
+						;;
+				esac
+				;;
+			*)
+				echo_date "内核：${KEL_VERS}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
 				exit_install 1
-			else
-				# no such model, yet.
-				echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该架构！退出！"
-				exit_install 1
-			fi
-		elif [ "${LINUX_VER}" == "44" ];then
-			# RT-AX89X
-			echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
-			echo_date "建议使用fancyss_qca_full或者fancyss_qca_lite！"		
-			echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_qca"
-			exit_install 1
-		elif [ "${LINUX_VER}" == "54" ];then
-			# mediatek TX-AX6000
-			echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
-			echo_date "建议使用fancyss_mtk_full或者fancyss_mtk_lite！"		
-			echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_mtk"
-			exit_install 1
-		else
-			# future model
-			echo_date "内核：${KEL_VERS}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
-			exit_install 1
-		fi
+				;;
+		esac
 	fi
 	
 	# fancyss_hnd
-	if [ "${PKG_ARCH}" == "hnd" ];then
-		if [ "${LINUX_VER}" == "41" -o "${LINUX_VER}" == "419" ];then
-			if [ "${ROT_ARCH}" == "armv7l" ];then
-				# RT-AX56U RT-AX56U_V2 TUF-AX3000 TUF-AX3000_V2 TUF-AX5400 TUF-AX5400_V2 XT8
-				echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，安装fancyss_${PKG_ARCH}_${PKG_TYPE}！"
-			elif  [ "${ROT_ARCH}" == "aarch64" ];then
-				# RT-AX86U, RT-AX88U
-				echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，安装fancyss_${PKG_ARCH}_${PKG_TYPE}！"
-				echo_date
-				echo_date "----------------------------------------------------------------------"
-				echo_date "你的机型是${ROT_ARCH}架构，当前使用的是32位版本的fancyss！"
-				echo_date "建议使用64位的fancyss，如fancyss_hnd_v8_full或者fancyss_hnd_v8_lite！"
-				echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_hnd_v8"
-				echo_date "----------------------------------------------------------------------"
-				echo_date
-				echo_date "继续安装32位的fancyss_${PKG_ARCH}_${PKG_TYPE}！"
-			else
-				# no such model, yet.
-				echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该架构！退出！"
+	if [ "${PKG_ARCH}" = "hnd" ]; then
+		case "${LINUX_VER}" in
+			"41"|"419")
+				if [ "${ROT_ARCH}" = "armv7l" ]; then
+					echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，安装fancyss_${PKG_ARCH}_${PKG_TYPE}！"
+				elif [ "${ROT_ARCH}" = "aarch64" ]; then
+					echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，安装fancyss_${PKG_ARCH}_${PKG_TYPE}！"
+					echo_date
+					echo_date "----------------------------------------------------------------------"
+					echo_date "你的机型是${ROT_ARCH}架构，当前使用的是32位版本的fancyss！"
+					echo_date "建议使用64位的fancyss，如fancyss_hnd_v8_full或者fancyss_hnd_v8_lite！"
+					echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_hnd_v8"
+					echo_date "----------------------------------------------------------------------"
+					echo_date
+					echo_date "继续安装32位的fancyss_${PKG_ARCH}_${PKG_TYPE}！"
+				else
+					echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该架构！退出！"
+					exit_install 1
+				fi
+				;;
+			"26")
+				echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
+				echo_date "建议使用fancyss_arm_full或者fancyss_arm_lite！"
+				echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_arm"
 				exit_install 1
-			fi
-		elif [ "${LINUX_VER}" == "26" ];then
-			echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
-			echo_date "建议使用fancyss_arm_full或者fancyss_arm_lite！"
-			echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_arm"
-			exit_install 1
-		elif [ "${LINUX_VER}" == "44" ];then
-			echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
-			echo_date "建议使用fancyss_qca_full或者fancyss_qca_lite！"
-			echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_qca"
-			exit_install 1
-		elif [ "${LINUX_VER}" == "54" ];then
-			# mediatek TX-AX6000
-			echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_arm_${PKG_TYPE}不适用于该内核版本！"
-			echo_date "建议使用fancyss_mtk_full或者fancyss_mtk_lite！"		
-			echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_mtk"
-			exit_install 1
-		else
-			echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
-			exit_install 1
-		fi
+				;;
+			"44")
+				echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
+				echo_date "建议使用fancyss_qca_full或者fancyss_qca_lite！"
+				echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_qca"
+				exit_install 1
+				;;
+			"54")
+				echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
+				case "${MODEL}" in
+					"ZenWiFi_BD4")
+						echo_date "建议使用fancyss_ipq32_full或者fancyss_ipq32_lite！"		
+						echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_ipq32"
+						exit_install 1
+						;;
+					"TUF_6500")
+						echo_date "建议使用fancyss_ipq64_full或者fancyss_ipq64_lite！"		
+						echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_ipq64"
+						exit_install 1
+						;;
+					"TX-AX6000"|"TUF-AX4200Q"|"RT-AX57_Go"|"GS7"|"ZenWiFi_BT8P"|"GS7_Air")
+						echo_date "建议使用fancyss_mtk_full或者fancyss_mtk_lite！"		
+						echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_mtk"
+						exit_install 1
+						;;
+					*)
+						echo_date "原因：暂不支持你的路由器型号：${MODEL}，请联系插件作者！"		
+						exit_install 1
+						;;
+				esac
+				;;
+			*)
+				echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
+				exit_install 1
+				;;
+		esac
 	fi
 
 	# fancyss_hnd_v8
-	if [ "${PKG_ARCH}" == "hnd_v8" ];then
-		if [ "${LINUX_VER}" == "41" -o "${LINUX_VER}" == "419" ];then
-			if [ "${ROT_ARCH}" == "armv7l" ];then
-				# RT-AX56U RT-AX56U_V2 TUF-AX3000 TUF-AX3000_V2 TUF-AX5400 TUF-AX5400_V2 XT8
-				echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该架构！"
-				echo_date "原因：无法在32位的路由器上使用64位程序的fancyss_${PKG_ARCH}_${PKG_TYPE}！"
-				echo_date "建议使用fancyss_hnd_full或者fancyss_hnd_lite！"
-				echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_hnd"
-				echo_date "退出安装！"
+	if [ "${PKG_ARCH}" = "hnd_v8" ]; then
+		case "${LINUX_VER}" in
+			"41"|"419")
+				if [ "${ROT_ARCH}" = "armv7l" ]; then
+					echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该架构！"
+					echo_date "原因：无法在32位的路由器上使用64位程序的fancyss_${PKG_ARCH}_${PKG_TYPE}！"
+					echo_date "建议使用fancyss_hnd_full或者fancyss_hnd_lite！"
+					echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_hnd"
+					echo_date "退出安装！"
+					exit_install 1
+				elif [ "${ROT_ARCH}" = "aarch64" ]; then
+					echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，安装fancyss_${PKG_ARCH}_${PKG_TYPE}！"
+				else
+					echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该架构！退出！"
+					exit_install 1
+				fi
+				;;
+			"26")
+				echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
+				echo_date "建议使用fancyss_arm_full或者fancyss_arm_lite！"
+				echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_arm"
 				exit_install 1
-			elif  [ "${ROT_ARCH}" == "aarch64" ];then
-				# RT-AX86U, RT-AX88U
-				echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，安装fancyss_${PKG_ARCH}_${PKG_TYPE}！"
-			else
-				# no such model, yet.
-				echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该架构！退出！"
+				;;
+			"44")
+				echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
+				echo_date "建议使用fancyss_qca_full或者fancyss_qca_lite！"
+				echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_qca"
 				exit_install 1
-			fi
-		elif [ "${LINUX_VER}" == "26" ];then
-			echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
-			echo_date "建议使用fancyss_arm_full或者fancyss_arm_lite！"
-			echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_arm"
-			exit_install 1
-		elif [ "${LINUX_VER}" == "44" ];then
-			echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
-			echo_date "建议使用fancyss_qca_full或者fancyss_qca_lite！"
-			echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_qca"
-			exit_install 1
-		elif [ "${LINUX_VER}" == "54" ];then
-			# mediatek TX-AX6000
-			echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_arm_${PKG_TYPE}不适用于该内核版本！"
-			echo_date "建议使用fancyss_mtk_full或者fancyss_mtk_lite！"		
-			echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_mtk"
-			exit_install 1
-		else
-			echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
-			exit_install 1
-		fi
+				;;
+			"54")
+				echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
+				case "${MODEL}" in
+					"ZenWiFi_BD4")
+						echo_date "建议使用fancyss_ipq32_full或者fancyss_ipq32_lite！"		
+						echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_ipq32"
+						exit_install 1
+						;;
+					"TUF_6500")
+						echo_date "建议使用fancyss_ipq64_full或者fancyss_ipq64_lite！"		
+						echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_ipq64"
+						exit_install 1
+						;;
+					"TX-AX6000"|"TUF-AX4200Q"|"RT-AX57_Go"|"GS7"|"ZenWiFi_BT8P"|"GS7_Air")
+						echo_date "建议使用fancyss_mtk_full或者fancyss_mtk_lite！"		
+						echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_mtk"
+						exit_install 1
+						;;
+					*)
+						echo_date "原因：暂不支持你的路由器型号：${MODEL}，请联系插件作者！"		
+						exit_install 1
+						;;
+				esac
+				;;
+			*)
+				echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
+				exit_install 1
+				;;
+		esac
 	fi
 
 	# fancyss_qca
-	if [ "${PKG_ARCH}" == "qca" ];then
-		if [ "${LINUX_VER}" == "44" ];then
-			# RT-AX89X
-			echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，安装fancyss_${PKG_ARCH}_${PKG_TYPE}！"
-		elif [ "${LINUX_VER}" == "26" ];then
-			# RT-AC68U, RT-AC88U, RT-AC3100, RT-AC5300
-			echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
-			echo_date "建议使用fancyss_arm_full或者fancyss_arm_lite！"
-			echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_arm"
-			exit_install 1
-			
-		elif [ "${LINUX_VER}" == "41" -o "${LINUX_VER}" == "419" ];then
-			if [ "${ROT_ARCH}" == "armv7l" ];then
-				# RT-AX56U RT-AX56U_V2 TUF-AX3000 TUF-AX3000_V2 TUF-AX5400 TUF-AX5400_V2 XT8
+	if [ "${PKG_ARCH}" = "qca" ]; then
+		case "${LINUX_VER}" in
+			"44")
+				echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，安装fancyss_${PKG_ARCH}_${PKG_TYPE}！"
+				;;
+			"26")
 				echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
-				echo_date "建议使用fancyss_hnd_full或者fancyss_hnd_lite！"
-				echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_hnd"
+				echo_date "建议使用fancyss_arm_full或者fancyss_arm_lite！"
+				echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_arm"
 				exit_install 1
-			elif  [ "${ROT_ARCH}" == "aarch64" ];then
-				# RT-AC86U, RT-AX86U, RT-AX56U, GT-AX6000, XT12...
+				;;
+			"41"|"419")
+				if [ "${ROT_ARCH}" = "armv7l" ]; then
+					echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
+					echo_date "建议使用fancyss_hnd_full或者fancyss_hnd_lite！"
+					echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_hnd"
+					exit_install 1
+				elif [ "${ROT_ARCH}" = "aarch64" ]; then
+					echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
+					echo_date "建议使用fancyss_hnd_v8_full或者fancyss_hnd_v8_lite！"
+					echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_hnd"
+					exit_install 1
+				else
+					echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该架构！退出！"
+					exit_install 1
+				fi
+				;;
+			"54")
 				echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
-				echo_date "建议使用fancyss_hnd_v8_full或者fancyss_hnd_v8_lite！"
-				echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_hnd"
+				case "${MODEL}" in
+					"ZenWiFi_BD4")
+						echo_date "建议使用fancyss_ipq32_full或者fancyss_ipq32_lite！"
+						echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_ipq32"
+						exit_install 1
+						;;
+					"TUF_6500")
+						echo_date "建议使用fancyss_ipq64_full或者fancyss_ipq64_lite！"
+						echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_ipq64"
+						exit_install 1
+						;;
+					"TX-AX6000"|"TUF-AX4200Q"|"RT-AX57_Go"|"GS7"|"ZenWiFi_BT8P"|"GS7_Air")
+						echo_date "建议使用fancyss_mtk_full或者fancyss_mtk_lite！"		
+						echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_mtk"
+						exit_install 1
+						;;
+					*)
+						echo_date "原因：暂不支持你的路由器型号：${MODEL}，请联系插件作者！"
+						exit_install 1
+						;;
+				esac
+				;;
+			*)
+				echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
 				exit_install 1
-			else
-				# no such model, yet.
-				echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该架构！退出！"
-				exit_install 1
-			fi
-		elif [ "${LINUX_VER}" == "54" ];then
-			# mediatek TX-AX6000
-			echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
-			echo_date "建议使用fancyss_mtk_full或者fancyss_mtk_lite！"		
-			echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_mtk"
-			exit_install 1
-		else
-			# no such model, yet.
-			echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
-			exit_install 1
-		fi
+				;;
+		esac
 	fi
 
 	# fancyss_mtk
-	if [ "${PKG_ARCH}" == "mtk" ];then
-		if [ "${LINUX_VER}" == "54" ];then
-			# MTK,tx-ax6000 tuf-ax4200
-			echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，安装fancyss_${PKG_ARCH}_${PKG_TYPE}！"
-		elif [ "${LINUX_VER}" == "26" ];then
-			# RT-AC68U, RT-AC88U, RT-AC3100, RT-AC5300
-			echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
-			echo_date "建议使用fancyss_arm_full或者fancyss_arm_lite！"
-			echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_arm"
-			exit_install 1
-			
-		elif [ "${LINUX_VER}" == "41" -o "${LINUX_VER}" == "419" ];then
-			if [ "${ROT_ARCH}" == "armv7l" ];then
-				# RT-AX56U RT-AX56U_V2 TUF-AX3000 TUF-AX3000_V2 TUF-AX5400 TUF-AX5400_V2 XT8
+	if [ "${PKG_ARCH}" == "mtk" ]; then
+		case "${LINUX_VER}" in
+			"54")
+				case "${MODEL}" in
+					"ZenWiFi_BD4")
+						echo_date "建议使用fancyss_ipq32_full或者fancyss_ipq32_lite！"	
+						echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_ipq32"
+						exit_install 1
+						;;
+					"TUF_6500")
+						echo_date "建议使用fancyss_ipq64_full或者fancyss_ipq64_lite！"		
+						echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_ipq64"
+						exit_install 1
+						;;
+					"TX-AX6000"|"TUF-AX4200Q"|"RT-AX57_Go"|"GS7"|"ZenWiFi_BT8P"|"GS7_Air")
+						echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，安装fancyss_${PKG_ARCH}_${PKG_TYPE}！"
+						;;
+					*)
+						echo_date "原因：暂不支持你的路由器型号：${MODEL}，请联系插件作者！"		
+						exit_install 1
+						;;
+				esac
+				;;
+			"26")
 				echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
-				echo_date "建议使用fancyss_hnd_full或者fancyss_hnd_lite！"
-				echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_hnd"
+				echo_date "建议使用fancyss_arm_full或者fancyss_arm_lite！"
+				echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_arm"
 				exit_install 1
-			elif  [ "${ROT_ARCH}" == "aarch64" ];then
-				# RT-AC86U, RT-AX86U, RT-AX56U, GT-AX6000, XT12...
+				;;
+			"41"|"419")
+				if [ "${ROT_ARCH}" == "armv7l" ]; then
+					echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
+					echo_date "建议使用fancyss_hnd_full或者fancyss_hnd_lite！"
+					echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_hnd"
+					exit_install 1
+				elif [ "${ROT_ARCH}" == "aarch64" ]; then
+					echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
+					echo_date "建议使用fancyss_hnd_v8_full或者fancyss_hnd_v8_lite！"
+					echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_hnd"
+					exit_install 1
+				else
+					echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该架构！退出！"
+					exit_install 1
+				fi
+				;;
+			"44")
+				echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_hnd_${PKG_TYPE}不适用于该内核版本！"
+				echo_date "建议使用fancyss_qca_full或者fancyss_qca_lite！"
+				echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_qca"
+				exit_install 1
+				;;
+			*)
 				echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
-				echo_date "建议使用fancyss_hnd_v8_full或者fancyss_hnd_v8_lite！"
-				echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_hnd"
 				exit_install 1
-			else
-				# no such model, yet.
-				echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该架构！退出！"
+				;;
+		esac
+	fi
+
+	# fancyss_ipq32
+	if [ "${PKG_ARCH}" = "ipq32" ]; then
+		case "${LINUX_VER}" in
+			"54")
+				case "${MODEL}" in
+					"ZenWiFi_BD4")
+						echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，安装fancyss_${PKG_ARCH}_${PKG_TYPE}！"
+						;;
+					"TUF_6500")
+						echo_date "建议使用fancyss_ipq64_full或者fancyss_ipq64_lite！"		
+						echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_ipq64"
+						exit_install 1
+						;;
+					"TX-AX6000"|"TUF-AX4200Q"|"RT-AX57_Go"|"GS7"|"ZenWiFi_BT8P"|"GS7_Air")
+						echo_date "建议使用fancyss_mtk_full或者fancyss_mtk_lite！"		
+						echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_mtk"
+						exit_install 1
+						;;
+					*)
+						echo_date "原因：暂不支持你的路由器型号：${MODEL}，请联系插件作者！"		
+						exit_install 1
+						;;
+				esac
+				;;
+			"26")
+				echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
+				echo_date "建议使用fancyss_arm_full或者fancyss_arm_lite！"
+				echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_arm"
 				exit_install 1
-			fi
-		elif [ "${LINUX_VER}" == "44" ];then
-			echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_hnd_${PKG_TYPE}不适用于该内核版本！"
-			echo_date "建议使用fancyss_qca_full或者fancyss_qca_lite！"
-			echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_qca"
-			exit_install 1
-		else
-			# no such model, yet.
-			echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
-			exit_install 1
-		fi
+				;;
+			"41"|"419")
+				if [ "${ROT_ARCH}" = "armv7l" ]; then
+					echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
+					echo_date "建议使用fancyss_hnd_full或者fancyss_hnd_lite！"
+					echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_hnd"
+					exit_install 1
+				elif [ "${ROT_ARCH}" = "aarch64" ]; then
+					echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
+					echo_date "建议使用fancyss_hnd_v8_full或者fancyss_hnd_v8_lite！"
+					echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_hnd"
+					exit_install 1
+				else
+					echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该架构！退出！"
+					exit_install 1
+				fi
+				;;
+			"44")
+				echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_hnd_${PKG_TYPE}不适用于该内核版本！"
+				echo_date "建议使用fancyss_qca_full或者fancyss_qca_lite！"
+				echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_qca"
+				exit_install 1
+				;;
+			*)
+				echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
+				exit_install 1
+				;;
+		esac
+	fi
+
+	# fancyss_ipq64
+	if [ "${PKG_ARCH}" = "ipq64" ]; then
+		case "${LINUX_VER}" in
+			"54")
+				case "${MODEL}" in
+					"ZenWiFi_BD4")
+						echo_date "建议使用fancyss_ipq32_full或者fancyss_ipq32_lite！"		
+						echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_ipq32"
+						exit_install 1
+						;;
+					"TUF_6500")
+						echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，安装fancyss_${PKG_ARCH}_${PKG_TYPE}！"
+						;;
+					"TX-AX6000"|"TUF-AX4200Q"|"RT-AX57_Go"|"GS7"|"ZenWiFi_BT8P"|"GS7_Air")
+						echo_date "建议使用fancyss_mtk_full或者fancyss_mtk_lite！"		
+						echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_mtk"
+						exit_install 1
+						;;
+					*)
+						echo_date "原因：暂不支持你的路由器型号：${MODEL}，请联系插件作者！"		
+						exit_install 1
+						;;
+				esac
+				;;
+			"26")
+				echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
+				echo_date "建议使用fancyss_arm_full或者fancyss_arm_lite！"
+				echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_arm"
+				exit_install 1
+				;;
+			"41"|"419")
+				if [ "${ROT_ARCH}" = "armv7l" ]; then
+					echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
+					echo_date "建议使用fancyss_hnd_full或者fancyss_hnd_lite！"
+					echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_hnd"
+					exit_install 1
+				elif [ "${ROT_ARCH}" = "aarch64" ]; then
+					echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
+					echo_date "建议使用fancyss_hnd_v8_full或者fancyss_hnd_v8_lite！"
+					echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_hnd"
+					exit_install 1
+				else
+					echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该架构！退出！"
+					exit_install 1
+				fi
+				;;
+			"44")
+				echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_hnd_${PKG_TYPE}不适用于该内核版本！"
+				echo_date "建议使用fancyss_qca_full或者fancyss_qca_lite！"
+				echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_qca"
+				exit_install 1
+				;;
+			*)
+				echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，fancyss_${PKG_ARCH}_${PKG_TYPE}不适用于该内核版本！"
+				exit_install 1
+				;;
+		esac
 	fi
 }
 
@@ -306,16 +848,26 @@ set_skin(){
 exit_install(){
 	local state=$1
 	local PKG_ARCH=$(cat ${DIR}/.valid)
+	cleanup_install_tmp
 	case $state in
 		1)
 			echo_date "fancyss项目地址：https://github.com/hq450/fancyss"
 			echo_date "退出安装！"
-			rm -rf /tmp/${module}* >/dev/null 2>&1
 			exit 1
 			;;
 		0|*)
-			rm -rf /tmp/${module}* >/dev/null 2>&1
 			exit 0
+			;;
+	esac
+}
+
+cleanup_install_tmp(){
+	# 仅清理当前安装脚本所在的 /tmp 解压目录，避免误删 /tmp 下其它文件。
+	case "${DIR}" in
+		/tmp/*)
+			if [ "${DIR}" != "/tmp" -a "${DIR}" != "/tmp/" ];then
+				rm -rf "${DIR}" >/dev/null 2>&1
+			fi
 			;;
 	esac
 }
@@ -334,20 +886,200 @@ __get_name_by_type() {
 	esac
 }
 
+append_backup_nodes_schema2(){
+	local backup_file="$1"
+	local order_csv next_id max_id reserved_max imported_order="" node_json node_id stored_json node_ts
+	local first_imported=""
+
+	[ -f "${backup_file}" ] || return 1
+	order_csv=$(dbus get fss_node_order)
+	next_id=$(dbus get fss_node_next_id)
+	[ -n "${next_id}" ] || next_id=1
+	max_id=$(printf '%s' "${order_csv}" | tr ',' '\n' | sed '/^$/d' | sort -n | tail -n1)
+	[ -n "${max_id}" ] || max_id=0
+	reserved_max=$(jq -r '._id // empty' "${backup_file}" 2>/dev/null | sed '/^$/d' | sort -n | tail -n1)
+	if [ -n "${reserved_max}" ] && [ "${reserved_max}" -gt "${max_id}" ] 2>/dev/null;then
+		max_id="${reserved_max}"
+	fi
+	if [ "${next_id}" -le "${max_id}" ] 2>/dev/null;then
+		next_id=$((max_id + 1))
+	fi
+
+	while IFS= read -r node_json
+	do
+		[ -z "${node_json}" ] && continue
+		node_json=$(printf '%s' "${node_json}" | jq -c . 2>/dev/null)
+		[ -z "${node_json}" ] && continue
+		node_id=$(printf '%s' "${node_json}" | jq -r '._id // empty')
+		if [ -z "${node_id}" ];then
+			node_id="${next_id}"
+			next_id=$((next_id + 1))
+		fi
+		node_ts=$(fss_now_ts_ms)
+		stored_json=$(printf '%s' "${node_json}" | jq -c --arg id "${node_id}" --argjson ts "${node_ts}" '
+			with_entries(select(.value != "" and .value != null))
+			| del(._schema, ._rev, ._source, ._updated_at, ._migrated_from, .server_ip, .latency, .ping)
+			| if ((.type // "") == "4" and ((.xray_prot // "") == "")) then .xray_prot = "vless" else . end
+			| . + {
+				"_schema": 2,
+				"_id": $id,
+				"_rev": 1,
+				"_source": "lite-restore",
+				"_updated_at": $ts
+			}
+			| ._created_at = (((._created_at // $ts) | tonumber? // $ts) | if . < 1000000000000 then (. * 1000) else . end)
+		')
+		fss_clear_webtest_cache_node "${node_id}"
+		dbus set fss_node_${node_id}="$(fss_b64_encode "${stored_json}")"
+		imported_order="${imported_order}${imported_order:+,}${node_id}"
+		[ -n "${first_imported}" ] || first_imported="${node_id}"
+		if [ "${node_id}" -gt "${max_id}" ] 2>/dev/null;then
+			max_id="${node_id}"
+		fi
+	done < "${backup_file}"
+
+	[ -z "${imported_order}" ] && return 1
+	if [ -n "${order_csv}" ];then
+		dbus set fss_node_order="${order_csv},${imported_order}"
+	else
+		dbus set fss_node_order="${imported_order}"
+	fi
+	dbus set fss_data_schema=2
+	dbus set fss_node_next_id="$((max_id + 1))"
+	if [ -z "$(fss_get_current_node_id 2>/dev/null)" ] && [ -n "${first_imported}" ];then
+		fss_set_current_node_id "${first_imported}"
+	fi
+	fss_touch_node_catalog_ts >/dev/null 2>&1
+	fss_touch_node_config_ts >/dev/null 2>&1
+	return 0
+}
+
 full2lite(){
-	# 当从full版本切换到lite版本的时候，需要将naive，tuic，hysteria2节点进行备份后，从节点列表里删除相应节点
+	# 当从full版本切换到lite版本的时候，需要将naive、tuic节点进行备份后，从节点列表里删除相应节点
 	# 1. 将所有不支持的节点数据储存到备份文件
-	dbus list ssconf_basic_ | grep -E "_[0-9]+=" | sed '/^ssconf_basic_.\+_[0-9]\+=$/d' | sed 's/^ssconf_basic_//' >/tmp/fancyss_kv.txt
-	NODES_INFO=$(cat /tmp/fancyss_kv.txt | sed -n 's/type_\([0-9]\+=[678]\)/\1/p' | sort -n)
-	if [ -n "${NODES_IN2FO}" ];then
-		mkdir -p /koolshare/configs/fanyss
+	local tmp_kv="/tmp/fancyss_kv.txt"
+	local backup_dir="/koolshare/configs/fanyss"
+	local backup_file="${backup_dir}/fancyss_kv.json"
+	if [ "$(fss_detect_storage_schema 2>/dev/null)" = "2" ];then
+		local remove_flag=0
+		local keep_order=""
+		local max_keep=0
+		local old_current="$(fss_get_current_node_id 2>/dev/null)"
+		local old_failover="$(fss_get_failover_node_id 2>/dev/null)"
+		local new_current=""
+		local new_failover=""
+		local tmp_dir=""
+		local nodes_dir=""
+		local meta_file=""
+		local removed_ids=""
+		local json_file=""
+		local node_meta=""
+		local TY=""
+		local NAME=""
+		mkdir -p "${backup_dir}"
+		: > "${backup_file}"
+		tmp_dir="$(fss_mktemp_dir full2lite 2>/dev/null)"
+		nodes_dir="${tmp_dir}/nodes"
+		meta_file="${tmp_dir}/nodes.meta.tsv"
+		if [ -n "${tmp_dir}" ] && fss_dump_v2_node_json_dir "${nodes_dir}" >/dev/null 2>&1; then
+			find "${nodes_dir}" -maxdepth 1 -type f -name '*.json' | sort | xargs -r jq -r '[._id, (.type // ""), (.name // "")] | @tsv' > "${meta_file}" 2>/dev/null || true
+		fi
+		while IFS= read -r NU
+		do
+			[ -n "${NU}" ] || continue
+			TY=""
+			NAME=""
+			json_file="${nodes_dir}/${NU}.json"
+			if [ -s "${meta_file}" ] && [ -f "${json_file}" ]; then
+				node_meta="$(grep -m1 "^${NU}	" "${meta_file}" 2>/dev/null)"
+				if [ -n "${node_meta}" ]; then
+					TY="$(printf '%s' "${node_meta}" | awk -F '\t' '{print $2}')"
+					NAME="$(printf '%s' "${node_meta}" | cut -f3-)"
+				fi
+			fi
+			if [ -z "${TY}" ]; then
+				TY="$(fss_get_node_field_plain "${NU}" type)"
+				NAME="$(fss_get_node_field_plain "${NU}" name)"
+			fi
+			case "${TY}" in
+			6|7)
+				echo_date "备份并从节点列表里移除第$NU个$(__get_name_by_type ${TY})节点：【${NAME}】"
+				if [ -f "${json_file}" ]; then
+					jq -c '
+						with_entries(select(.value != "" and .value != null))
+						| del(._schema, ._rev, ._source, ._updated_at, ._migrated_from, .server_ip, .latency, .ping)
+					' "${json_file}" >> "${backup_file}"
+				else
+					fss_v2_get_node_json_by_id "${NU}" | jq -c '
+						with_entries(select(.value != "" and .value != null))
+						| del(._schema, ._rev, ._source, ._updated_at, ._migrated_from, .server_ip, .latency, .ping)
+					' >> "${backup_file}"
+				fi
+				removed_ids="${removed_ids} ${NU}"
+				dbus remove fss_node_${NU}
+				remove_flag=1
+				;;
+			*)
+				keep_order="${keep_order}${keep_order:+,}${NU}"
+				if [ "${NU}" -gt "${max_keep}" ] 2>/dev/null;then
+					max_keep="${NU}"
+				fi
+				;;
+			esac
+		done <<-EOF
+		$(fss_list_node_ids)
+		EOF
+		if [ "${remove_flag}" != "1" ];then
+			rm -rf "${tmp_dir}"
+			rm -rf "${backup_file}"
+			return
+		fi
+		for NU in ${removed_ids}
+		do
+			[ -n "${NU}" ] || continue
+			fss_clear_webtest_cache_node "${NU}"
+		done
+		[ -n "${keep_order}" ] && dbus set fss_node_order="${keep_order}" || dbus remove fss_node_order
+		if [ -n "${keep_order}" ];then
+			if printf '%s' "${keep_order}" | tr ',' '\n' | grep -Fxq "${old_current}" 2>/dev/null;then
+				new_current="${old_current}"
+			else
+				new_current="$(printf '%s' "${keep_order}" | cut -d ',' -f 1)"
+			fi
+			if [ -n "${old_failover}" ] && printf '%s' "${keep_order}" | tr ',' '\n' | grep -Fxq "${old_failover}" 2>/dev/null;then
+				new_failover="${old_failover}"
+			fi
+		fi
+		fss_set_current_node_id "${new_current}"
+		fss_set_failover_node_id "${new_failover}"
+		dbus set fss_data_schema=2
+		dbus set fss_node_next_id="$((max_keep + 1))"
+		fss_touch_node_catalog_ts >/dev/null 2>&1
+		fss_touch_node_config_ts >/dev/null 2>&1
+		if [ -s "${backup_file}" ];then
+			echo_date "📁lite版本不支持的节点成功备份到${backup_file}"
+		else
+			rm -rf "${backup_file}"
+		fi
+		rm -rf "${tmp_dir}"
+		return
+	fi
+	dbus list ssconf_basic_ | grep -E "_[0-9]+=" | sed '/^ssconf_basic_.\+_[0-9]\+=$/d' | sed 's/^ssconf_basic_//' >"${tmp_kv}"
+	NODES_INFO=$(sed -n 's/type_\([0-9]\+=[67]\)/\1/p' "${tmp_kv}" | sort -n)
+	if [ -z "${NODES_INFO}" ];then
+		rm -rf "${tmp_kv}" "${backup_file}"
+		return
+	fi
+	if [ -n "${NODES_INFO}" ];then
+		mkdir -p "${backup_dir}"
+		: > "${backup_file}"
 		for NODE_INFO in ${NODES_INFO}
 		do
 			local NU=$(echo "${NODE_INFO}" | awk -F"=" '{print $1}')
 			local TY=$(echo "${NODE_INFO}" | awk -F"=" '{print $2}')
 			echo_date "备份并从节点列表里移除第$NU个$(__get_name_by_type ${TY})节点：【$(dbus get ssconf_basic_name_${NU})】"
 			# 备份
-			cat /tmp/fancyss_kv.txt | grep "_${NU}=" | sed "s/_${NU}=/\":\"/" | sed 's/^/"/;s/$/\"/;s/$/,/g;1 s/^/{/;$ s/,$/}/' | tr -d '\n' | sed 's/$/\n/' >>/koolshare/configs/fanyss/fancyss_kv.json
+			grep "_${NU}=" "${tmp_kv}" | sed "s/_${NU}=/\":\"/" | sed 's/^/"/;s/$/\"/;s/$/,/g;1 s/^/{/;$ s/,$/}/' | tr -d '\n' | sed 's/$/\n/' >>"${backup_file}"
 			# 删除
 			dbus list ssconf_basic_|grep "_${NU}="|sed -n 's/\(ssconf_basic_\w\+\)=.*/\1/p' |  while read key
 			do
@@ -355,9 +1087,11 @@ full2lite(){
 			done
 		done
 		
-		if [ -f "/koolshare/configs/fanyss/fancyss_kv.json" ];then
-			echo_date "📁lite版本不支持的节点成功备份到/koolshare/configs/fanyss/fancyss_kv.json"
-			rm -rf /tmp/fancyss_kv.txt
+		if [ -s "${backup_file}" ];then
+			echo_date "📁lite版本不支持的节点成功备份到${backup_file}"
+			rm -rf "${tmp_kv}"
+		else
+			rm -rf "${tmp_kv}" "${backup_file}"
 		fi
 	fi
 }
@@ -368,6 +1102,13 @@ lite2full(){
 	fi
 	
 	echo_date "检测到上次安装fancyss lite备份的不支持节点，准备恢复！"
+	if [ "$(fss_detect_storage_schema 2>/dev/null)" = "2" ];then
+		append_backup_nodes_schema2 "/koolshare/configs/fanyss/fancyss_kv.json"
+		echo_date "节点恢复成功！"
+		sync
+		rm -rf /koolshare/configs/fanyss/fancyss_kv.json
+		return
+	fi
 	local file_name=fancyss_nodes_restore
 	cat > /tmp/${file_name}.sh <<-EOF
 		#!/bin/sh
@@ -393,6 +1134,30 @@ lite2full(){
 check_empty_node(){
 	# 从full版本切换为lite版本后，部分不支持节点将会被删除，比如naive，tuic，hysteria2节点
 	# 如果安装lite版本的时候，full版本使用的是以上节点，则这些节点可能是空的，此时应该切换为下一个不为空的节点，或者关闭插件（没有可用节点的情况）
+	if [ "$(fss_detect_storage_schema 2>/dev/null)" = "2" ];then
+		local NODES_SEQ=$(fss_list_node_ids)
+		if [ -z "${NODES_SEQ}" ];then
+			dbus set ss_basic_enable="0"
+			ss_basic_enable="0"
+			return 0
+		fi
+
+		local CURR_NODE=$(fss_get_current_node_id)
+		if [ -z "${CURR_NODE}" ];then
+			dbus set ss_basic_enable="0"
+			ss_basic_enable="0"
+			return 0
+		fi
+
+		local NODE_FIRST=$(printf '%s\n' "${NODES_SEQ}" | sed -n '1p')
+		local CURR_TYPE=$(fss_get_node_field_plain "${CURR_NODE}" type)
+		if [ -z "${CURR_TYPE}" ];then
+			echo_date "检测到当前节点为空，调整默认节点为节点列表内的第一个节点!"
+			fss_set_current_node_id "${NODE_FIRST}"
+			return 0
+		fi
+		return 0
+	fi
 	local NODES_SEQ=$(dbus list ssconf_basic_name_ | sed -n 's/^.*_\([0-9]\+\)=.*/\1/p' | sort -n)
 	if [ -z "${NODES_SEQ}" ];then
 		# 没有任何节点，可能是新安装插件，可能是full安装lite被删光了
@@ -426,7 +1191,7 @@ check_device(){
 		return "1"
 	fi
 	
-	mkdir -p $1/rw_test
+	mkdir -p $1/rw_test 2>/dev/null
 	sync
 	if [ -d "$1/rw_test" ]; then
 		echo "rwTest=OK" >"$1/rw_test/rw_test.txt"
@@ -453,10 +1218,17 @@ check_device(){
 install_now(){
 	# default value
 	local PLVER=$(cat ${DIR}/ss/version)
+	local OLD_VER="$(dbus get ss_basic_version_local)"
+	local FORCE_LEGACY_CACHE_RESET=0
+	local FORCE_SCHEMA2_SECRET_NORMALIZE=0
+	[ -z "${OLD_VER}" -a -f "/koolshare/ss/version" ] && OLD_VER="$(cat /koolshare/ss/version 2>/dev/null)"
+	[ -n "${OLD_VER}" ] && version_lt "${OLD_VER}" "3.6.0" && FORCE_LEGACY_CACHE_RESET=1
+	[ -n "${OLD_VER}" ] && version_lt "${OLD_VER}" "3.5.13" && FORCE_SCHEMA2_SECRET_NORMALIZE=1
 
 	#local PKG_ARCH_OLD=$(cat /koolshare/webs/Module_shadowsocks.asp 2>/dev/null | grep -Eo "PKG_ARCH=.+" | awk -F"=" '{print $2}' |sed 's/"//g')
 	#local PKG_TYPE_OLD=$(cat /koolshare/webs/Module_shadowsocks.asp 2>/dev/null | grep -Eo "PKG_TYPE=.+" | awk -F"=" '{print $2}' |sed 's/"//g')
 	local TITLE_OLD=$(dbus get softcenter_module_shadowsocks_title)
+	local PKG_TYPE_OLD=""
 
 	# print message
 	local TITLE_NEW="科学上网 ${PKG_TYPE}"
@@ -479,9 +1251,10 @@ install_now(){
 
 	# check old version type
 	if [ -f "/koolshare/webs/Module_shadowsocks.asp" ];then
-		local IS_LITE=$(cat /koolshare/webs/Module_shadowsocks.asp | grep "lite")
+		PKG_TYPE_OLD="$(get_pkg_field_from_file /koolshare/webs/Module_shadowsocks.asp "TYPE")"
+		[ -z "${PKG_TYPE_OLD}" ] && PKG_TYPE_OLD="$(dbus get ss_basic_pkg_type)"
 		# 已经安装，此次为升级
-		if [ -n "${IS_LITE}" ];then
+		if [ "${PKG_TYPE_OLD}" = "lite" ];then
 			OLD_TYPE="lite"
 		else
 			OLD_TYPE="full"
@@ -506,15 +1279,13 @@ install_now(){
 
 	# check empty node
 	check_empty_node
+	cleanup_legacy_smartdns_user_configs "${OLD_VER}"
 
 	# remove some file first
 	echo_date "清理旧文件"
 	rm -rf /koolshare/ss/*
 	rm -rf /koolshare/scripts/ss_*
 	rm -rf /koolshare/webs/Module_shadowsocks*
-	rm -rf /koolshare/bin/ss-redir
-	rm -rf /koolshare/bin/ss-tunnel
-	rm -rf /koolshare/bin/ss-local
 	rm -rf /koolshare/bin/rss-redir
 	rm -rf /koolshare/bin/rss-tunnel
 	rm -rf /koolshare/bin/rss-local
@@ -522,23 +1293,14 @@ install_now(){
 	rm -rf /koolshare/bin/dns2socks
 	rm -rf /koolshare/bin/kcptun
 	rm -rf /koolshare/bin/chinadns-ng
-	rm -rf /koolshare/bin/speederv1
-	rm -rf /koolshare/bin/speederv2
-	rm -rf /koolshare/bin/udp2raw
-	rm -rf /koolshare/bin/tuic-client
 	rm -rf /koolshare/bin/xray
-	rm -rf /koolshare/bin/v2ray
-	rm -rf /koolshare/bin/v2ray-plugin
 	rm -rf /koolshare/bin/curl-fancyss
 	rm -rf /koolshare/bin/hysteria2
-	rm -rf /koolshare/bin/httping
 	rm -rf /koolshare/bin/haveged
 	rm -rf /koolshare/bin/naive
 	rm -rf /koolshare/bin/ipt2socks
 	rm -rf /koolshare/bin/dnsclient
-	rm -rf /koolshare/bin/dns2tcp
-	rm -rf /koolshare/bin/dns-ecs-forcer
-	rm -rf /koolshare/bin/uredir
+	rm -rf /koolshare/bin/smartdns
 	rm -rf /koolshare/res/icon-shadowsocks.png
 	rm -rf /koolshare/res/arrow-down.gif
 	rm -rf /koolshare/res/arrow-up.gif
@@ -549,12 +1311,15 @@ install_now(){
 	rm -rf /koolshare/res/fancyss.css
 	find /koolshare/init.d/ -name "*shadowsocks.sh" | xargs rm -rf
 	find /koolshare/init.d/ -name "*socks5.sh" | xargs rm -rf
-
 	# optional file maybe exist should be removed, but no need remove on install/upgrade
-	# rm -rf /koolshare/bin/sslocal
+
 
 	# optional file maybe exist should be removed, remove on install
 	rm -rf /koolshare/bin/dig
+	rm -rf /koolshare/bin/speederv1
+	rm -rf /koolshare/bin/speederv2
+	rm -rf /koolshare/bin/udp2raw
+	rm -rf /koolshare/bin/tuic-client
 
 	# some file may exist in /data
 	if [ -d "/data" ];then
@@ -563,17 +1328,24 @@ install_now(){
 		rm -rf /data/hysteria2 >/dev/null 2>&1
 		rm -rf /data/naive >/dev/null 2>&1
 		rm -rf /data/sslocal >/dev/null 2>&1
+		rm -rf /data/rss-local >/dev/null 2>&1
+		rm -rf /data/rss-redir >/dev/null 2>&1
+		# legacy since 3.3.6
 		rm -rf /data/ss-local >/dev/null 2>&1
 		rm -rf /data/ss-redir >/dev/null 2>&1
 		rm -rf /data/ss-tunnel >/dev/null 2>&1
-		rm -rf /data/rss-local >/dev/null 2>&1
-		rm -rf /data/rss-redir >/dev/null 2>&1
 	fi
 	
 	# legacy files should be removed
+	rm -rf /koolshare/bin/v2ray
+	rm -rf /koolshare/bin/uredir
+	rm -rf /koolshare/bin/dns-ecs-forcer
+	rm -rf /koolshare/bin/dns2tcp
+	rm -rf /koolshare/bin/sslocal
+	rm -rf /koolshare/bin/httping
+	rm -rf /koolshare/bin/v2ray-plugin
 	rm -rf /koolshare/bin/trojan
 	rm -rf /koolshare/bin/haproxy
-	rm -rf /koolshare/bin/smartdns
 	rm -rf /koolshare/bin/dohclient
 	rm -rf /koolshare/bin/dohclient-cache
 	rm -rf /koolshare/bin/v2ctl
@@ -588,6 +1360,9 @@ install_now(){
 	rm -rf /koolshare/bin/koolgame
 	rm -rf /koolshare/bin/dnscrypt-proxy
 	rm -rf /koolshare/bin/resolveip
+	rm -rf /koolshare/bin/ss-redir
+	rm -rf /koolshare/bin/ss-tunnel
+	rm -rf /koolshare/bin/ss-local
 	rm -rf /koolshare/res/all.png
 	rm -rf /koolshare/res/gfw.png
 	rm -rf /koolshare/res/chn.png
@@ -602,11 +1377,22 @@ install_now(){
 	if [ "${MODEL}" == "RT-AX56U_V2" -o "${MODEL}" == "RT-AX57" ];then
 		rm -rf /jffs/syslog.log
 		rm -rf /jffs/syslog.log-1
-		rm -rf /jffs/wglist
+		rm -rf /jffs/wglist*
 		rm -rf /jffs/.sys/diag_db/*
 		# make a dummy
 		rm -rf /jffs/uu.tar.gz*
 		touch /jffs/uu.tar.gz
+	elif [ "${MODEL}" == "ZenWiFi_BD4" ];then
+		rm -rf /jffs/ahs
+		rm -rf /jffs/asd
+		rm -rf /jffs/syslog.log*
+		rm -rf /jffs/curllst*
+		rm -rf /jffs/wglist*
+		rm -rf /jffs/asd.log
+		rm -rf /jffs/hostapd.log
+		rm -rf /jffs/webs_upgrade.log*
+		rm -rf /jffs/.sys/diag_db/*
+		rm -rf /jffs/uu.tar.gz*
 	else
 		rm -rf /jffs/uu.tar.gz*
 	fi
@@ -635,10 +1421,6 @@ install_now(){
 		rm -rf /tmp/shadowsocks/bin/uredir
 	fi
 	
-	if [ -f "/koolshrae/bin/websocketd" ];then
-		rm -rf /tmp/shadowsocks/bin/websocketd
-	fi
-
 	# 将一些较大的二进制文件安装到/data分区，以节约jffs分区空间
 	# 1. 卸载的时候记得删除/data分区内的二进制
 	# 2. 打包的时候应该用/data分区内的二进制
@@ -649,7 +1431,7 @@ install_now(){
 		echo_date "检测/data分区剩余空间..."
 		local SPACE_DATA_AVAL1=$(df | grep -w "/data" | awk '{print $4}')
 		echo_date "/data分区剩余空间为：${SPACE_DATA_AVAL1}KB"
-		local _BINS="xray v2ray hysteria2 naive sslocal ss-local ss-redir ss-tunnel rss-local rss-tunnel rss-redir"
+		local _BINS="xray v2ray hysteria2 naive sslocal rss-local rss-tunnel rss-redir"
 		for _BIN in ${_BINS}
 		do
 			if [ -f "/tmp/shadowsocks/bin/${_BIN}" ];then
@@ -702,11 +1484,12 @@ install_now(){
 	
 	echo_date "复制相关的网页文件！"
 	cp -rf /tmp/shadowsocks/webs/* /koolshare/webs/
+	sync_pkg_meta_runtime /tmp/shadowsocks/webs/Module_shadowsocks.asp
 	local _LAYJS_MD5=$(md5sum /koolshare/res/layer/layer.js | awk '{print $1}')
 	if [ -f "/koolshare/res/layer/layer.js" -a "${_LAYJS_MD5}" == "9d72838d6f33e45f058cc1fa00b7a5c7" ];then
 		mv -f /tmp/shadowsocks/res/layer.js /koolshare/res/layer/
 	else
-		rm tmp/shadowsocks/res/layer.js
+		rm /tmp/shadowsocks/res/layer.js >/dev/null 2>&1
 	fi
 	cp -rf /tmp/shadowsocks/res/* /koolshare/res/
 	sync
@@ -717,21 +1500,6 @@ install_now(){
 	chmod 755 /koolshare/ss/* >/dev/null 2>&1
 	chmod 755 /koolshare/scripts/ss* >/dev/null 2>&1
 	chmod 755 /koolshare/bin/* >/dev/null 2>&1
-	
-	# kill some process before fancyss start
-	ret_0=$(ps | grep "websocketd" | grep "/bin/sh")
-	if [ -n "${ret_0}" ];then
-		killall websocketd >/dev/null 2>&1
-		sleep 1
-		sync
-	fi
-
-	# start some process before fancyss start
-	if [ -x "/koolshare/bin/websocketd" -a -f "/koolshare/ss/websocket" ];then
-		if [ -z "$(pidof websocketd)" ];then
-			run_bg websocketd --port=803 /koolshare/ss/websocket
-		fi
-	fi
 	
 	# intall different UI
 	set_skin
@@ -748,92 +1516,260 @@ install_now(){
 	[ ! -L "/koolshare/bin/rss-tunnel" ] && ln -sf /koolshare/bin/rss-local /koolshare/bin/rss-tunnel
 	[ ! -L "/koolshare/init.d/S99shadowsocks.sh" ] && ln -sf /koolshare/ss/ssconfig.sh /koolshare/init.d/S99shadowsocks.sh
 	[ ! -L "/koolshare/init.d/N99shadowsocks.sh" ] && ln -sf /koolshare/ss/ssconfig.sh /koolshare/init.d/N99shadowsocks.sh
-	[ ! -L "/koolshare/init.d/S99socks5.sh" ] && ln -sf /koolshare/scripts/ss_socks5.sh /koolshare/init.d/S99socks5.sh
 
 	# default values
 	eval $(dbus export ss)
 	local PKG_TYPE=$(cat /koolshare/webs/Module_shadowsocks.asp | tr -d '\r' | grep -Eo "PKG_TYPE=.+"|awk -F "=" '{print $2}'|sed 's/"//g')
-	# 3.0.4：国内DNS默认使用运营商DNS
-	[ -z "${ss_china_dns}" ] && dbus set ss_china_dns="1"
-	# 3.0.4 从老版本升级到3.0.4，原部分方案需要切换到进阶方案，因为这些方案已经不存在
-	if [ -z "${ss_basic_advdns}" -a -z "${ss_basic_olddns}" ];then
-		# 全新安装的 3.0.4+，或者从3.0.3及其以下版本升级而来
-		if [ -z "${ss_foreign_dns}" ];then
-			# 全新安装的 3.0.4
-			dbus set ss_basic_advdns="1"
-			dbus set ss_basic_olddns="0"
-		else
-			# 从3.0.3及其以下版本升级而来
-			# 因为一些dns选项已经不存在，所以更改一下
-			if [ "${ss_foreign_dns}" == "2" -o "${ss_foreign_dns}" == "5" -o "${ss_foreign_dns}" == "10" -o "${ss_foreign_dns}" == "1" -o "${ss_foreign_dns}" == "6" ];then
-				# 原chinands2、chinadns1、chinadns-ng、cdns、https_dns_proxy已经不存在, 更改为进阶DNS设定：chinadns-ng
-				dbus set ss_basic_advdns="1"
-				dbus set ss_basic_olddns="0"
-			elif [ "${ss_foreign_dns}" == "4" -o "${ss_foreign_dns}" == "9" ];then
-				if [ "${PKG_TYPE}" == "lite" ];then
-					# ss-tunnel、SmartDNS方案在lite版本中不存在
-					dbus set ss_basic_advdns="1"
-					dbus set ss_basic_olddns="0"
-				else
-					# ss-tunnel、SmartDNS方案在full版本中存在
-					dbus set ss_basic_advdns="0"
-					dbus set ss_basic_olddns="1"
-				fi
-			else
-				# dns2socks, v2ray/xray_dns, 直连这些在full和lite版中都在
-				dbus set ss_basic_advdns="0"
-				dbus set ss_basic_olddns="1"
-			fi
-		fi
-	elif [ -z "${ss_basic_advdns}" -a -n "${ss_basic_olddns}" ];then
-		# 不正确，ss_basic_advdns和ss_basic_olddns必须值相反
-		[ "${ss_basic_olddns}" == "0" ] && dbus set ss_basic_advdns="1"
-		[ "${ss_basic_olddns}" == "1" ] && dbus set ss_basic_advdns="0"
-	elif [ -n "${ss_basic_advdns}" -a -z "${ss_basic_olddns}" ];then
-		# 不正确，ss_basic_advdns和ss_basic_olddns必须值相反
-		[ "${ss_basic_advdns}" == "0" ] && dbus set ss_basic_olddns="1"
-		[ "${ss_basic_advdns}" == "1" ] && dbus set ss_basic_olddns="0"
-	elif [ -n "${ss_basic_advdns}" -a -n "${ss_basic_olddns}" ];then
-		if [ "${ss_basic_advdns}" == "${ss_basic_olddns}" ];then
-			[ "${ss_basic_olddns}" == "0" ] && dbus set ss_basic_advdns="1"
-			[ "${ss_basic_olddns}" == "1" ] && dbus set ss_basic_advdns="0"
-		fi
-	fi
 
 	[ -z "${ss_basic_proxy_newb}" ] && dbus set ss_basic_proxy_newb=1
-	[ -z "${ss_basic_udpoff}" ] && dbus set ss_basic_udpoff=0
+	[ -z "${ss_basic_proxy_ipv6}" ] && dbus set ss_basic_proxy_ipv6=0
+	[ -z "${ss_basic_udpoff}" ] && dbus set ss_basic_udpoff=1
 	[ -z "${ss_basic_udpall}" ] && dbus set ss_basic_udpall=0
-	[ -z "${ss_basic_udpgpt}" ] && dbus set ss_basic_udpgpt=1
+	# 兼容，仅chatgpt删除掉了（3.4.13），ss_basic_udpoff和ss_basic_udpall必须有一个等于1
+	if [ "${ss_basic_udpoff}" != "1" -a "${ss_basic_udpall}" != "1" ];then
+		ss_basic_udpoff=1
+		ss_basic_udpall=0
+		dbus set ss_basic_udpoff=1
+		dbus set ss_basic_udpall=0
+	fi
 	[ -z "${ss_basic_nonetcheck}" ] && dbus set ss_basic_nonetcheck=1
 	[ -z "${ss_basic_notimecheck}" ] && dbus set ss_basic_notimecheck=1
 	[ -z "${ss_basic_nocdnscheck}" ] && dbus set ss_basic_nocdnscheck=1
 	[ -z "${ss_basic_nofdnscheck}" ] && dbus set ss_basic_nofdnscheck=1
 	[ -z "${ss_basic_noruncheck}" ] && dbus set ss_basic_noruncheck=1
-	
-	[ "${ss_disable_aaaa}" != "1" ] && dbus set ss_basic_chng_no_ipv6=1
+	[ -z "${ss_basic_qrcode}" ] && dbus set ss_basic_qrcode=1
+	[ -z "${ss_basic_node_cards}" ] && dbus set ss_basic_node_cards=1
+
 	[ -z "${ss_basic_chng_xact}" ] && dbus set ss_basic_chng_xact=0
 	[ -z "${ss_basic_chng_xgt}" ] && dbus set ss_basic_chng_xgt=1
 	[ -z "${ss_basic_chng_xmc}" ] && dbus set ss_basic_chng_xmc=0
 	
 	# others
-	[ -z "$(dbus get ss_acl_default_mode)" ] && dbus set ss_acl_default_mode=1
-	[ -z "$(dbus get ss_acl_default_port)" ] && dbus set ss_acl_default_port=all
+	fss_cleanup_acl_default_port_keys >/dev/null 2>&1
+	[ -z "$(dbus get ss_acl_default_mode)" ] && dbus set ss_acl_default_mode=follow
+	[ -z "$(dbus get ss_acl_default_mode_format)" ] && dbus set ss_acl_default_mode_format=2
+	[ -z "$(dbus get ss_acl_default_udp)" ] && dbus set ss_acl_default_udp=0
+	[ -z "$(dbus get ss_acl_default_quic)" ] && dbus set ss_acl_default_quic=1
+	[ -z "$(dbus get ss_acl_default_ports)" ] && dbus set ss_acl_default_ports="22,80,443,8080,8443"
 	[ -z "$(dbus get ss_basic_interval)" ] && dbus set ss_basic_interval=2
-	[ -z "$(dbus get ss_basic_wt_furl)" ] && dbus set ss_basic_wt_furl="http://www.google.com.tw"
-	[ -z "$(dbus get ss_basic_wt_curl)" ] && dbus set ss_basic_wt_curl="http://www.baidu.com"
-	[ -z "${ss_basic_latency_opt}" ] && dbus set ss_basic_latency_opt="2"
+	[ -z "$(dbus get ss_basic_furl)" ] && dbus set ss_basic_furl="http://www.google.com/generate_204"
+	[ -z "$(dbus get ss_basic_curl)" ] && dbus set ss_basic_curl="http://connectivitycheck.platform.hicloud.com/generate_204"
+
+	# 延迟测试默认开启，所有平台默认显示 web 落地延迟列
+	dbus set ss_basic_latency_val="2"
+	dbus set ss_basic_latency_batch="1"
 
 	# 因版本变化导致一些值没有了，更改一下
 	if [ "${ss_basic_chng_china_2_tcp}" == "5" ];then
 		dbus set ss_basic_chng_china_2_tcp="6"
 	fi
-	
-	# lite
-	if [ ! -x "/koolshare/bin/v2ray" ];then
-		dbus set ss_basic_vcore=1
+
+	# 某些版本不含ss-rust，默认由xray运行ss协议
+	if [ ! -x "/koolshare/bin/sslocal" ];then
+		dbus set ss_basic_score=1
+		ss_basic_score=1
 	else
-		dbus set ss_basic_vcore=0
+		dbus set ss_basic_score=0
+		ss_basic_score=0
 	fi
+
+	local MIGRATED_SUB_PROFILES=""
+	if subprof_migrate_legacy_profiles_if_needed >/tmp/sub_profile_migrate.count 2>/dev/null; then
+		MIGRATED_SUB_PROFILES="$(cat /tmp/sub_profile_migrate.count 2>/dev/null)"
+		subprof_rebuild_cron_jobs >/dev/null 2>&1 || true
+		rm -f /tmp/sub_profile_migrate.count >/dev/null 2>&1
+	fi
+
+	# 节点存储自动迁移：升级到支持 schema 2 的版本后，直接切换到新结构。
+	export PATH=/koolshare/bin:${PATH}
+	if [ -x "/koolshare/bin/node-tool" ];then
+		FSS_NODE_TOOL_PICKED="/koolshare/bin/node-tool"
+		FSS_NODE_TOOL_TRUST_PICKED=1
+		export FSS_NODE_TOOL_PICKED FSS_NODE_TOOL_TRUST_PICKED
+	elif [ -x "${DIR}/bin/node-tool" ];then
+		FSS_NODE_TOOL_PICKED="${DIR}/bin/node-tool"
+		FSS_NODE_TOOL_TRUST_PICKED=1
+		export FSS_NODE_TOOL_PICKED FSS_NODE_TOOL_TRUST_PICKED
+	else
+		unset FSS_NODE_TOOL_PICKED
+		unset FSS_NODE_TOOL_TRUST_PICKED
+	fi
+	if [ -n "${FSS_NODE_TOOL_PICKED:-}" ];then
+		echo_date "节点数据升级将优先使用 node-tool：${FSS_NODE_TOOL_PICKED}"
+		local NODE_TOOL_VERSION_OUTPUT=""
+		local NODE_TOOL_MIN_VERSION="0.1.8"
+		NODE_TOOL_VERSION_OUTPUT="$("${FSS_NODE_TOOL_PICKED}" version 2>&1)"
+		local NODE_TOOL_VERSION_RC="$?"
+		if [ "${NODE_TOOL_VERSION_RC}" != "0" ];then
+			NODE_TOOL_VERSION_OUTPUT="$(env -i PATH="/koolshare/bin:/usr/sbin:/usr/bin:/sbin:/bin" "${FSS_NODE_TOOL_PICKED}" version 2>&1)"
+			NODE_TOOL_VERSION_RC="$?"
+			if [ "${NODE_TOOL_VERSION_RC}" = "0" ];then
+				FSS_NODE_TOOL_CLEAN_ENV=1
+				export FSS_NODE_TOOL_CLEAN_ENV
+				echo_date "node-tool 版本：${NODE_TOOL_VERSION_OUTPUT}（安装环境较大，迁移时使用干净环境执行）"
+			else
+				echo_date "node-tool 版本探测失败（退出码 ${NODE_TOOL_VERSION_RC}），后续将自动回退 shell 迁移流程。"
+				if [ -n "${NODE_TOOL_VERSION_OUTPUT}" ];then
+					echo_date "node-tool 版本探测输出：${NODE_TOOL_VERSION_OUTPUT}"
+				fi
+				unset FSS_NODE_TOOL_PICKED
+				unset FSS_NODE_TOOL_TRUST_PICKED
+				unset FSS_NODE_TOOL_CLEAN_ENV
+			fi
+		else
+			echo_date "node-tool 版本：${NODE_TOOL_VERSION_OUTPUT}"
+		fi
+		if [ -n "${FSS_NODE_TOOL_PICKED:-}" ] && ! version_ge "${NODE_TOOL_VERSION_OUTPUT}" "${NODE_TOOL_MIN_VERSION}";then
+			echo_date "node-tool 版本低于 ${NODE_TOOL_MIN_VERSION}，旧版 schema1 迁移可能丢失默认字段，回退 shell 迁移流程。"
+			unset FSS_NODE_TOOL_PICKED
+			unset FSS_NODE_TOOL_TRUST_PICKED
+			unset FSS_NODE_TOOL_CLEAN_ENV
+		fi
+	fi
+	local STORAGE_SCHEMA_BEFORE="$(fss_detect_storage_schema 2>/dev/null)"
+	fss_auto_migrate_if_needed 1 report_install_migration_progress
+	case "$?" in
+	0)
+		if [ "$(dbus get fss_data_schema)" = "2" ];then
+			echo_date "节点数据已经升级到 schema 2 存储。"
+		fi
+		;;
+	2)
+		if [ "$(fss_detect_storage_schema 2>/dev/null)" != "2" ];then
+			fss_mark_native_schema2_storage >/dev/null 2>&1 || true
+		fi
+		;;
+	*)
+		echo_date "节点数据升级到 schema 2 失败，保留旧版节点结构。"
+		;;
+	esac
+
+	if [ "$(fss_detect_storage_schema 2>/dev/null)" = "2" ];then
+		if [ "${STORAGE_SCHEMA_BEFORE}" != "2" ];then
+			if [ "$(dbus get fss_data_secret_mode 2>/dev/null)" = "raw" ];then
+				echo_date "schema1 -> schema2 升级已使用 raw 密码字段，跳过密码字段二次校正。"
+			else
+				normalize_schema2_secret_fields_after_install "schema1 -> schema2 升级"
+			fi
+		elif [ "${FORCE_SCHEMA2_SECRET_NORMALIZE}" = "1" ]; then
+			normalize_schema2_secret_fields_after_install "旧版 schema2 数据纠偏" "1"
+		fi
+	fi
+
+	if [ -n "${MIGRATED_SUB_PROFILES}" ]; then
+		echo_date "旧版订阅地址已迁移为 ${MIGRATED_SUB_PROFILES} 个独立订阅配置。"
+	fi
+
+	if [ "$(fss_detect_storage_schema 2>/dev/null)" = "2" ] && [ "$(dbus get fss_data_source_meta_repaired 2>/dev/null)" != "1" ];then
+		echo_date "检查旧版订阅节点来源归属..."
+		local repaired_sub_nodes="$(fss_repair_legacy_subscribe_source_meta 2>/dev/null)"
+		if [ "${repaired_sub_nodes:-0}" -gt 0 ] 2>/dev/null;then
+			echo_date "已修复 ${repaired_sub_nodes} 个旧版订阅节点的来源归属。"
+		fi
+		dbus set fss_data_source_meta_repaired=1
+	fi
+
+	if [ "${FORCE_LEGACY_CACHE_RESET}" = "1" ];then
+		echo_date "检测到旧版 fancyss（${OLD_VER} < 3.6.0），强制清理节点配置缓存和 webtest 缓存..."
+		invalidate_runtime_caches_after_install
+		echo_date "重建节点运行缓存..."
+		fss_refresh_node_json_cache >/dev/null 2>&1 || true
+	else
+		echo_date "刷新节点运行缓存..."
+		invalidate_runtime_caches_after_install
+		fss_refresh_node_json_cache >/dev/null 2>&1 || true
+	fi
+
+	# 节点存储自动迁移：升级到支持 schema 2 的版本后，直接切换到新结构。
+	export PATH=/koolshare/bin:${PATH}
+	local STORAGE_SCHEMA_BEFORE="$(fss_detect_storage_schema 2>/dev/null)"
+	fss_auto_migrate_if_needed 1 report_install_migration_progress
+	case "$?" in
+	0)
+		if [ "$(dbus get fss_data_schema)" = "2" ];then
+			echo_date "节点数据已经升级到 schema 2 存储。"
+		fi
+		;;
+	2)
+		:
+		;;
+	*)
+		echo_date "节点数据升级到 schema 2 失败，保留旧版节点结构。"
+		;;
+	esac
+
+	if [ "$(fss_detect_storage_schema 2>/dev/null)" = "2" ];then
+		if [ "${STORAGE_SCHEMA_BEFORE}" != "2" ];then
+			normalize_schema2_secret_fields_after_install "schema1 -> schema2 升级"
+		elif [ "${FORCE_SCHEMA2_SECRET_NORMALIZE}" = "1" ]; then
+			normalize_schema2_secret_fields_after_install "旧版 schema2 数据纠偏"
+		fi
+	fi
+
+	if [ "${FORCE_LEGACY_CACHE_RESET}" = "1" ];then
+		echo_date "检测到旧版 fancyss（${OLD_VER} < 3.6.0），强制清理节点配置缓存和 webtest 缓存..."
+		invalidate_runtime_caches_after_install
+		echo_date "重建节点运行缓存..."
+		fss_refresh_node_json_cache >/dev/null 2>&1 || true
+	else
+		echo_date "刷新节点运行缓存..."
+		invalidate_runtime_caches_after_install
+		fss_refresh_node_json_cache >/dev/null 2>&1 || true
+	fi
+
+	# 节点存储自动迁移：升级到支持 schema 2 的版本后，直接切换到新结构。
+	export PATH=/koolshare/bin:${PATH}
+	local STORAGE_SCHEMA_BEFORE="$(fss_detect_storage_schema 2>/dev/null)"
+	fss_auto_migrate_if_needed 1 report_install_migration_progress
+	case "$?" in
+	0)
+		if [ "$(dbus get fss_data_schema)" = "2" ];then
+			echo_date "节点数据已经升级到 schema 2 存储。"
+		fi
+		;;
+	2)
+		:
+		;;
+	*)
+		echo_date "节点数据升级到 schema 2 失败，保留旧版节点结构。"
+		;;
+	esac
+
+	if [ "$(fss_detect_storage_schema 2>/dev/null)" = "2" ];then
+		if [ "${STORAGE_SCHEMA_BEFORE}" != "2" ];then
+			normalize_schema2_secret_fields_after_install "schema1 -> schema2 升级"
+		elif [ -n "${OLD_VER}" ] && version_lt "${OLD_VER}" "3.6.0"; then
+			normalize_schema2_secret_fields_after_install "旧版 schema2 数据纠偏"
+		fi
+	fi
+
+	if [ "${FORCE_LEGACY_CACHE_RESET}" = "1" ];then
+		echo_date "检测到旧版 fancyss（${OLD_VER} < 3.6.0），强制清理节点配置缓存和 webtest 缓存..."
+		invalidate_runtime_caches_after_install
+		echo_date "重建节点运行缓存..."
+		fss_refresh_node_json_cache >/dev/null 2>&1 || true
+		fss_schedule_webtest_cache_warm >/dev/null 2>&1 || true
+	else
+		echo_date "刷新节点运行缓存..."
+		refresh_runtime_caches_after_install
+	fi
+
+	# 节点存储自动迁移：升级到支持 schema 2 的版本后，直接切换到新结构。
+	export PATH=/koolshare/bin:${PATH}
+	fss_auto_migrate_if_needed 1 report_install_migration_progress
+	case "$?" in
+	0)
+		if [ "$(dbus get fss_data_schema)" = "2" ];then
+			echo_date "节点数据已经升级到 schema 2 存储。"
+		fi
+		;;
+	2)
+		:
+		;;
+	*)
+		echo_date "节点数据升级到 schema 2 失败，保留旧版节点结构。"
+		;;
+	esac
 
 	# dbus value
 	echo_date "设置插件安装参数..."
@@ -851,7 +1787,11 @@ install_now(){
 	if [ "${ENABLE}" == "1" -a -f "/koolshare/ss/ssconfig.sh" ];then
 		echo_date 重启科学上网插件！
 		sh /koolshare/ss/ssconfig.sh restart
+		restart_status_runtime_async
+	else
+		restart_websocketd_async
 	fi
+	fss_schedule_webtest_cache_warm >/dev/null 2>&1
 
 	echo_date "更新完毕，请等待网页自动刷新！"
 	exit_install

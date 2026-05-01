@@ -1,129 +1,158 @@
 #!/usr/bin/env bash
 
 set -e
-DIR="$( cd "$( dirname "$BASH_SOURCE[0]" )" && pwd )"
-mkdir -p $DIR/.build_xray
-base_dir=$DIR/.build_xray
-cd ${base_dir}
-GO_VERSION="1.23.4"
-UPX_VERSION="4.2.4"
-CODENAME="hq450@fancyss"
+
+DIR="$(cd "$(dirname "$BASH_SOURCE[0]")" && pwd)"
+base_dir="${DIR}/.build_xray"
+mkdir -p "${base_dir}"
+
+GO_VERSION="1.25.6"
+
+BUILD_REF="tag" # tag | main
+case "${1-}" in
+	--main|main)
+		BUILD_REF="main"
+		shift
+		;;
+	--help|-h)
+		cat <<-EOF
+		Usage:
+		  $(basename "$0")            # build latest tag (full build)
+		  $(basename "$0") --main     # build latest commit of main (full build)
+		EOF
+		exit 0
+		;;
+esac
 
 echo "-----------------------------------------------------------------"
 
-# prepare golang
-if [ ! -x ${base_dir}/go/bin/go ];then
-	#[ ! -f "go${GO_VERSION}.linux-amd64.tar.gz" ] && wget https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz
-	[ ! -f "go${GO_VERSION}.linux-amd64.tar.gz" ] && wget https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz
-	tar -C ${base_dir} -xzf go${GO_VERSION}.linux-amd64.tar.gz
+# prepare golang (local toolchain under .build_xray/)
+if [ ! -x "${base_dir}/go/bin/go" ]; then
+	[ ! -f "${base_dir}/go${GO_VERSION}.linux-amd64.tar.gz" ] && \
+		wget "https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz" -O "${base_dir}/go${GO_VERSION}.linux-amd64.tar.gz"
+	tar -C "${base_dir}" -xzf "${base_dir}/go${GO_VERSION}.linux-amd64.tar.gz"
 fi
-export PATH=${base_dir}/go/bin:$PATH
+
+export PATH="${base_dir}/go/bin:${PATH}"
 go version
-echo "-----------------------------------------------------------------"
 
-# get upx
-if [ ! -x ${base_dir}/upx ];then
-	[ ! -f "upx-${UPX_VERSION}-amd64_linux.tar.xz" ] && wget https://github.com/upx/upx/releases/download/v${UPX_VERSION}/upx-${UPX_VERSION}-amd64_linux.tar.xz
-	tar xf upx-${UPX_VERSION}-amd64_linux.tar.xz
-	cp ${base_dir}/upx-${UPX_VERSION}-amd64_linux/upx ${base_dir}/
-fi
-${base_dir}/upx -V
 echo "-----------------------------------------------------------------"
 
 # get Xray-core
-if [ ! -d ${base_dir}/Xray-core ];then
-	echo "Clone v2fly/Xray-core repo..."
-	git clone https://github.com/XTLS/Xray-core.git
-	cd ${base_dir}/Xray-core
-	go mod download
-else
-	cd ${base_dir}/Xray-core
-	git reset --hard && git clean -fdqx
-	git checkout main
-	git pull
+if [ ! -d "${base_dir}/Xray-core/.git" ]; then
+	echo "Clone XTLS/Xray-core repo..."
+	git clone https://github.com/XTLS/Xray-core.git "${base_dir}/Xray-core"
 fi
 
-VERSIONTAG=$(git describe --abbrev=0 --tags)
-rm -rf ${base_dir}/${VERSIONTAG}
-mkdir -p ${base_dir}/${VERSIONTAG}
-rm -rf ${base_dir}/armv5
-rm -rf ${base_dir}/armv7
-rm -rf ${base_dir}/armv64
-git checkout $VERSIONTAG
+cd "${base_dir}/Xray-core"
+git reset --hard
+git clean -fdqx
 
-# remove some features from xray
-# sed -i '/toml/d' ${base_dir}/Xray-core/main/distro/all/all.go
-# sed -i '/yaml/d' ${base_dir}/Xray-core/main/distro/all/all.go
-# sed -i '/observatory/d' ${base_dir}/Xray-core/main/distro/all/all.go
-# sed -i '/confloader/d' ${base_dir}/Xray-core/main/distro/all/all.go
-# sed -i '/httpupgrade/d' ${base_dir}/Xray-core/main/distro/all/all.go
-# sed -i '/app\/commander/d' ${base_dir}/Xray-core/main/distro/all/all.go
-# sed -i '/app\/log\/command/d' ${base_dir}/Xray-core/main/distro/all/all.go
-# sed -i '/app\/proxyman\/command/d' ${base_dir}/Xray-core/main/distro/all/all.go
-# sed -i '/app\/stats\/command/d' ${base_dir}/Xray-core/main/distro/all/all.go
-# sed -i '/proxy\/dns/d' ${base_dir}/Xray-core/main/distro/all/all.go
-# sed -i '/proxy\/loopback/d' ${base_dir}/Xray-core/main/distro/all/all.go
-# sed -i '/headers\/noop/d' ${base_dir}/Xray-core/main/distro/all/all.go
-# sed -i '/internet\/domainsocket/d' ${base_dir}/Xray-core/main/distro/all/all.go
-# sed -i '/fakedns/d' ${base_dir}/Xray-core/main/distro/all/all.go
-# sed -i '/app\/metrics/d' ${base_dir}/Xray-core/main/distro/all/all.go
-# sed -i '/app\/policy/d' ${base_dir}/Xray-core/main/distro/all/all.go
-# sed -i '/app\/reverse/d' ${base_dir}/Xray-core/main/distro/all/all.go
-# sed -i '/app\/router/d' ${base_dir}/Xray-core/main/distro/all/all.go
-# sed -i '/app\/stats/d' ${base_dir}/Xray-core/main/distro/all/all.go
+git checkout -f main
+git fetch --prune origin || true
+git fetch --tags origin || true
+git pull --ff-only || git pull || echo "WARNING: git pull failed, continue with existing local repo state..."
 
-# build xray
-build_v2() {
-	TMP=$(mktemp -d)
-	BUILDNAME=$NOW
-	case $1 in
+if [ "${BUILD_REF}" = "tag" ]; then
+	# Latest tag, version-sort aware (v26.1.13 > v25.12.8)
+	VERSIONTAG="$(git tag -l 'v*' --sort=-v:refname | head -n 1)"
+	[ -z "${VERSIONTAG}" ] && VERSIONTAG="$(git describe --abbrev=0 --tags)"
+	echo "Checkout latest tag: ${VERSIONTAG}"
+	git checkout -f "${VERSIONTAG}"
+else
+	echo "Checkout latest main commit"
+	git checkout -f main
+	git pull --ff-only || git pull || echo "WARNING: git pull failed, continue with existing local repo state..."
+	# For folder naming, still use the nearest tag as the version prefix.
+	VERSIONTAG="$(git tag -l 'v*' --sort=-v:refname | head -n 1)"
+	[ -z "${VERSIONTAG}" ] && VERSIONTAG="$(git describe --abbrev=0 --tags 2>/dev/null || true)"
+	[ -z "${VERSIONTAG}" ] && VERSIONTAG="v0.0.0"
+fi
+
+COMMITHASH="$(git rev-parse --short=7 HEAD)"
+OUTDIR="${VERSIONTAG}-${COMMITHASH}"
+
+echo "Build ref   : ${BUILD_REF}"
+echo "Version tag : ${VERSIONTAG}"
+echo "Commit hash : ${COMMITHASH}"
+echo "Output dir  : ${OUTDIR}"
+
+rm -rf "${base_dir:?}/${OUTDIR}"
+mkdir -p "${base_dir:?}/${OUTDIR}"
+
+# build xray (full build)
+build_one() {
+	local arch="$1"
+	local GOARM=""
+	local GOARCH=""
+
+	case "${arch}" in
 		armv5)
 			GOARM=5
 			GOARCH=arm
-			;;		
+			;;
 		armv7)
 			GOARM=7
 			GOARCH=arm
 			;;
 		arm64)
-			GOARM=
+			GOARM=""
 			GOARCH=arm64
 			;;
+		*)
+			echo "Unknown arch: ${arch}" >&2
+			exit 1
+			;;
 	esac
-	cd ${base_dir}/Xray-core
 
-	local VERSION=$(git describe --abbrev=0 --tags | sed 's/v//')
+	local TMP
+	TMP="$(mktemp -d)"
+	trap 'rm -rf "${TMP}"' RETURN
 
-	LDFLAGS="-s -w -buildid="
+	local LDFLAGS="-s -w -buildid="
+	echo "Compile xray ${arch} GOARM=${GOARM:-} GOARCH=${GOARCH}..."
+	env CGO_ENABLED=0 GOOS=linux GOARM="${GOARM}" GOARCH="${GOARCH}" \
+		go build -v -o "${TMP}/xray_${arch}" -trimpath -ldflags "${LDFLAGS}" ./main
 
-	echo "Compile xray $1 GOARM=${GOARM} GOARCH=${GOARCH}..."
-	env CGO_ENABLED=0 GOOS=linux GOARM=$GOARM GOARCH=$GOARCH go build -v -o "${TMP}/xray_${1}" -trimpath -ldflags "$LDFLAGS" ./main
-
-	cp ${TMP}/xray_${1} ${base_dir}/${VERSIONTAG}/
-	rm -rf ${TMP}
+	cp -f "${TMP}/xray_${arch}" "${base_dir}/${OUTDIR}/"
 }
 
-compress_binary(){
+compress_and_finalize() {
 	echo "-----------------------------------------------------------------"
-	ls -l ${base_dir}/${VERSIONTAG}/*
+	ls -l "${base_dir}/${OUTDIR}/"*
 	echo "-----------------------------------------------------------------"
-	${base_dir}/upx --lzma --ultra-brute ${base_dir}/${VERSIONTAG}/*
 
-	${base_dir}/upx -t ${base_dir}/${VERSIONTAG}/*
+	# Keep existing UPX policy:
+	# - arm64/armv7: upx-5.0.2
+	# - armv5:       upx-4.2.4
+	upx-5.0.2 --lzma --ultra-brute "${base_dir}/${OUTDIR}/xray_arm64"
+	upx-5.0.2 --lzma --ultra-brute "${base_dir}/${OUTDIR}/xray_armv7"
+	upx-4.2.4 --lzma --ultra-brute "${base_dir}/${OUTDIR}/xray_armv5"
 
-	cd ${base_dir}/${VERSIONTAG}/
-	md5sum * >md5sum.txt
-	
-	cd ${base_dir}
-	rm -rf ../${VERSIONTAG}
-	mv -f ${VERSIONTAG} ..
+	upx-5.0.2 -t "${base_dir}/${OUTDIR}/xray_arm64"
+	upx-5.0.2 -t "${base_dir}/${OUTDIR}/xray_armv7"
+	upx-4.2.4 -t "${base_dir}/${OUTDIR}/xray_armv5"
 
-	echo -n "$VERSIONTAG" > latest_2.txt
+	(
+		cd "${base_dir}/${OUTDIR}"
+		md5sum * > md5sum.txt
+	)
+
+	rm -rf "${DIR:?}/${OUTDIR}"
+	mv -f "${base_dir}/${OUTDIR}" "${DIR}/"
+
+	# Keep existing convention file name, but store the folder name.
+	# NOTE: This becomes "vX.Y.Z-<sha>" (as requested).
+	if [ "${BUILD_REF}" = "tag" ]; then
+		echo -n "${OUTDIR}" > "${DIR}/latest_2.txt"
+	else
+		echo -n "${OUTDIR}" > "${DIR}/latest_2_main.txt"
+	fi
 }
 
-build_v2 armv5
-build_v2 armv7
-build_v2 arm64
-compress_binary
+build_one armv5
+build_one armv7
+build_one arm64
+compress_and_finalize
 
-
+echo "done: ${DIR}/${OUTDIR}"
