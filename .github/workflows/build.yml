@@ -22,14 +22,7 @@ jobs:
           submodules: false
 
       # =========================
-      # 2. 防污染（gitignore）
-      # =========================
-      - name: Ensure ignore CI temp files
-        run: |
-          grep -qxF "release_body.txt" .gitignore || echo "release_body.txt" >> .gitignore
-
-      # =========================
-      # 3. Fix submodules
+      # 2. Fix submodules
       # =========================
       - name: Fix all submodule URLs
         run: |
@@ -45,7 +38,7 @@ jobs:
           git -c protocol.file.allow=always submodule update --init --depth=1 || true
 
       # =========================
-      # 4. git config
+      # 3. git config
       # =========================
       - name: Configure git user
         run: |
@@ -53,7 +46,7 @@ jobs:
           git config user.email "actions@github.com"
 
       # =========================
-      # 5. upstream
+      # 4. upstream
       # =========================
       - name: Add upstream and fetch
         run: |
@@ -61,7 +54,7 @@ jobs:
           git fetch upstream --no-tags
 
       # =========================
-      # 6. version compare
+      # 5. version compare
       # =========================
       - name: Compare version.json.js
         id: compare_version
@@ -85,7 +78,7 @@ jobs:
           fi
 
       # =========================
-      # 7. skip
+      # 6. skip
       # =========================
       - name: Skip if no update
         if: steps.compare_version.outputs.needs_sync == 'false'
@@ -94,7 +87,7 @@ jobs:
           exit 0
 
       # =========================
-      # 8. merge upstream
+      # 7. merge upstream
       # =========================
       - name: Sync upstream repository
         if: steps.compare_version.outputs.needs_sync == 'true'
@@ -125,14 +118,14 @@ jobs:
             clear.py || true
 
       # =========================
-      # 9. jq
+      # 8. jq
       # =========================
       - name: Install jq
         if: steps.compare_version.outputs.needs_sync == 'true'
         run: sudo apt-get update && sudo apt-get install -y jq
 
       # =========================
-      # 10. patch
+      # 9. patch
       # =========================
       - name: Patch ss_rule_update.sh
         if: steps.compare_version.outputs.needs_sync == 'true'
@@ -141,7 +134,7 @@ jobs:
             fancyss/scripts/ss_rule_update.sh
 
       # =========================
-      # 11. append cron
+      # 10. append cron
       # =========================
       - name: Append cron_task.txt to ssconfig.sh
         if: steps.compare_version.outputs.needs_sync == 'true'
@@ -149,13 +142,18 @@ jobs:
           cat cron_task.txt >> fancyss/ss/ssconfig.sh
 
       # =========================
-      # 12. commit（核心修复）
+      # 11. commit（修复点）
       # =========================
       - name: Commit & Push
         if: steps.compare_version.outputs.needs_sync == 'true'
         run: |
-          # 双保险：gitignore + add 排除
+          # 在 merge 后再改 .gitignore（避免污染工作区）
+          grep -qxF "release_body.txt" .gitignore || echo "release_body.txt" >> .gitignore
+
+          # 移除历史跟踪
           git rm -f --cached release_body.txt 2>/dev/null || true
+
+          # add（排除临时文件）
           git add -A \
             -- ':!release_body.txt' \
             -- ':!*.log' \
@@ -170,7 +168,7 @@ jobs:
           fi
 
       # =========================
-      # 13. build
+      # 12. build
       # =========================
       - name: Make build-custom.sh executable
         if: steps.compare_version.outputs.needs_sync == 'true'
@@ -182,7 +180,7 @@ jobs:
           ./build-custom.sh
 
       # =========================
-      # 14. release info
+      # 13. release info
       # =========================
       - name: Generate release body and tag
         if: steps.compare_version.outputs.needs_sync == 'true'
@@ -199,7 +197,7 @@ jobs:
           echo "body=$(cat release_body.txt)" >> $GITHUB_OUTPUT
 
       # =========================
-      # 15. release
+      # 14. release
       # =========================
       - name: Create/Update Release
         if: steps.compare_version.outputs.needs_sync == 'true'
