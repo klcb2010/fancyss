@@ -90,6 +90,7 @@ jobs:
             white_list.txt \
             black_list.txt \
             ss_update.sh \
+            README.md \
             clear.py || true
 
       # 7. jq
