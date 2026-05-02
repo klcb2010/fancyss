@@ -12,55 +12,29 @@ jobs:
       contents: write
 
     steps:
-      # =========================
       # 1. Checkout
-      # =========================
       - name: Checkout source
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: false
 
-      # =========================
-      # 2. Fix submodules（允许修改 .gitmodules）
-      # =========================
-      - name: Fix all submodule URLs
-        run: |
-          rm -rf .git/modules
-          git submodule deinit -f --all || true
-
-          git config -f .gitmodules submodule.tool/geotool.url https://github.com/hq450/geotool.git
-          git config -f .gitmodules submodule.tool/xapi-tool.url https://github.com/hq450/xapi-tool.git
-          git config -f .gitmodules submodule.tool/node-tool.url https://github.com/hq450/node-tool.git
-          git config -f .gitmodules submodule.tool/sub-tool.url https://github.com/hq450/sub-tool.git
-
-          git submodule sync --recursive
-          git -c protocol.file.allow=always submodule update --init --depth=1 || true
-
-      # =========================
-      # 3. git config
-      # =========================
+      # 2. git config
       - name: Configure git user
         run: |
           git config user.name "GitHub Actions Bot"
           git config user.email "actions@github.com"
 
-      # =========================
-      # 4. upstream
-      # =========================
+      # 3. upstream
       - name: Add upstream and fetch
         run: |
           git remote add upstream https://github.com/hq450/fancyss.git || true
           git fetch upstream --no-tags
 
-      # =========================
-      # 5. version compare
-      # =========================
+      # 4. version compare
       - name: Compare version.json.js
         id: compare_version
         run: |
-          set -e
-
           curl -sL https://raw.githubusercontent.com/hq450/fancyss/3.0/packages/version.json.js \
             -o /tmp/upstream_version.json.js
 
@@ -77,29 +51,26 @@ jobs:
             echo "needs_sync=false" >> $GITHUB_OUTPUT
           fi
 
-      # =========================
-      # 6. skip
-      # =========================
+      # 5. skip
       - name: Skip if no update
         if: steps.compare_version.outputs.needs_sync == 'false'
         run: |
           echo "已是最新，无需同步"
           exit 0
 
-      # =========================
-      # 7. merge upstream（关键修复：强制 clean）
-      # =========================
+      # 6. merge upstream（彻底修复版）
       - name: Sync upstream repository
         if: steps.compare_version.outputs.needs_sync == 'true'
         run: |
           git checkout ${{ github.ref_name }}
 
-          # ⭐ 关键：清理工作区，解决 .gitmodules / .gitignore 污染问题
+          # ⭐ 关键：保证 merge 前干净
           git reset --hard
           git clean -fd
 
           OLD_HEAD=$(git rev-parse HEAD)
 
+          # merge
           if ! git merge upstream/3.0 -X theirs --no-edit --allow-unrelated-histories; then
             git checkout --ours .gitmodules build-custom.sh || true
             git add .gitmodules build-custom.sh || true
@@ -112,7 +83,7 @@ jobs:
             git commit -m "resolve conflicts"
           fi
 
-          # 恢复你自己的自定义文件
+          # 恢复你自定义文件
           git restore --source=$OLD_HEAD \
             .gitmodules \
             .github/workflows/ \
@@ -123,47 +94,36 @@ jobs:
             ss_update.sh \
             clear.py || true
 
-      # =========================
-      # 8. jq
-      # =========================
+      # 7. 安装 jq
       - name: Install jq
         if: steps.compare_version.outputs.needs_sync == 'true'
         run: sudo apt-get update && sudo apt-get install -y jq
 
-      # =========================
-      # 9. patch
-      # =========================
+      # 8. 修补规则
       - name: Patch ss_rule_update.sh
         if: steps.compare_version.outputs.needs_sync == 'true'
         run: |
           sed -i '9s|.*|URL_MAIN="https://raw.githubusercontent.com/qxzg/Actions/3.0/fancyss_rules"|' \
             fancyss/scripts/ss_rule_update.sh
 
-      # =========================
-      # 10. append cron
-      # =========================
+      # 9. 追加 cron
       - name: Append cron_task.txt to ssconfig.sh
         if: steps.compare_version.outputs.needs_sync == 'true'
         run: |
           cat cron_task.txt >> fancyss/ss/ssconfig.sh
 
-      # =========================
-      # 11. commit（修复：防止临时文件进入仓库）
-      # =========================
+      # 10. commit（稳定版）
       - name: Commit & Push
         if: steps.compare_version.outputs.needs_sync == 'true'
         run: |
-          # 在 merge 后再修改 .gitignore
+          # merge 后再处理 ignore
           grep -qxF "release_body.txt" .gitignore || echo "release_body.txt" >> .gitignore
 
-          # 移除历史跟踪
+          # 防止历史被跟踪
           git rm -f --cached release_body.txt 2>/dev/null || true
 
-          # add（排除临时文件）
-          git add -A \
-            -- ':!release_body.txt' \
-            -- ':!*.log' \
-            -- ':!*.tmp'
+          # ⭐ 正确写法（无 --）
+          git add -A ':!release_body.txt' ':!*.log' ':!*.tmp'
 
           if ! git diff --cached --quiet; then
             git commit -m "Sync upstream hq450/fancyss@3.0"
@@ -173,9 +133,7 @@ jobs:
             echo "已是最新，无需提交推送"
           fi
 
-      # =========================
-      # 12. build
-      # =========================
+      # 11. build
       - name: Make build-custom.sh executable
         if: steps.compare_version.outputs.needs_sync == 'true'
         run: chmod +x build-custom.sh
@@ -185,9 +143,7 @@ jobs:
         run: |
           ./build-custom.sh
 
-      # =========================
-      # 13. release info
-      # =========================
+      # 12. release info
       - name: Generate release body and tag
         if: steps.compare_version.outputs.needs_sync == 'true'
         id: release_info
@@ -202,9 +158,7 @@ jobs:
           echo "release_name=FancySS v${VERSION}" >> $GITHUB_OUTPUT
           echo "body=$(cat release_body.txt)" >> $GITHUB_OUTPUT
 
-      # =========================
-      # 14. release
-      # =========================
+      # 13. release
       - name: Create/Update Release
         if: steps.compare_version.outputs.needs_sync == 'true'
         uses: softprops/action-gh-release@v2.6.1
