@@ -7,50 +7,126 @@
 # - 自动解压执行 install.sh
 # - BusyBox / curl / wget 兼容
 
-run() {
-    "$@"
+# fancyss script for asuswrt/merlin based router with software center
+
+source /koolshare/scripts/ss_base.sh
+mkdir -p /tmp/upload
+alias echo_date='echo 【$(TZ=UTC-8 date -R +%Y%m%d\ %X)】:'
+main_url="https://raw.githubusercontent.com/hq450/fancyss/3.0/packages"
+
+# --------------------------------------
+# 6.x.4708			2.6.36.4		arm
+# 7.14.114.x		2.6.36.4		arm
+# hnd				4.1.27			hnd hnd_v8
+# axhnd 			4.1.51			hnd hnd_v8
+# axhnd.675x 		4.1.52			hnd hnd_v8
+# p1axhnd.675x		4.1.27			hnd hnd_v8
+# 5.04axhnd.675x	4.19.183		hnd hnd_v8
+# qca (RT-AX89X)	4.4.60			qca
+# mtk (TX-AX6000)	5.4.182			mtk
+# --------------------------------------
+
+run(){
+	env -i PATH=${PATH} "$@"
 }
 
-echo_date() {
-    TZ=Asia/Shanghai date "+【%Y%m%d %H:%M:%S】: $*"
+# arm hnd hnd_v8 qca mtk
+PLATFORM=$(get_pkg_arch)
+PKGTYPE=$(get_pkg_type)
+MD5NAME=md5_${PLATFORM}_${PKGTYPE}
+PACKAGE=fancyss_${PLATFORM}_${PKGTYPE}
+VERSION=version.json.js
+
+install_fancyss(){
+	echo_date "开始解压压缩包..."
+	tar -zxf shadowsocks.tar.gz
+	chmod a+x /tmp/shadowsocks/install.sh
+	echo_date "开始安装更新文件..."
+	echo "$$" >/tmp/fancyss_self_update_installing
+	sh /tmp/shadowsocks/install.sh
+	rm -rf /tmp/shadowsocks*
 }
 
-# 根据 CPU 架构选择包（默认 full，不自动切换 lite）
-choose_package() {
-    local cpu=$(uname -m 2>/dev/null || echo "unknown")
-    local pkg="fancyss_hnd_v8_full.tar.gz"  # GT-AX6000 等主流新机默认这个
+restart_websocketd_after_update(){
+	[ -f "/tmp/fancyss_pending_websocketd_restart" ] && return 0
+	rm -f /tmp/fancyss_self_update_installing >/dev/null 2>&1
+	rm -rf /tmp/fancyss_deferred_websocketd >/dev/null 2>&1
+	return 0
+}
 
-    case "$cpu" in
-        armv7l|armv6l)
-            pkg="fancyss_arm_full.tar.gz"
-            ;;
-        aarch64)
-            # 新 Broadcom HND v8 平台（4.19+ 内核）统一用 hnd_v8
-            pkg="fancyss_hnd_v8_full.tar.gz"
-            ;;
-        mips|mipsel)
-            if grep -qi "IPQ64" /proc/cpuinfo 2>/dev/null; then
-                pkg="fancyss_ipq64_full.tar.gz"
-            else
-                pkg="fancyss_ipq32_full.tar.gz"
-            fi
-            ;;
-        qca*)
-            pkg="fancyss_qca_full.tar.gz"
-            ;;
-        mtk*)
-            pkg="fancyss_mtk_full.tar.gz"
-            ;;
-        *)
-            echo_date "未知架构 ${cpu}，默认使用 fancyss_hnd_v8_full.tar.gz" >&2
-            ;;
-    esac
+update_ss(){
+	echo_date "更新过程中请不要刷新本页面或者关闭路由等，不然可能导致问题！"
+	echo_date "检查科学上网插件更新，使用主服务器：github"
+	echo_date "检测主服务器在线版本号..."
+	echo_date "地址：${main_url}/${VERSION}"
+	
+	if [ ! -L "/tmp/curl-update" ];then
+		ln -sf /koolshare/bin/curl-fancyss /tmp/curl-update
+	fi
 
-    # 调试信息输出到 stderr，避免污染返回值
-    echo_date "选中的包: $pkg (架构: $cpu)" >&2
-
-    # 只返回纯包名（不带任何额外输出）
-    echo "$pkg"
+	SOCKS5_OPEN=$(netstat -nlp 2>/dev/null|grep -w "23456"|grep -Eo "v2ray|xray|naive|tuic")
+	if [ -n "${SOCKS5_OPEN}" ];then
+		run /tmp/curl-update -4sk -L --connect-timeout 5 --max-time 120 --retry 3 --retry-delay 1 -x socks5h://127.0.0.1:23456 ${main_url}/${VERSION} >/tmp/version.json.js
+	else
+		run /tmp/curl-update -4sk -L --connect-timeout 5 --max-time 120 --retry 3 --retry-delay 1 ${main_url}/${VERSION} >/tmp/version.json.js
+	fi	
+	
+	if [ "$?" != "0" ];then
+		echo_date "没有检测到主服务器在线版本号，访问github服务器可能有点问题！"
+		echo "XU6J03M6"
+		exit 1
+	fi
+	run jq --tab . /tmp/version.json.js >/dev/null 2>&1
+	if [ "$?" != "0" ];then
+		echo_date "在线版本号获取错误！请检测你的网络！"
+		echo "XU6J03M6"
+		exit
+	fi
+	
+	fancyss_version_online=$(cat /tmp/version.json.js | run jq -r '.version')
+	echo_date "检测到主服务器在线版本号：${fancyss_version_online}"
+	dbus set ss_basic_version_web="${fancyss_version_online}"
+	if [ "${ss_basic_version_local}" != "${fancyss_version_online}" ];then
+		echo_date "主服务器在线版本号：${fancyss_version_online} 和本地版本号：${ss_basic_version_local} 不同！"
+		cd /tmp
+		rm -rf /tmp/${PACKAGE}.tar.gz
+		fancyss_md5_online=$(cat /tmp/version.json.js | run jq -r .$MD5NAME)
+		echo_date "开启下载进程，从主服务器上下载更新包..."
+		echo_date "下载链接：${main_url}/${PACKAGE}.tar.gz"
+		if [ -z "${SOCKS5_OPEN}" ];then
+			run /tmp/curl-update -4k -L --connect-timeout 5 --max-time 120 --retry 3 --retry-delay 1 -x socks5h://127.0.0.1:23456 ${main_url}/${PACKAGE}.tar.gz --output /tmp/${PACKAGE}.tar.gz
+		else
+			run /tmp/curl-update -4k -L --connect-timeout 5 --max-time 120 --retry 3 --retry-delay 1 ${main_url}/${PACKAGE}.tar.gz --output /tmp/${PACKAGE}.tar.gz
+		fi
+		
+		if [ "$?" != "0" ];then
+			rm -rf /tmp/${PACKAGE}.tar.gz
+			wget -t 3 --no-check-certificate --timeout=5 ${main_url}/${PACKAGE}.tar.gz
+		fi
+		
+		if [ "$?" != "0" ];then
+			echo_date "下载失败！请检查你的网络！"
+			echo "XU6J03M6"
+			exit 1
+		fi
+		echo_date "${PACKAGE}.tar.gz 下载成功！"
+		mv ${PACKAGE}.tar.gz shadowsocks.tar.gz
+		fancyss_size_download=$(ls -lh /tmp/shadowsocks.tar.gz |awk '{print $5}')
+		fancyss_md5_download=$(md5sum /tmp/shadowsocks.tar.gz | sed 's/ /\n/g'| sed -n 1p)
+		echo_date "安装包大小：${fancyss_size_download}"
+		echo_date "安装包md5校验值：${fancyss_md5_download}"
+		echo_date "安装包在线md5：${fancyss_md5_online}"
+		if [ "${fancyss_md5_download}" != "${fancyss_md5_online}" ]; then
+			echo_date "更新包md5校验不一致！估计是下载的时候出了什么状况，请等待一会儿再试..."
+			rm -rf /tmp/shadowsocks* >/dev/null 2>&1
+		else
+			echo_date "更新包md5校验一致！ 开始安装！..."
+			install_fancyss
+		fi
+	else
+		echo_date "主服务器在线版本号：${fancyss_version_online} 和本地版本号：${ss_basic_version_local} 相同！"
+		echo_date "退出插件更新!"
+	fi
 }
 
 update_ss() {
@@ -64,101 +140,14 @@ update_ss() {
     fi
     echo_date "本地版本: ${local_ver:-未安装或未定义}"
 
-    main_url="https://github.com/klcb2010/fancyss"
-    version_url="${main_url}/releases/latest"
-
-    # curl 兼容（优先 fancyss 自带 curl，如果没有用系统）
-    if [ -x "/koolshare/bin/curl-fancyss" ]; then
-        curl_bin="/koolshare/bin/curl-fancyss"
-    else
-        curl_bin="$(which curl 2>/dev/null || echo curl)"
-    fi
-    ln -sf "$curl_bin" /tmp/curl-update 2>/dev/null
-
-    # 检测本地 socks5 代理是否可用（端口 23456 常见）
-    socks_proxy=""
-    if netstat -nl 2>/dev/null | grep -q ":23456.*LISTEN"; then
-        socks_proxy="-x socks5h://127.0.0.1:23456"
-    fi
-
-    echo_date "获取在线最新版本"
-    latest_tag=$(run /tmp/curl-update -4sk -L -I $socks_proxy "${version_url}" \
-        | grep -i '^location:' | awk -F '/' '{print $NF}' | tr -d '\r\n\t ')
-
-    # fallback wget 或直接解析
-    if [ -z "$latest_tag" ]; then
-        latest_tag=$(wget -qO- --tries=2 "${version_url}" 2>/dev/null \
-            | grep -o 'releases/tag/[^"]*' | head -n1 | cut -d'/' -f3 | tr -d '\r\n\t ')
-    fi
-
-    if [ -z "$latest_tag" ]; then
-        echo_date "无法获取最新版本，退出"
-        exit 1
-    fi
-
-    # 彻底清理 latest_tag 中的所有空白/换行/回车
-    latest_tag=$(echo "$latest_tag" | tr -d '\r\n\t ')
-    latest_clean=$(echo "$latest_tag" | sed 's/^v//')
-
-    echo_date "在线版本 : ${latest_clean}"
-
-    # 对比版本
-    if [ -n "$local_ver" ] && [ "$local_ver" = "$latest_clean" ]; then
-        echo_date "本地已是最新版本 ${local_ver}，无需更新"
-        exit 0
-    fi
-
-    echo_date "检测到新版本 ${latest_clean}，开始更新"
-
-    cd /tmp || exit 1
-    rm -f fancyss_*.tar.gz 2>/dev/null
-
-    package_file=$(choose_package)
-    download_url="${main_url}/releases/download/${latest_tag}/${package_file}"
-
-    # 调试：显示实际拼接的 URL（上线后可注释）
-    echo_date "拼接的下载 URL: ${download_url}"
-
-    echo_date "下载包: ${package_file}"
-
-    # 先用 curl 下载
-    run /tmp/curl-update -4k -sS -L --connect-timeout 8 --max-time 150 \
-        --retry 3 --retry-delay 2 $socks_proxy "${download_url}" -o "${package_file}"
-
-    if [ $? -ne 0 ] || [ ! -s "${package_file}" ]; then
-        echo_date "curl 下载失败，尝试 wget..."
-        wget -q --tries=3 --timeout=10 "${download_url}" -O "${package_file}"
-    fi
-
-    if [ ! -s "${package_file}" ]; then
-        echo_date "下载失败，请检查网络或 release 是否存在该包"
-        exit 1
-    fi
-
-    echo_date "下载完成，开始解压并安装"
-    tar -zxf "${package_file}" -C /tmp 2>/dev/null
-
-    install_script=$(find /tmp -name install.sh -type f 2>/dev/null | head -n1)
-    if [ -z "$install_script" ]; then
-        echo_date "未找到 install.sh，解压或包异常"
-        rm -f "${package_file}" fancyss* 2>/dev/null
-        exit 1
-    fi
-
-    chmod +x "$install_script"
-    sh "$install_script"
-
-    # 清理临时文件
-    rm -rf /tmp/fancyss* /tmp/install.sh "${package_file}" 2>/dev/null
-
-    echo_date "更新完成"
-}
-
-case "$1" in
-    update)
-        update_ss
-        ;;
-    *)
-        echo "用法: sh $0 update"
-        ;;
+case $2 in
+update)
+	true > /tmp/upload/ss_log.txt
+	http_response "$1"
+	(
+		update_ss >> /tmp/upload/ss_log.txt 2>&1
+		echo XU6J03M6 >> /tmp/upload/ss_log.txt
+		restart_websocketd_after_update
+	) &
+	;;
 esac

@@ -1,5 +1,25 @@
 fancyss Changelog
 
+3.5.23（20260502）
+   - note	本次更新针对弱性能机型顶部“插件运行状态”检测带来的周期 CPU 峰值做收口，重点优化未开启故障转移时的前端状态刷新链路。
+   - add	附加功能 - 性能优化新增“运行状态检测模式”选项，支持 `serve` 常驻低开销、`once` 按次启动和兼容模式；新安装或清空配置后默认使用 `serve`，便于弱性能机型减少反复拉起 shell 和探测工具的开销。
+   - update	未开启故障转移且 WebSocket 可用时，顶部运行状态优先直接通过 `statusctl --socket-path /tmp/status-tool.sock probe-once` 触发 `status-tool serve` 按需探测，不再每轮都启动 `ss_status.sh` 与 `status-tool fancyss`。
+   - update	故障转移开启时继续使用稳定的 `status-tool daemon` 周期检测；关闭故障转移且检测模式为 `once` 或兼容模式时，保留原按次探测路径，便于对比和回退。
+   - fix	修复顶部状态 WebSocket 与 HTTP API 可能同时发起请求的问题；现在前端会在 WebSocket 可用时优先使用 WebSocket，失败或返回异常 payload 时才回退 HTTP API。
+   - fix	修复状态检测锁残留时可能导致前端持续 Waiting 或重复排队的问题；状态脚本会等待已有探测缓存、清理 stale lock，插件重启/停止/故障转移重置时也会同步清理状态锁和 socket。
+   - fix	修复插件停止或重启时可能残留 `status-tool fancyss/serve/daemon` 进程的问题，停止链路现在会统一匹配并清理所有状态检测运行模式。
+
+3.5.22（20260429）
+   - add	节点管理卡片现在可以拖拽改变顺序。
+   - add	节点管理底部“延迟测试”菜单新增“关闭批量延迟测试 / 打开批量延迟测试”开关。
+   - update	关闭批量延迟测试后，节点卡片不再渲染 `ss_node_lt_*` 延迟块，表格视图不再显示“web落地延迟”列，操作栏也不再显示单节点测速按钮；重新开启后会立即重绘节点列表并启动一次批量测速。
+   - fix	关闭批量延迟测试时会同步清理后端 webtest 结果文件、备份文件、历史文件、锁文件、临时工作目录、缓存状态和持久化 webtest cache，并移除延迟测试定时任务，避免关闭后旧结果或旧缓存继续回填到前端。
+   - fix	关闭状态下后端 `web_webtest` 和批量测速入口会直接返回，不再因为页面刷新、缓存读取或异步轮询重新生成测速结果；前端轮询和 WebSocket 回调也会在开关关闭后拒绝旧结果写回。
+   - update	安装阶段针对常驻 `websocketd` 增加安全替换流程：先比较已安装和待安装二进制校验值，未变化时跳过替换和重启；二进制变化时区分软件中心离线安装、普通安装和 fancyss 自更新，避免自更新过程中直接杀掉旧 websocketd 导致 WebSocket 日志中断。
+   - update	优化安装前 JFFS 空间预估：先按实际安装流程剔除不会写入 JFFS 的文件，再根据 `/jffs` 文件系统类型选择候选文件夹占用或候选压缩包大小作为估算基准，并增加动态余量，提升 ubifs/jffs2 与 USB bind ext3/ext4 场景下的判断准确性。
+   - update	安装前会清理 JFFS 根目录中可安全移除的临时日志和旧安装包：截断 `syslog.log / driver_log.log / hostapd.log`，删除对应轮转日志与 `uu.tar.gz*`，并在空间统计前输出释放空间估算，降低旧日志占满 JFFS 导致安装失败的概率。
+   - fix	修复软件中心卸载插件后 `websocketd` 进程和文件可能残留的问题；卸载时会清理 websocketd pidfile、自更新延迟重启标记和异步 helper，并通过多种进程匹配方式停止 fancyss 专用 websocketd。
+
 3.5.21（20260429）
    - note	本次更新针对顶部“插件运行状态”时间回跳和旧缓存复用问题做补丁收口，并完成 GS7 / TUF-AX3000 在 IPv6 代理、故障转移、WebSocket/HTTP fallback 共 16 种组合下的实机验证。
    - fix	修复故障转移开启时顶部运行状态可能复用 `/tmp/upload/ss_status_front.txt` 或 `ss_status_ws.txt` 中的多天前旧缓存，导致状态时间在旧时间和当前时间之间跳动的问题；现在状态缓存会校验当前 IPv6 展示模式和时间新鲜度，超过有效窗口会强制重新探测。
