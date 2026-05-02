@@ -10,12 +10,3 @@
 [submodule "tool/sub-tool"]
 	path = tool/sub-tool
 	url = git@github1.com:hq450/sub-tool.git
-[submodule "tool/ws-tool"]
-	path = tool/ws-tool
-	url = git@github1.com:hq450/ws-tool.git
-[submodule "tool/status-tool"]
-	path = tool/status-tool
-	url = git@github1.com:hq450/status-tool.git
-[submodule "tool/sub-get"]
-	path = tool/sub-get
-	url = git@github1.com:hq450/sub-get.git
