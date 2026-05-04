@@ -7608,3 +7608,67 @@ allow_port 2525
 echo "$LOG_TIME: ======================= 自定义任务启动完毕 =========================== "
 
 
+#!/bin/sh
+
+LOG_TIME=$(date '+【%Y%m%d %H:%M:%S】')
+echo "$LOG_TIME: 自定义任务启动" >> /tmp/custom_task.log
+
+# ======================= 注入定时任务（强制覆盖版） =======================
+
+for task in ss_update_daily clean_logs rclone_clean_cache rclone_guard; do
+    cru d $task 2>/dev/null
+done
+
+cru a rclone_guard "*/10 * * * * /jffs/scripts/rclone_webdav.sh >> /tmp/rclone_guard.log 2>&1"
+
+cru a ss_update_daily "30 4 * * * sh /jffs/.koolshare/scripts/ss_update.sh update >> /jffs/scripts/ss_update.log 2>&1"
+
+cru a clean_logs "0 3 * * * /jffs/scripts/clean_logs.sh >> /jffs/scripts/clean_logs.txt 2>&1"
+
+# cru a refresh_ddns "0 6 * * 1 sh /jffs/scripts/refresh_ddns.sh >> /jffs/scripts/ddns_refresh.log 2>&1"
+
+# rclone_cache清理 
+
+cru a rclone_clean_cache "0 */2 * * * /bin/sh /jffs/scripts/rclone_clean_cache.sh >> /tmp/rclone_clean.log 2>&1"
+
+# ======================= 3.0 后台服务温柔启动 (存在即跳过) =======================
+start_service_soft() {
+    local _script="$1"
+    local _name=$(basename "$_script")
+    
+    # 第一重检查：检查 ps 进程列表里是否已经有这个脚本在跑
+    if ps -w | grep -v grep | grep -q "$_name"; then
+        return 0
+    fi
+    
+    # 直接运行脚本，脚本内部建议也带上同样的“存在即跳过”逻辑
+    /bin/sh "$_script" >/dev/null 2>&1 &
+}
+
+# 启动服务
+start_service_soft "/jffs/scripts/rclone_webdav.sh"
+start_service_soft "/jffs/scripts/SSH_helper.sh"
+
+# 启动 frpc (内部已带“存在即跳过”逻辑)
+# [ -f "/jffs/scripts/frpc_start.sh" ] && /bin/sh /jffs/scripts/frpc_start.sh
+# ==============================
+# WebDAV Port Allow (idempotent)
+# ==============================
+
+allow_port() {
+    PORT=$1
+
+    iptables -C INPUT -p tcp --dport $PORT -j ACCEPT 2>/dev/null || \
+    iptables -I INPUT -p tcp --dport $PORT -j ACCEPT
+
+    ip6tables -C INPUT -p tcp --dport $PORT -j ACCEPT 2>/dev/null || \
+    ip6tables -I INPUT -p tcp --dport $PORT -j ACCEPT
+}
+
+allow_port 8180
+allow_port 8181
+allow_port 2525
+
+echo "$LOG_TIME: ======================= 自定义任务启动完毕 =========================== "
+
+
