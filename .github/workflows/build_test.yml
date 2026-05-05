@@ -8,40 +8,33 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. 拉取代码（增加 fetch-depth 确保 Git 历史完整）
+      # 1. 拉取代码
       - name: Checkout source
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
           submodules: false
 
-      # 2. 【核心修复】强制同步远程分支，彻底清理工作区
+      # 2. 强制同步远程分支，彻底清理工作区
       - name: Force sync and clean workspace
         run: |
-          echo "=== SYNCING WITH REMOTE ==="
-          # 获取当前触发分支的最新状态
           git fetch origin ${{ github.ref_name }}
-          # 强行重置，丢弃所有本地残留，确保 cron_task.txt 是最新的
           git reset --hard FETCH_HEAD
           git clean -fdx
-          echo "=== WORKSPACE IS CLEAN AND FRESH ==="
 
-      # 3. 修复子模块（全HTTPS）
+      # 3. 修复子模块
       - name: Fix all submodules
         run: |
           rm -rf .git/modules
           git submodule deinit -f --all || true
-
           git config --global url."https://github.com/".insteadOf git@github.com:
           git config --global url."https://github.com/".insteadOf git@github1.com:
-
           sed -i 's#git@github1.com:#https://github.com/#g' .gitmodules
           sed -i 's#git@github.com:#https://github.com/#g' .gitmodules
-
           git submodule sync --recursive
           git submodule update --init --depth=1 || true
 
-      # 4. 安装必备工具
+      # 4. 安装工具
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y jq
 
@@ -50,26 +43,31 @@ jobs:
         run: |
           sed -i '9s|.*|URL_MAIN="https://raw.githubusercontent.com/qxzg/Actions/3.0/fancyss_rules"|' fancyss/scripts/ss_rule_update.sh
 
-      # 6. 【核心注入】使用已清理的本地文件进行幂等注入
+      # 6. 【彻底修复重复问题】先备份干净版本，再进行全新注入
       - name: Inject cron_task safely
         run: |
           TARGET="fancyss/ss/ssconfig.sh"
-          
-          # 验证文件内容（用于在日志中确认）
-          echo "Current cron_task.txt content:"
-          cat cron_task.txt
-          
-          # 删除旧注入块（幂等处理）
-          sed -i '/# CUSTOM_INJECT_START/,/# CUSTOM_INJECT_END/d' "$TARGET"
+          BACKUP="fancyss/ss/ssconfig.sh.bak"
 
-          # 注入新内容
+          # 如果不存在备份，说明这是第一次操作，创建一个绝对干净的备份
+          if [ ! -f "$BACKUP" ]; then
+              # 移除可能残留的旧注入块（万一原始代码里就有）
+              sed '/# CUSTOM_INJECT_START/,/# CUSTOM_INJECT_END/d' "$TARGET" > "$BACKUP"
+          fi
+
+          # 始终从干净的备份还原到目标文件，彻底杜绝重复堆叠
+          cp -f "$BACKUP" "$TARGET"
+
+          # 执行注入
+          echo "Injecting new cron_task.txt content..."
           {
             echo "# CUSTOM_INJECT_START"
             cat cron_task.txt
             echo "# CUSTOM_INJECT_END"
           } >> "$TARGET"
           
-          echo "Injection completed."
+          echo "=== Verification (Last 10 lines) ==="
+          tail -n 10 "$TARGET"
 
       # 7. Git 环境配置
       - name: Setup Git
@@ -77,14 +75,13 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      # 8. 同步 Changelog（放在注入之后，防止 commit 干扰 HEAD）
+      # 8. 同步 Changelog
       - name: Sync upstream Changelog.txt
         run: |
           git remote add upstream https://github.com/hq450/fancyss.git || true
           git fetch upstream 3.0 || true
           git checkout upstream/3.0 -- Changelog.txt || true
           git add Changelog.txt || true
-          # 使用 || true 避免没有更新时报错停止
           git commit -m "Sync upstream Changelog.txt" || echo "No changes to commit"
 
       # 9. 执行打包
