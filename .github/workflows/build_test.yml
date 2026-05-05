@@ -1,116 +1,113 @@
 name: FancySS Mod Build test
 
 on:
-workflow_dispatch:
+  workflow_dispatch:
 
 jobs:
-build-and-release:
-runs-on: ubuntu-latest
+  build-and-release:
+    runs-on: ubuntu-latest
 
+    steps:
+      # 1. 拉代码
+      - name: Checkout source
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          submodules: false
 
-steps:
-  # 1. 拉代码
-  - name: Checkout source
-    uses: actions/checkout@v5
-    with:
-      fetch-depth: 0
-      submodules: false
+      # 🚨【关键步骤1：强制无状态环境】
+      - name: Force clean workspace (stateless build)
+        run: |
+          echo "=== CLEAN WORKSPACE ==="
+          git reset --hard HEAD
+          git clean -fdx
+          echo "=== CLEAN DONE ==="
 
-  # 🚨【关键步骤1：强制无状态环境（核心修复点）】
-  - name: Force clean workspace (stateless build)
-    run: |
-      echo "=== CLEAN WORKSPACE ==="
-      git reset --hard HEAD
-      git clean -fdx
-      echo "=== CLEAN DONE ==="
+      # 2. 修复子模块（全HTTPS）
+      - name: Fix all submodules
+        run: |
+          rm -rf .git/modules
+          git submodule deinit -f --all || true
 
-  # 2. 修复子模块（全HTTPS）
-  - name: Fix all submodules
-    run: |
-      rm -rf .git/modules
-      git submodule deinit -f --all || true
+          git config --global url."https://github.com/".insteadOf git@github.com:
+          git config --global url."https://github.com/".insteadOf git@github1.com:
 
-      git config --global url."https://github.com/".insteadOf git@github.com:
-      git config --global url."https://github.com/".insteadOf git@github1.com:
+          sed -i 's#git@github1.com:#https://github.com/#g' .gitmodules
+          sed -i 's#git@github.com:#https://github.com/#g' .gitmodules
 
-      sed -i 's#git@github1.com:#https://github.com/#g' .gitmodules
-      sed -i 's#git@github.com:#https://github.com/#g' .gitmodules
+          git submodule sync --recursive
+          git submodule update --init --depth=1 || true
 
-      git submodule sync --recursive
-      git submodule update --init --depth=1 || true
+      # 3. 安装 jq
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
 
-  # 3. 安装 jq
-  - name: Install jq
-    run: sudo apt-get update && sudo apt-get install -y jq
+      # 4. Patch 规则地址
+      - name: Patch ss_rule_update.sh
+        run: |
+          sed -i '9s|.*|URL_MAIN="https://raw.githubusercontent.com/qxzg/Actions/3.0/fancyss_rules"|' fancyss/scripts/ss_rule_update.sh
 
-  # 4. Patch 规则地址
-  - name: Patch ss_rule_update.sh
-    run: |
-      sed -i '9s|.*|URL_MAIN="https://raw.githubusercontent.com/qxzg/Actions/3.0/fancyss_rules"|' fancyss/scripts/ss_rule_update.sh
+      # 🚨【关键步骤2：幂等注入 + 强制使用仓库版本】
+      - name: Inject cron_task safely (stateless)
+        run: |
+          TARGET="fancyss/ss/ssconfig.sh"
 
-  # 🚨【关键步骤2：幂等注入 + 强制使用仓库版本】
-  - name: Inject cron_task safely (stateless)
-    run: |
-      TARGET="fancyss/ss/ssconfig.sh"
+          # 删除旧注入块
+          sed -i '/# CUSTOM_INJECT_START/,/# CUSTOM_INJECT_END/d' "$TARGET"
 
-      # 删除旧注入块
-      sed -i '/# CUSTOM_INJECT_START/,/# CUSTOM_INJECT_END/d' "$TARGET"
+          # 强制用 git 当前版本（不读工作目录）
+          {
+            echo "# CUSTOM_INJECT_START"
+            git show HEAD:cron_task.txt
+            echo "# CUSTOM_INJECT_END"
+          } >> "$TARGET"
 
-      # 强制用 git 当前版本（不读工作目录）
-      {
-        echo "# CUSTOM_INJECT_START"
-        git show HEAD:cron_task.txt
-        echo "# CUSTOM_INJECT_END"
-      } >> "$TARGET"
+      # 6. 权限
+      - name: Make build script executable
+        run: chmod +x build-custom.sh
 
-  # 6. 权限
-  - name: Make build script executable
-    run: chmod +x build-custom.sh
+      # 7. Git 配置
+      - name: Setup Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-  # 7. Git 配置
-  - name: Setup Git
-    run: |
-      git config --global user.name "github-actions[bot]"
-      git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      # 8. 同步 Changelog
+      - name: Sync upstream Changelog.txt
+        run: |
+          git remote add upstream https://github.com/hq450/fancyss.git || true
+          git fetch upstream 3.0 || true
+          git checkout upstream/3.0 -- Changelog.txt || true
+          git add Changelog.txt || true
+          git commit -m "Sync upstream Changelog.txt" || echo "No changes"
 
-  # 8. 同步 Changelog
-  - name: Sync upstream Changelog.txt
-    run: |
-      git remote add upstream https://github.com/hq450/fancyss.git || true
-      git fetch upstream 3.0 || true
-      git checkout upstream/3.0 -- Changelog.txt || true
-      git add Changelog.txt || true
-      git commit -m "Sync upstream Changelog.txt" || echo "No changes"
+      # 9. 打包
+      - name: Build FancySS packages
+        run: ./build-custom.sh
 
-  # 9. 打包
-  - name: Build FancySS packages
-    run: ./build-custom.sh
+      # 10. 生成版本信息
+      - name: Generate release info
+        id: release_info
+        run: |
+          UPSTREAM_VERSION=$(cat fancyss/ss/version | sed -n 1p | tr -d '\n\r' | sed 's/[^0-9.]//g')
+          TAG_NAME="v${UPSTREAM_VERSION}"
+          BUILD_TIME=$(TZ='Asia/Shanghai' date +"%Y-%m-%d %H:%M:%S")
 
-  # 10. 生成版本信息
-  - name: Generate release info
-    id: release_info
-    run: |
-      UPSTREAM_VERSION=$(cat fancyss/ss/version | sed -n 1p | tr -d '\n\r' | sed 's/[^0-9.]//g')
-      TAG_NAME="v${UPSTREAM_VERSION}"
-      BUILD_TIME=$(TZ='Asia/Shanghai' date +"%Y-%m-%d %H:%M:%S")
+          echo "构建时间 ：${BUILD_TIME}" > release_body.txt
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "release_name=FancySS v${UPSTREAM_VERSION}" >> $GITHUB_OUTPUT
+          echo "body=$(cat release_body.txt)" >> $GITHUB_OUTPUT
 
-      echo "构建时间 ：${BUILD_TIME}" > release_body.txt
-      echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
-      echo "release_name=FancySS v${UPSTREAM_VERSION}" >> $GITHUB_OUTPUT
-      echo "body=$(cat release_body.txt)" >> $GITHUB_OUTPUT
-
-  # 11. 发布
-  - name: Create/Update Release
-    uses: softprops/action-gh-release@v2.6.1
-    with:
-      tag_name: ${{ steps.release_info.outputs.tag_name }}
-      name: ${{ steps.release_info.outputs.release_name }}
-      body: ${{ steps.release_info.outputs.body }}
-      files: packages/*.tar.gz
-      make_latest: true
-      generate_release_notes: false
-      overwrite_files: true
-    env:
-      GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
+      # 11. 发布
+      - name: Create/Update Release
+        uses: softprops/action-gh-release@v2.6.1
+        with:
+          tag_name: ${{ steps.release_info.outputs.tag_name }}
+          name: ${{ steps.release_info.outputs.release_name }}
+          body: ${{ steps.release_info.outputs.body }}
+          files: packages/*.tar.gz
+          make_latest: true
+          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
