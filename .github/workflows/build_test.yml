@@ -1,93 +1,98 @@
 name: FancySS Mod Build test
+
 on:
   workflow_dispatch:
+
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
+
     steps:
-      # 1. 拉取仓库代码
+      # 1. 拉代码
       - name: Checkout source
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
           submodules: false
-      - name: Fix all submodule URLs (safe, no commit check)
+
+      # 2. 修复子模块（全HTTPS）
+      - name: Fix all submodules
         run: |
-         # 清除旧子模块缓存（彻底干净）
-         rm -rf .git/modules
-         git submodule deinit -f --all || true
+          rm -rf .git/modules
+          git submodule deinit -f --all || true
 
-         # ====== 强制修正所有子模块 URL（关键点） ======
-         git config -f .gitmodules submodule.tool/geotool.url https://github.com/hq450/geotool.git
-         git config -f .gitmodules submodule.tool/xapi-tool.url https://github.com/hq450/xapi-tool.git
-         git config -f .gitmodules submodule.tool/node-tool.url https://github.com/hq450/node-tool.git
-         git config -f .gitmodules submodule.tool/sub-tool.url https://github.com/hq450/sub-tool.git
+          git config --global url."https://github.com/".insteadOf git@github.com:
+          git config --global url."https://github.com/".insteadOf git@github1.com:
 
-         # 同步配置
-         git submodule sync --recursive
+          sed -i 's#git@github1.com:#https://github.com/#g' .gitmodules
+          sed -i 's#git@github.com:#https://github.com/#g' .gitmodules
 
-         # 初始化（浅克隆 + 不递归，避免旧 commit 校验炸）
-         git -c protocol.file.allow=always submodule update --init --depth=1 || true
+          git submodule sync --recursive
+          git submodule update --init --depth=1 || true
 
-         # ====== 兜底（防止某些子模块还是失败）======
-         [ -d "tool/geotool" ] || git clone --depth=1 https://github.com/hq450/geotool tool/geotool || true
-         [ -d "tool/xapi-tool" ] || git clone --depth=1 https://github.com/hq450/xapi-tool tool/xapi-tool || true
-         [ -d "tool/node-tool" ] || git clone --depth=1 https://github.com/hq450/node-tool tool/node-tool || true
-         [ -d "tool/sub-tool" ] || git clone --depth=1 https://github.com/hq450/sub-tool tool/sub-tool || true
-
-      # 2. 安装 jq 工具
+      # 3. 安装 jq
       - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
 
-      # 3. Patch ss_rule_update.sh 中的规则地址
+      # 4. Patch 规则地址
       - name: Patch ss_rule_update.sh
         run: |
           sed -i '9s|.*|URL_MAIN="https://raw.githubusercontent.com/qxzg/Actions/3.0/fancyss_rules"|' fancyss/scripts/ss_rule_update.sh
 
-      # 4. 把 cron_task.txt 追加到 ssconfig.sh
-      - name: Append cron_task.txt to ssconfig.sh
+      # 5. 幂等注入（不会重复）
+      - name: Inject cron_task safely
         run: |
-         cat cron_task.txt >> fancyss/ss/ssconfig.sh
+          TARGET="fancyss/ss/ssconfig.sh"
 
-      # 5. 设置 build-custom.sh 可执行权限
-      - name: Make build-custom.sh executable
+          # 删除旧注入块
+          sed -i '/# CUSTOM_INJECT_START/,/# CUSTOM_INJECT_END/d' "$TARGET"
+
+          # 重新写入
+          cat >> "$TARGET" <<'EOF'
+
+          # CUSTOM_INJECT_START
+          $(cat cron_task.txt)
+          # CUSTOM_INJECT_END
+
+             EOF
+
+      # 6. 权限
+      - name: Make build script executable
         run: chmod +x build-custom.sh
-     # 6.0 修复name not allowed
+
+      # 7. Git 配置
       - name: Setup Git
         run: |
-         git config --global user.name "github-actions[bot]"
-         git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-     
-      # 6.1 添加上游仓库 remote 并 fetch Changelog.txt（放在 build-custom.sh 之前）
-      - name: Add upstream and fetch Changelog.txt
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      # 8. 同步 Changelog
+      - name: Sync upstream Changelog.txt
         run: |
           git remote add upstream https://github.com/hq450/fancyss.git || true
           git fetch upstream 3.0 || true
           git checkout upstream/3.0 -- Changelog.txt || true
           git add Changelog.txt || true
-          git commit -m "Sync upstream Changelog.txt" || echo "Changelog.txt 无变更"
+          git commit -m "Sync upstream Changelog.txt" || echo "No changes"
 
-
-      # 6.2 执行打包，只保留 hnd / hnd_v8 full 包 + 同步 Changelog.txt
+      # 9. 打包
       - name: Build FancySS packages
-        run: |
-          ./build-custom.sh
-          
-      # 7. 获取上游版本 + 生成 release 描述（只保留北京时间）
-      - name: Generate release body and tag
+        run: ./build-custom.sh
+
+      # 10. 生成版本信息
+      - name: Generate release info
         id: release_info
         run: |
-          # 获取上游版本（从 fancyss/ss/version 第一行）
-          UPSTREAM_VERSION=$(cat fancyss/ss/version | sed -n 1p | tr -d '\n\r' | sed 's/[^0-9.]//g') # 清理非数字/点字符
+          UPSTREAM_VERSION=$(cat fancyss/ss/version | sed -n 1p | tr -d '\n\r' | sed 's/[^0-9.]//g')
           TAG_NAME="v${UPSTREAM_VERSION}"
           BUILD_TIME=$(TZ='Asia/Shanghai' date +"%Y-%m-%d %H:%M:%S")
-          # body 只保留时间一行
+
           echo "构建时间 ：${BUILD_TIME}" > release_body.txt
           echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
           echo "release_name=FancySS v${UPSTREAM_VERSION}" >> $GITHUB_OUTPUT
           echo "body=$(cat release_body.txt)" >> $GITHUB_OUTPUT
 
-      # 8. 创建/更新 Release（用版本号作为 tag，覆盖同版本）
+      # 11. 发布
       - name: Create/Update Release
         uses: softprops/action-gh-release@v2.6.1
         with:
@@ -97,7 +102,6 @@ jobs:
           files: packages/*.tar.gz
           make_latest: true
           generate_release_notes: false
-          overwrite_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
           FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
