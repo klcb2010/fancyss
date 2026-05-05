@@ -10,7 +10,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-
     steps:
       # 1. Checkout
       - name: Checkout source
@@ -37,13 +36,10 @@ jobs:
         run: |
           curl -sL https://raw.githubusercontent.com/hq450/fancyss/3.0/packages/version.json.js \
             -o /tmp/upstream_version.json.js
-
           LOCAL_VERSION=$(jq -r '.version' packages/version.json.js)
           UPSTREAM_VERSION=$(jq -r '.version' /tmp/upstream_version.json.js)
-
           echo "local=$LOCAL_VERSION"
           echo "upstream=$UPSTREAM_VERSION"
-
           if [ "$(printf '%s\n%s' "$LOCAL_VERSION" "$UPSTREAM_VERSION" | sort -V | head -n1)" = "$LOCAL_VERSION" ] \
             && [ "$LOCAL_VERSION" != "$UPSTREAM_VERSION" ]; then
             echo "needs_sync=true" >> $GITHUB_OUTPUT
@@ -58,31 +54,24 @@ jobs:
           echo "已是最新，无需同步"
           exit 0
 
-      # 6. merge upstream（已修复）
+      # 6. merge upstream（已修复保护逻辑）
       - name: Sync upstream repository
         if: steps.compare_version.outputs.needs_sync == 'true'
         run: |
           git checkout ${{ github.ref_name }}
-
-          # ⭐ 保证 merge 前干净
           git reset --hard
           git clean -fd
-
           OLD_HEAD=$(git rev-parse HEAD)
-
           if ! git merge upstream/3.0 -X theirs --no-edit --allow-unrelated-histories; then
             git checkout --ours build-custom.sh || true
             git add build-custom.sh || true
-
             git ls-files -u | cut -f2 | sort -u | while read file; do
               git checkout --ours "$file" || true
               git add "$file" || true
             done
-
             git commit -m "resolve conflicts"
           fi
-
-          # ❗ 注意：这里已经移除了 .gitmodules
+          # 还原受保护的文件
           git restore --source=$OLD_HEAD \
             .github/workflows/ \
             cron_task.txt \
@@ -105,25 +94,29 @@ jobs:
           sed -i '9s|.*|URL_MAIN="https://raw.githubusercontent.com/qxzg/Actions/3.0/fancyss_rules"|' \
             fancyss/scripts/ss_rule_update.sh
 
-      # 9. append cron
+      # 9. 【核心修复点】幂等注入：确保先删除旧块，再追加新内容
       - name: Append cron_task.txt to ssconfig.sh
         if: steps.compare_version.outputs.needs_sync == 'true'
         run: |
-          cat cron_task.txt >> fancyss/ss/ssconfig.sh
+          TARGET="fancyss/ss/ssconfig.sh"
+          # 1. 彻底清除可能存在的旧注入块（根据标签清理）
+          sed -i '/# CUSTOM_INJECT_START/,/# CUSTOM_INJECT_END/d' "$TARGET"
+          
+          # 2. 追加新内容
+          {
+            echo "# CUSTOM_INJECT_START"
+            cat cron_task.txt
+            echo "# CUSTOM_INJECT_END"
+          } >> "$TARGET"
+          echo "Injection successfully verified."
 
-      # 10. commit（稳定版）
+      # 10. commit
       - name: Commit & Push
         if: steps.compare_version.outputs.needs_sync == 'true'
         run: |
-          # merge 后再改 ignore
           grep -qxF "release_body.txt" .gitignore || echo "release_body.txt" >> .gitignore
-
-          # 防止被跟踪
           git rm -f --cached release_body.txt 2>/dev/null || true
-
-          # 正确 add 写法
           git add -A ':!release_body.txt' ':!*.log' ':!*.tmp'
-
           if ! git diff --cached --quiet; then
             git commit -m "Sync upstream hq450/fancyss@3.0"
             git push origin HEAD:${{ github.ref_name }} --force-with-lease
@@ -150,9 +143,7 @@ jobs:
           VERSION=$(jq -r '.version' packages/version.json.js)
           TAG_NAME="v${VERSION}"
           BUILD_TIME=$(TZ='Asia/Shanghai' date +"%Y-%m-%d %H:%M:%S")
-
           echo "构建时间：${BUILD_TIME}" > release_body.txt
-
           echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
           echo "release_name=FancySS v${VERSION}" >> $GITHUB_OUTPUT
           echo "body=$(cat release_body.txt)" >> $GITHUB_OUTPUT
