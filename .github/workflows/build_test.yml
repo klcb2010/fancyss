@@ -6,113 +6,57 @@ on:
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
-
     steps:
-      # 1. 拉取代码
       - name: Checkout source
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          submodules: false
 
-      # 2. 强制同步远程分支，彻底清理工作区
       - name: Force sync and clean workspace
         run: |
           git fetch origin ${{ github.ref_name }}
           git reset --hard FETCH_HEAD
           git clean -fdx
 
-      # 3. 修复子模块
-      - name: Fix all submodules
-        run: |
-          rm -rf .git/modules
-          git submodule deinit -f --all || true
-          git config --global url."https://github.com/".insteadOf git@github.com:
-          git config --global url."https://github.com/".insteadOf git@github1.com:
-          sed -i 's#git@github1.com:#https://github.com/#g' .gitmodules
-          sed -i 's#git@github.com:#https://github.com/#g' .gitmodules
-          git submodule sync --recursive
-          git submodule update --init --depth=1 || true
-
-      # 4. 安装工具
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y jq
 
-      # 5. Patch 规则地址
-      - name: Patch ss_rule_update.sh
-        run: |
-          sed -i '9s|.*|URL_MAIN="https://raw.githubusercontent.com/qxzg/Actions/3.0/fancyss_rules"|' fancyss/scripts/ss_rule_update.sh
-
-      # 6. 【彻底修复重复问题】先备份干净版本，再进行全新注入
-      - name: Inject cron_task safely
+      - name: Dynamic Inject cron_task
         run: |
           TARGET="fancyss/ss/ssconfig.sh"
-          BACKUP="fancyss/ss/ssconfig.sh.bak"
-
-          # 如果不存在备份，说明这是第一次操作，创建一个绝对干净的备份
-          if [ ! -f "$BACKUP" ]; then
-              # 移除可能残留的旧注入块（万一原始代码里就有）
-              sed '/# CUSTOM_INJECT_START/,/# CUSTOM_INJECT_END/d' "$TARGET" > "$BACKUP"
-          fi
-
-          # 始终从干净的备份还原到目标文件，彻底杜绝重复堆叠
-          cp -f "$BACKUP" "$TARGET"
-
-          # 执行注入
-          echo "Injecting new cron_task.txt content..."
+          # 1. 动态清理：删除旧标签之间的所有内容（解决重复问题）
+          sed -i '/# CUSTOM_INJECT_START/,/# CUSTOM_INJECT_END/d' "$TARGET"
+          
+          # 2. 注入新内容（解决刻舟求剑问题，始终基于当前最新文件操作）
           {
+            echo ""
             echo "# CUSTOM_INJECT_START"
             cat cron_task.txt
             echo "# CUSTOM_INJECT_END"
           } >> "$TARGET"
           
-          echo "=== Verification (Last 10 lines) ==="
-          tail -n 10 "$TARGET"
+          echo "=== 注入结果确认 ==="
+          tail -n 15 "$TARGET"
 
-      # 7. Git 环境配置
-      - name: Setup Git
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-      # 8. 同步 Changelog
-      - name: Sync upstream Changelog.txt
-        run: |
-          git remote add upstream https://github.com/hq450/fancyss.git || true
-          git fetch upstream 3.0 || true
-          git checkout upstream/3.0 -- Changelog.txt || true
-          git add Changelog.txt || true
-          git commit -m "Sync upstream Changelog.txt" || echo "No changes to commit"
-
-      # 9. 执行打包
-      - name: Make scripts executable and Build
+      - name: Build
         run: |
           chmod +x build-custom.sh
           ./build-custom.sh
 
-      # 10. 生成 Release 信息
       - name: Generate release info
         id: release_info
         run: |
           UPSTREAM_VERSION=$(cat fancyss/ss/version | sed -n 1p | tr -d '\n\r' | sed 's/[^0-9.]//g')
-          TAG_NAME="v${UPSTREAM_VERSION}"
-          BUILD_TIME=$(TZ='Asia/Shanghai' date +"%Y-%m-%d %H:%M:%S")
-
-          echo "构建时间 ：${BUILD_TIME}" > release_body.txt
-          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "tag_name=v${UPSTREAM_VERSION}" >> $GITHUB_OUTPUT
           echo "release_name=FancySS v${UPSTREAM_VERSION}" >> $GITHUB_OUTPUT
-          echo "body=$(cat release_body.txt)" >> $GITHUB_OUTPUT
+          echo "body=测试构建时间：$(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M:%S')" >> $GITHUB_OUTPUT
 
-      # 11. 发布到 Releases
-      - name: Create/Update Release
+      - name: Create Release
         uses: softprops/action-gh-release@v2.6.1
         with:
           tag_name: ${{ steps.release_info.outputs.tag_name }}
           name: ${{ steps.release_info.outputs.release_name }}
           body: ${{ steps.release_info.outputs.body }}
           files: packages/*.tar.gz
-          make_latest: true
-          generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
