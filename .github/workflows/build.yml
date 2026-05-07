@@ -62,14 +62,11 @@ jobs:
         run: |
           sed -i '9s|.*|URL_MAIN="https://raw.githubusercontent.com/qxzg/Actions/3.0/fancyss_rules"|' fancyss/scripts/ss_rule_update.sh
 
-      # 【核心机制：动态清理 + 重新注入】
       - name: Dynamic Inject cron_task
         if: steps.compare_version.outputs.needs_sync == 'true'
         run: |
           TARGET="fancyss/ss/ssconfig.sh"
-          # 删除旧注入块（即使上游更新了该文件，这一步也能确保清除掉 merge 带来的可能污染）
           sed -i '/# CUSTOM_INJECT_START/,/# CUSTOM_INJECT_END/d' "$TARGET"
-          # 重新注入
           {
             echo ""
             echo "# CUSTOM_INJECT_START"
@@ -94,14 +91,21 @@ jobs:
           chmod +x build-custom.sh
           ./build-custom.sh
 
+      - name: Get version and build time
+        if: steps.compare_version.outputs.needs_sync == 'true'
+        id: get_meta
+        run: |
+          echo "version=$(jq -r '.version' packages/version.json.js)" >> $GITHUB_OUTPUT
+          echo "build_time=$(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M:%S')" >> $GITHUB_OUTPUT
+
       - name: Release
         if: steps.compare_version.outputs.needs_sync == 'true'
         uses: softprops/action-gh-release@v2.6.1
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         with:
-          tag_name: v$(jq -r '.version' packages/version.json.js)
-          name: FancySS v$(jq -r '.version' packages/version.json.js)
-          body: "构建时间：$(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M:%S')"
+          tag_name: v${{ steps.get_meta.outputs.version }}
+          name: FancySS v${{ steps.get_meta.outputs.version }}
+          body: "构建时间：${{ steps.get_meta.outputs.build_time }}"
           files: packages/*.tar.gz
           overwrite_files: true
