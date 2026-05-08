@@ -30,12 +30,19 @@ jobs:
           rm -rf .git/modules
           git submodule deinit -f --all || true
 
+          # 全部改 HTTPS
+          git config -f .gitmodules submodule.tool/anytls-zig.url https://github.com/hq450/anytls-zig.git
           git config -f .gitmodules submodule.tool/geotool.url https://github.com/hq450/geotool.git
-          git config -f .gitmodules submodule.tool/xapi-tool.url https://github.com/hq450/xapi-tool.git
           git config -f .gitmodules submodule.tool/node-tool.url https://github.com/hq450/node-tool.git
+          git config -f .gitmodules submodule.tool/status-tool.url https://github.com/hq450/status-tool.git
+          git config -f .gitmodules submodule.tool/sub-get.url https://github.com/hq450/sub-get.git
           git config -f .gitmodules submodule.tool/sub-tool.url https://github.com/hq450/sub-tool.git
+          git config -f .gitmodules submodule.tool/webtest-tool.url https://github.com/hq450/webtest-tool.git
+          git config -f .gitmodules submodule.tool/ws-tool.url https://github.com/hq450/ws-tool.git
+          git config -f .gitmodules submodule.tool/xapi-tool.url https://github.com/hq450/xapi-tool.git
 
           git submodule sync --recursive
+
           git -c protocol.file.allow=always submodule update --init --depth=1 || true
 
       # =========================
