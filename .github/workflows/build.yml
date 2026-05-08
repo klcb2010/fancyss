@@ -43,8 +43,9 @@ jobs:
         if: steps.compare_version.outputs.needs_sync == 'true'
         run: |
           git checkout ${{ github.ref_name }}
+          # 强制干净环境（防残留）
           git reset --hard
-          git clean -fd
+          git clean -fdx
           OLD_HEAD=$(git rev-parse HEAD)
           if ! git merge upstream/3.0 -X theirs --no-edit --allow-unrelated-histories; then
             git checkout --ours build-custom.sh || true
@@ -66,7 +67,9 @@ jobs:
         if: steps.compare_version.outputs.needs_sync == 'true'
         run: |
           TARGET="fancyss/ss/ssconfig.sh"
+          # 删除旧注入块（防止无限叠加）
           sed -i '/# CUSTOM_INJECT_START/,/# CUSTOM_INJECT_END/d' "$TARGET"
+          # 重新注入
           {
             echo ""
             echo "# CUSTOM_INJECT_START"
@@ -91,12 +94,20 @@ jobs:
           chmod +x build-custom.sh
           ./build-custom.sh
 
-      - name: Get version and build time
+      - name: Generate release info
         if: steps.compare_version.outputs.needs_sync == 'true'
-        id: get_meta
+        id: release_info
         run: |
-          echo "version=$(jq -r '.version' packages/version.json.js)" >> $GITHUB_OUTPUT
-          echo "build_time=$(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M:%S')" >> $GITHUB_OUTPUT
+          VERSION=$(jq -r '.version' packages/version.json.js)
+          if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
+            echo "读取版本失败！"
+            exit 1
+          fi
+          TAG_NAME="v${VERSION}"
+          BUILD_TIME=$(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M:%S')
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "release_name=FancySS ${TAG_NAME}" >> $GITHUB_OUTPUT
+          echo "release_body=构建时间：${BUILD_TIME}" >> $GITHUB_OUTPUT
 
       - name: Release
         if: steps.compare_version.outputs.needs_sync == 'true'
@@ -104,8 +115,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         with:
-          tag_name: v${{ steps.get_meta.outputs.version }}
-          name: FancySS v${{ steps.get_meta.outputs.version }}
-          body: "构建时间：${{ steps.get_meta.outputs.build_time }}"
+          tag_name: ${{ steps.release_info.outputs.tag_name }}
+          name: ${{ steps.release_info.outputs.release_name }}
+          body: ${{ steps.release_info.outputs.release_body }}
           files: packages/*.tar.gz
           overwrite_files: true
