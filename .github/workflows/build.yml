@@ -8,7 +8,6 @@ on:
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
-
     permissions:
       contents: write
 
@@ -23,28 +22,7 @@ jobs:
           submodules: false
 
       # =========================
-      # 2. Fix submodules（彻底解决 github1.com + 全部替换 HTTPS）
-      # =========================
-      - name: Fix all submodule URLs
-        run: |
-          rm -rf .git/modules
-          git submodule deinit -f --all || true
-
-          git config -f .gitmodules submodule.tool/anytls-zig.url https://github.com/hq450/anytls-zig.git
-          git config -f .gitmodules submodule.tool/geotool.url https://github.com/hq450/geotool.git
-          git config -f .gitmodules submodule.tool/node-tool.url https://github.com/hq450/node-tool.git
-          git config -f .gitmodules submodule.tool/status-tool.url https://github.com/hq450/status-tool.git
-          git config -f .gitmodules submodule.tool/sub-get.url https://github.com/hq450/sub-get.git
-          git config -f .gitmodules submodule.tool/sub-tool.url https://github.com/hq450/sub-tool.git
-          git config -f .gitmodules submodule.tool/webtest-tool.url https://github.com/hq450/webtest-tool.git
-          git config -f .gitmodules submodule.tool/ws-tool.url https://github.com/hq450/ws-tool.git
-          git config -f .gitmodules submodule.tool/xapi-tool.url https://github.com/hq450/xapi-tool.git
-
-          git submodule sync --recursive
-          git -c protocol.file.allow=always submodule update --init --depth=1 || true
-
-      # =========================
-      # 3. git config
+      # 2. git config
       # =========================
       - name: Configure git user
         run: |
@@ -52,17 +30,17 @@ jobs:
           git config user.email "actions@github.com"
 
       # =========================
-      # 4. upstream
+      # 3. upstream
       # =========================
       - name: Add upstream and fetch
         run: |
           git remote add upstream https://github.com/hq450/fancyss.git || true
-          git fetch upstream --no-tags
+          git fetch upstream 3.0 --no-tags
 
       # =========================
-      # 5. version compare
+      # 4. version compare
       # =========================
-      - name: Compare version.json.js
+      - name: Compare version
         id: compare_version
         run: |
           set -e
@@ -76,23 +54,25 @@ jobs:
           echo "local=$LOCAL_VERSION"
           echo "upstream=$UPSTREAM_VERSION"
 
-          if [ "$(printf '%s\n%s' "$LOCAL_VERSION" "$UPSTREAM_VERSION" | sort -V | head -n1)" = "$LOCAL_VERSION" ] && [ "$LOCAL_VERSION" != "$UPSTREAM_VERSION" ]; then
+          # version compare
+          if [ "$(printf '%s\n%s' "$LOCAL_VERSION" "$UPSTREAM_VERSION" | sort -V | head -n1)" = "$LOCAL_VERSION" ] \
+            && [ "$LOCAL_VERSION" != "$UPSTREAM_VERSION" ]; then
             echo "needs_sync=true" >> $GITHUB_OUTPUT
           else
             echo "needs_sync=false" >> $GITHUB_OUTPUT
           fi
 
       # =========================
-      # 6. skip
+      # 5. skip
       # =========================
       - name: Skip if no update
         if: steps.compare_version.outputs.needs_sync == 'false'
         run: |
-          echo "已是最新，无需同步"
+          echo "已是最新版本"
           exit 0
 
       # =========================
-      # 7. merge upstream
+      # 6. sync upstream
       # =========================
       - name: Sync upstream repository
         if: steps.compare_version.outputs.needs_sync == 'true'
@@ -100,22 +80,17 @@ jobs:
           git checkout ${{ github.ref_name }}
 
           git reset --hard
+          git clean -fdx
+
           OLD_HEAD=$(git rev-parse HEAD)
 
           if ! git merge upstream/3.0 -X theirs --no-edit --allow-unrelated-histories; then
-            git checkout --ours .gitmodules build-custom.sh || true
-            git add .gitmodules build-custom.sh || true
-
-            git ls-files -u | cut -f2 | sort -u | while read file; do
-              git checkout --ours "$file" || true
-              git add "$file" || true
-            done
-
+            git checkout --ours build-custom.sh || true
+            git add build-custom.sh || true
             git commit -m "resolve conflicts"
           fi
 
           git restore --source=$OLD_HEAD \
-            .gitmodules \
             .github/workflows/ \
             cron_task.txt \
             build-custom.sh \
@@ -125,14 +100,26 @@ jobs:
             clear.py || true
 
       # =========================
-      # 8. jq
+      # 7. FORCE FIX VERSION（关键修复点）
+      # =========================
+      - name: Sync version file
+        if: steps.compare_version.outputs.needs_sync == 'true'
+        run: |
+          curl -sL https://raw.githubusercontent.com/hq450/fancyss/3.0/packages/version.json.js \
+            -o packages/version.json.js
+
+          echo "✔ version.json.js 已同步"
+          cat packages/version.json.js
+
+      # =========================
+      # 8. install jq
       # =========================
       - name: Install jq
         if: steps.compare_version.outputs.needs_sync == 'true'
         run: sudo apt-get update && sudo apt-get install -y jq
 
       # =========================
-      # 9. patch
+      # 9. patch script
       # =========================
       - name: Patch ss_rule_update.sh
         if: steps.compare_version.outputs.needs_sync == 'true'
@@ -141,9 +128,9 @@ jobs:
             fancyss/scripts/ss_rule_update.sh
 
       # =========================
-      # 10. cron inject（防重复）
+      # 10. inject cron (防重复)
       # =========================
-      - name: Dynamic Inject cron_task
+      - name: Inject cron_task safely
         if: steps.compare_version.outputs.needs_sync == 'true'
         run: |
           TARGET="fancyss/ss/ssconfig.sh"
@@ -158,7 +145,7 @@ jobs:
           } >> "$TARGET"
 
       # =========================
-      # 11. commit & push（已修复 git add 崩溃）
+      # 11. commit fix
       # =========================
       - name: Commit & Push
         if: steps.compare_version.outputs.needs_sync == 'true'
@@ -167,60 +154,49 @@ jobs:
 
           git rm -f --cached release_body.txt 2>/dev/null || true
 
-          # ✅ 修复点：避免 git add pathspec 报错
           git add -A
-
-          git reset release_body.txt 2>/dev/null || true
-          git reset *.log 2>/dev/null || true
-          git reset *.tmp 2>/dev/null || true
+          git add .gitmodules 2>/dev/null || true
 
           if ! git diff --cached --quiet; then
-            git commit -m "Sync upstream hq450/fancyss@3.0"
+            git commit -m "Sync upstream + fix version + inject cron"
             git push origin HEAD:${{ github.ref_name }} --force-with-lease
-            echo "已提交并推送"
-          else
-            echo "已是最新，无需提交推送"
           fi
 
       # =========================
       # 12. build
       # =========================
-      - name: Make build-custom.sh executable
-        if: steps.compare_version.outputs.needs_sync == 'true'
-        run: chmod +x build-custom.sh
-
-      - name: Build FancySS packages
+      - name: Build packages
         if: steps.compare_version.outputs.needs_sync == 'true'
         run: |
+          chmod +x build-custom.sh
           ./build-custom.sh
 
       # =========================
-      # 13. release info
+      # 13. release info（安全版）
       # =========================
-      - name: Generate release body and tag
+      - name: Generate release info
         if: steps.compare_version.outputs.needs_sync == 'true'
         id: release_info
         run: |
           VERSION=$(jq -r '.version' packages/version.json.js)
 
+          # 防空
           if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
-            echo "读取版本失败！"
+            echo "version error"
             exit 1
           fi
 
           TAG_NAME="v${VERSION}"
           BUILD_TIME=$(TZ='Asia/Shanghai' date +"%Y-%m-%d %H:%M:%S")
 
-          echo "构建时间：${BUILD_TIME}" > release_body.txt
-
           echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
           echo "release_name=FancySS v${VERSION}" >> $GITHUB_OUTPUT
-          echo "body=$(cat release_body.txt)" >> $GITHUB_OUTPUT
+          echo "body=构建时间：${BUILD_TIME}" >> $GITHUB_OUTPUT
 
       # =========================
       # 14. release
       # =========================
-      - name: Create/Update Release
+      - name: Create Release
         if: steps.compare_version.outputs.needs_sync == 'true'
         uses: softprops/action-gh-release@v2.6.1
         env:
@@ -229,7 +205,7 @@ jobs:
           tag_name: ${{ steps.release_info.outputs.tag_name }}
           name: ${{ steps.release_info.outputs.release_name }}
           body: ${{ steps.release_info.outputs.body }}
-          make_latest: true
-          generate_release_notes: false
           files: packages/*.tar.gz
           overwrite_files: true
+          make_latest: true
+          generate_release_notes: false
