@@ -46,15 +46,14 @@ jobs:
           set -e
 
           curl -sL https://raw.githubusercontent.com/hq450/fancyss/3.0/packages/version.json.js \
-            -o /tmp/upstream_version.json.js
+            -o /tmp/up_version.json.js
 
           LOCAL_VERSION=$(jq -r '.version' packages/version.json.js)
-          UPSTREAM_VERSION=$(jq -r '.version' /tmp/upstream_version.json.js)
+          UPSTREAM_VERSION=$(jq -r '.version' /tmp/up_version.json.js)
 
           echo "local=$LOCAL_VERSION"
           echo "upstream=$UPSTREAM_VERSION"
 
-          # version compare
           if [ "$(printf '%s\n%s' "$LOCAL_VERSION" "$UPSTREAM_VERSION" | sort -V | head -n1)" = "$LOCAL_VERSION" ] \
             && [ "$LOCAL_VERSION" != "$UPSTREAM_VERSION" ]; then
             echo "needs_sync=true" >> $GITHUB_OUTPUT
@@ -100,16 +99,26 @@ jobs:
             clear.py || true
 
       # =========================
-      # 7. FORCE FIX VERSION（关键修复点）
+      # 7. 🔥 FIX: 同步两个版本文件（核心修复）
       # =========================
-      - name: Sync version file
+      - name: Sync version files (IMPORTANT FIX)
         if: steps.compare_version.outputs.needs_sync == 'true'
         run: |
+          set -e
+
+          # packages version
           curl -sL https://raw.githubusercontent.com/hq450/fancyss/3.0/packages/version.json.js \
             -o packages/version.json.js
 
-          echo "✔ version.json.js 已同步"
+          # ss runtime version (🔥 build真正用这个)
+          curl -sL https://raw.githubusercontent.com/hq450/fancyss/3.0/fancyss/ss/version \
+            -o fancyss/ss/version
+
+          echo "===== packages/version.json.js ====="
           cat packages/version.json.js
+
+          echo "===== fancyss/ss/version ====="
+          cat fancyss/ss/version
 
       # =========================
       # 8. install jq
@@ -119,7 +128,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y jq
 
       # =========================
-      # 9. patch script
+      # 9. patch
       # =========================
       - name: Patch ss_rule_update.sh
         if: steps.compare_version.outputs.needs_sync == 'true'
@@ -145,20 +154,15 @@ jobs:
           } >> "$TARGET"
 
       # =========================
-      # 11. commit fix
+      # 11. commit
       # =========================
       - name: Commit & Push
         if: steps.compare_version.outputs.needs_sync == 'true'
         run: |
-          grep -qxF "release_body.txt" .gitignore || echo "release_body.txt" >> .gitignore
-
-          git rm -f --cached release_body.txt 2>/dev/null || true
-
           git add -A
-          git add .gitmodules 2>/dev/null || true
 
           if ! git diff --cached --quiet; then
-            git commit -m "Sync upstream + fix version + inject cron"
+            git commit -m "sync upstream + fix version sync"
             git push origin HEAD:${{ github.ref_name }} --force-with-lease
           fi
 
@@ -172,7 +176,7 @@ jobs:
           ./build-custom.sh
 
       # =========================
-      # 13. release info（安全版）
+      # 13. release info
       # =========================
       - name: Generate release info
         if: steps.compare_version.outputs.needs_sync == 'true'
@@ -180,7 +184,6 @@ jobs:
         run: |
           VERSION=$(jq -r '.version' packages/version.json.js)
 
-          # 防空
           if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
             echo "version error"
             exit 1
