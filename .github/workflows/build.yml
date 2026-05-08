@@ -23,14 +23,13 @@ jobs:
           submodules: false
 
       # =========================
-      # 2. Fix submodules
+      # 2. Fix submodules（彻底解决 github1.com + 全部替换 HTTPS）
       # =========================
       - name: Fix all submodule URLs
         run: |
           rm -rf .git/modules
           git submodule deinit -f --all || true
 
-          # 全部改 HTTPS
           git config -f .gitmodules submodule.tool/anytls-zig.url https://github.com/hq450/anytls-zig.git
           git config -f .gitmodules submodule.tool/geotool.url https://github.com/hq450/geotool.git
           git config -f .gitmodules submodule.tool/node-tool.url https://github.com/hq450/node-tool.git
@@ -42,7 +41,6 @@ jobs:
           git config -f .gitmodules submodule.tool/xapi-tool.url https://github.com/hq450/xapi-tool.git
 
           git submodule sync --recursive
-
           git -c protocol.file.allow=always submodule update --init --depth=1 || true
 
       # =========================
@@ -101,9 +99,7 @@ jobs:
         run: |
           git checkout ${{ github.ref_name }}
 
-          # 保持旧版稳定逻辑（不要 git clean -fdx）
           git reset --hard
-
           OLD_HEAD=$(git rev-parse HEAD)
 
           if ! git merge upstream/3.0 -X theirs --no-edit --allow-unrelated-histories; then
@@ -145,17 +141,15 @@ jobs:
             fancyss/scripts/ss_rule_update.sh
 
       # =========================
-      # 10. inject cron（防重复注入）
+      # 10. cron inject（防重复）
       # =========================
       - name: Dynamic Inject cron_task
         if: steps.compare_version.outputs.needs_sync == 'true'
         run: |
           TARGET="fancyss/ss/ssconfig.sh"
 
-          # 删除旧注入块（防止重复）
           sed -i '/# CUSTOM_INJECT_START/,/# CUSTOM_INJECT_END/d' "$TARGET"
 
-          # 重新注入
           {
             echo ""
             echo "# CUSTOM_INJECT_START"
@@ -164,22 +158,21 @@ jobs:
           } >> "$TARGET"
 
       # =========================
-      # 11. commit
+      # 11. commit & push（已修复 git add 崩溃）
       # =========================
       - name: Commit & Push
         if: steps.compare_version.outputs.needs_sync == 'true'
         run: |
-          # 在 merge 后再改 .gitignore（避免污染工作区）
           grep -qxF "release_body.txt" .gitignore || echo "release_body.txt" >> .gitignore
 
-          # 移除历史跟踪
           git rm -f --cached release_body.txt 2>/dev/null || true
 
-          # add（排除临时文件）
-          git add -A \
-            -- ':!release_body.txt' \
-            -- ':!*.log' \
-            -- ':!*.tmp'
+          # ✅ 修复点：避免 git add pathspec 报错
+          git add -A
+
+          git reset release_body.txt 2>/dev/null || true
+          git reset *.log 2>/dev/null || true
+          git reset *.tmp 2>/dev/null || true
 
           if ! git diff --cached --quiet; then
             git commit -m "Sync upstream hq450/fancyss@3.0"
