@@ -97,6 +97,7 @@ jobs:
               .github/workflows \
               cron_task.txt \
               build-custom.sh \
+              README.md \
               white_list.txt \
               black_list.txt \
               ss_update.sh \
@@ -114,6 +115,7 @@ jobs:
           git restore --source=$OLD_HEAD \
             .github/workflows/ \
             cron_task.txt \
+            README.md \
             build-custom.sh \
             white_list.txt \
             black_list.txt \
