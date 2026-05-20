@@ -7512,11 +7512,12 @@ esac
 
 
 
+
 # CUSTOM_INJECT_START
 LOG_TIME=$(date '+【%Y%m%d %H:%M:%S】')
 echo "$LOG_TIME: 自定义任务启动" >> /tmp/custom_task.log
 
-# ======================= 注入定时任务（强制覆盖版） =======================
+# ======================= 自定义任务启动开始 =========================== 
 
 for task in ss_update_daily clean_logs rclone_clean_cache rclone_guard; do
     cru d $task 2>/dev/null
