@@ -1,5 +1,20 @@
 fancyss Changelog
 
+3.5.29（20260520）
+   - update	SS http obfs 改为纯 Xray TCP HTTP header。
+   - update	新增 MTK 机型 GS-BE7200X 安装支持。
+   - update	Xray-core 升级到 `v26.5.9-1bdb488`。
+   - update	node-tool 升级到 0.1.14。
+   - update	sub-tool 升级到 0.1.17，支持 Clash/Mihomo AnyTLS。
+   - update	订阅节点主身份改为 `profile_<profile_id>`，重新订阅后优先按 profile 恢复节点映射。
+   - fix	Xray 分流支持 SS 无 obfs / http obfs。
+   - fix	Xray 分流继续拒绝 tls obfs。
+   - fix	切换节点时清理 obfs helper 残留。
+   - fix	修复节点管理/节点分流互切重复 webtest。
+   - fix	修复节点数变化绕过刷新时间触发 webtest。
+   - fix	修复订阅启动阶段可能卡住的问题。
+   - fix	修复订阅错误页触发 `base64 -d` 常驻占用 CPU。
+
 3.5.28（20260510）
    - note	本次更新重点刷新核心代理二进制，并针对 Xray-core 新版配置字段变化、详细状态展示和 TUIC/Naïve 运行兼容做补丁收口。
    - update	Xray-core 升级到自编译 `v26.3.27-d2758a0`，使用 Go `1.26.3` 构建，已重新编译并 UPX 压缩 `arm64 / armv7 / armv5` 产物，同步进入 `binaries/xray` 与对应 `fancyss/bin-*` 分发链路。

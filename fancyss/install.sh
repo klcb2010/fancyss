@@ -709,7 +709,7 @@ platform_test(){
 						echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_ipq64"
 						exit_install 1
 						;;
-					"TX-AX6000"|"TUF-AX4200Q"|"RT-AX57_Go"|"GS7"|"ZenWiFi_BT8P"|"GS7_Air")
+					"TX-AX6000"|"TUF-AX4200Q"|"RT-AX57_Go"|"GS7"|"ZenWiFi_BT8P"|"GS7_Air"|"GS-BE7200X")
 						echo_date "建议使用fancyss_mtk_full或者fancyss_mtk_lite！"		
 						echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_mtk"
 						exit_install 1
@@ -773,7 +773,7 @@ platform_test(){
 						echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_ipq64"
 						exit_install 1
 						;;
-					"TX-AX6000"|"TUF-AX4200Q"|"RT-AX57_Go"|"GS7"|"ZenWiFi_BT8P"|"GS7_Air")
+					"TX-AX6000"|"TUF-AX4200Q"|"RT-AX57_Go"|"GS7"|"ZenWiFi_BT8P"|"GS7_Air"|"GS-BE7200X")
 						echo_date "建议使用fancyss_mtk_full或者fancyss_mtk_lite！"		
 						echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_mtk"
 						exit_install 1
@@ -834,7 +834,7 @@ platform_test(){
 						echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_ipq64"
 						exit_install 1
 						;;
-					"TX-AX6000"|"TUF-AX4200Q"|"RT-AX57_Go"|"GS7"|"ZenWiFi_BT8P"|"GS7_Air")
+					"TX-AX6000"|"TUF-AX4200Q"|"RT-AX57_Go"|"GS7"|"ZenWiFi_BT8P"|"GS7_Air"|"GS-BE7200X")
 						echo_date "建议使用fancyss_mtk_full或者fancyss_mtk_lite！"		
 						echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_mtk"
 						exit_install 1
@@ -893,7 +893,7 @@ platform_test(){
 						echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_ipq64"
 						exit_install 1
 						;;
-					"TX-AX6000"|"TUF-AX4200Q"|"RT-AX57_Go"|"GS7"|"ZenWiFi_BT8P"|"GS7_Air")
+					"TX-AX6000"|"TUF-AX4200Q"|"RT-AX57_Go"|"GS7"|"ZenWiFi_BT8P"|"GS7_Air"|"GS-BE7200X")
 						echo_date "建议使用fancyss_mtk_full或者fancyss_mtk_lite！"		
 						echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_mtk"
 						exit_install 1
@@ -926,7 +926,7 @@ platform_test(){
 						echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_ipq64"
 						exit_install 1
 						;;
-					"TX-AX6000"|"TUF-AX4200Q"|"RT-AX57_Go"|"GS7"|"ZenWiFi_BT8P"|"GS7_Air")
+					"TX-AX6000"|"TUF-AX4200Q"|"RT-AX57_Go"|"GS7"|"ZenWiFi_BT8P"|"GS7_Air"|"GS-BE7200X")
 						echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，安装fancyss_${PKG_ARCH}_${PKG_TYPE}！"
 						;;
 					*)
@@ -983,7 +983,7 @@ platform_test(){
 						echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_ipq64"
 						exit_install 1
 						;;
-					"TX-AX6000"|"TUF-AX4200Q"|"RT-AX57_Go"|"GS7"|"ZenWiFi_BT8P"|"GS7_Air")
+					"TX-AX6000"|"TUF-AX4200Q"|"RT-AX57_Go"|"GS7"|"ZenWiFi_BT8P"|"GS7_Air"|"GS-BE7200X")
 						echo_date "建议使用fancyss_mtk_full或者fancyss_mtk_lite！"		
 						echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_mtk"
 						exit_install 1
@@ -1042,7 +1042,7 @@ platform_test(){
 					"TUF_6500")
 						echo_date "内核：${KEL_VERS}，架构：${ROT_ARCH}，安装fancyss_${PKG_ARCH}_${PKG_TYPE}！"
 						;;
-					"TX-AX6000"|"TUF-AX4200Q"|"RT-AX57_Go"|"GS7"|"ZenWiFi_BT8P"|"GS7_Air")
+					"TX-AX6000"|"TUF-AX4200Q"|"RT-AX57_Go"|"GS7"|"ZenWiFi_BT8P"|"GS7_Air"|"GS-BE7200X")
 						echo_date "建议使用fancyss_mtk_full或者fancyss_mtk_lite！"		
 						echo_date "下载地址：https://github.com/hq450/fancyss_history_package/tree/master/fancyss_mtk"
 						exit_install 1
@@ -1917,6 +1917,114 @@ install_now(){
 	else
 		dbus set ss_basic_score=0
 		ss_basic_score=0
+	fi
+
+	local MIGRATED_SUB_PROFILES=""
+	if subprof_migrate_legacy_profiles_if_needed >/tmp/sub_profile_migrate.count 2>/dev/null; then
+		MIGRATED_SUB_PROFILES="$(cat /tmp/sub_profile_migrate.count 2>/dev/null)"
+		subprof_rebuild_cron_jobs >/dev/null 2>&1 || true
+		rm -f /tmp/sub_profile_migrate.count >/dev/null 2>&1
+	fi
+
+	# 节点存储自动迁移：升级到支持 schema 2 的版本后，直接切换到新结构。
+	export PATH=/koolshare/bin:${PATH}
+	if [ -x "/koolshare/bin/node-tool" ];then
+		FSS_NODE_TOOL_PICKED="/koolshare/bin/node-tool"
+		FSS_NODE_TOOL_TRUST_PICKED=1
+		export FSS_NODE_TOOL_PICKED FSS_NODE_TOOL_TRUST_PICKED
+	elif [ -x "${DIR}/bin/node-tool" ];then
+		FSS_NODE_TOOL_PICKED="${DIR}/bin/node-tool"
+		FSS_NODE_TOOL_TRUST_PICKED=1
+		export FSS_NODE_TOOL_PICKED FSS_NODE_TOOL_TRUST_PICKED
+	else
+		unset FSS_NODE_TOOL_PICKED
+		unset FSS_NODE_TOOL_TRUST_PICKED
+	fi
+	if [ -n "${FSS_NODE_TOOL_PICKED:-}" ];then
+		echo_date "节点数据升级将优先使用 node-tool：${FSS_NODE_TOOL_PICKED}"
+		local NODE_TOOL_VERSION_OUTPUT=""
+		local NODE_TOOL_MIN_VERSION="0.1.8"
+		NODE_TOOL_VERSION_OUTPUT="$("${FSS_NODE_TOOL_PICKED}" version 2>&1)"
+		local NODE_TOOL_VERSION_RC="$?"
+		if [ "${NODE_TOOL_VERSION_RC}" != "0" ];then
+			NODE_TOOL_VERSION_OUTPUT="$(env -i PATH="/koolshare/bin:/usr/sbin:/usr/bin:/sbin:/bin" "${FSS_NODE_TOOL_PICKED}" version 2>&1)"
+			NODE_TOOL_VERSION_RC="$?"
+			if [ "${NODE_TOOL_VERSION_RC}" = "0" ];then
+				FSS_NODE_TOOL_CLEAN_ENV=1
+				export FSS_NODE_TOOL_CLEAN_ENV
+				echo_date "node-tool 版本：${NODE_TOOL_VERSION_OUTPUT}（安装环境较大，迁移时使用干净环境执行）"
+			else
+				echo_date "node-tool 版本探测失败（退出码 ${NODE_TOOL_VERSION_RC}），后续将自动回退 shell 迁移流程。"
+				if [ -n "${NODE_TOOL_VERSION_OUTPUT}" ];then
+					echo_date "node-tool 版本探测输出：${NODE_TOOL_VERSION_OUTPUT}"
+				fi
+				unset FSS_NODE_TOOL_PICKED
+				unset FSS_NODE_TOOL_TRUST_PICKED
+				unset FSS_NODE_TOOL_CLEAN_ENV
+			fi
+		else
+			echo_date "node-tool 版本：${NODE_TOOL_VERSION_OUTPUT}"
+		fi
+		if [ -n "${FSS_NODE_TOOL_PICKED:-}" ] && ! version_ge "${NODE_TOOL_VERSION_OUTPUT}" "${NODE_TOOL_MIN_VERSION}";then
+			echo_date "node-tool 版本低于 ${NODE_TOOL_MIN_VERSION}，旧版 schema1 迁移可能丢失默认字段，回退 shell 迁移流程。"
+			unset FSS_NODE_TOOL_PICKED
+			unset FSS_NODE_TOOL_TRUST_PICKED
+			unset FSS_NODE_TOOL_CLEAN_ENV
+		fi
+	fi
+	local STORAGE_SCHEMA_BEFORE="$(fss_detect_storage_schema 2>/dev/null)"
+	fss_auto_migrate_if_needed 1 report_install_migration_progress
+	case "$?" in
+	0)
+		if [ "$(dbus get fss_data_schema)" = "2" ];then
+			echo_date "节点数据已经升级到 schema 2 存储。"
+		fi
+		;;
+	2)
+		if [ "$(fss_detect_storage_schema 2>/dev/null)" != "2" ];then
+			fss_mark_native_schema2_storage >/dev/null 2>&1 || true
+		fi
+		;;
+	*)
+		echo_date "节点数据升级到 schema 2 失败，保留旧版节点结构。"
+		;;
+	esac
+
+	if [ "$(fss_detect_storage_schema 2>/dev/null)" = "2" ];then
+		if [ "${STORAGE_SCHEMA_BEFORE}" != "2" ];then
+			if [ "$(dbus get fss_data_secret_mode 2>/dev/null)" = "raw" ];then
+				echo_date "schema1 -> schema2 升级已使用 raw 密码字段，跳过密码字段二次校正。"
+			else
+				normalize_schema2_secret_fields_after_install "schema1 -> schema2 升级"
+			fi
+		elif [ "${FORCE_SCHEMA2_SECRET_NORMALIZE}" = "1" ]; then
+			normalize_schema2_secret_fields_after_install "旧版 schema2 数据纠偏" "1"
+		fi
+		normalize_schema2_anytls_pass_after_install "旧版 AnyTLS 数据纠偏"
+	fi
+
+	if [ -n "${MIGRATED_SUB_PROFILES}" ]; then
+		echo_date "旧版订阅地址已迁移为 ${MIGRATED_SUB_PROFILES} 个独立订阅配置。"
+	fi
+
+	if [ "$(fss_detect_storage_schema 2>/dev/null)" = "2" ] && [ "$(dbus get fss_data_source_meta_repaired 2>/dev/null)" != "1" ];then
+		echo_date "检查旧版订阅节点来源归属..."
+		local repaired_sub_nodes="$(fss_repair_legacy_subscribe_source_meta 2>/dev/null)"
+		if [ "${repaired_sub_nodes:-0}" -gt 0 ] 2>/dev/null;then
+			echo_date "已修复 ${repaired_sub_nodes} 个旧版订阅节点的来源归属。"
+		fi
+		dbus set fss_data_source_meta_repaired=1
+	fi
+
+	if [ "${FORCE_LEGACY_CACHE_RESET}" = "1" ];then
+		echo_date "检测到旧版 fancyss（${OLD_VER} < 3.6.0），强制清理节点配置缓存和 webtest 缓存..."
+		invalidate_runtime_caches_after_install
+		echo_date "重建节点运行缓存..."
+		fss_refresh_node_json_cache >/dev/null 2>&1 || true
+	else
+		echo_date "刷新节点运行缓存..."
+		invalidate_runtime_caches_after_install
+		fss_refresh_node_json_cache >/dev/null 2>&1 || true
 	fi
 
 	local MIGRATED_SUB_PROFILES=""
