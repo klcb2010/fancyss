@@ -1,0 +1,62 @@
+name: FancySS Mod Build test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Force sync and clean workspace
+        run: |
+          git fetch origin ${{ github.ref_name }}
+          git reset --hard FETCH_HEAD
+          git clean -fdx
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Dynamic Inject cron_task
+        run: |
+          TARGET="fancyss/ss/ssconfig.sh"
+          # 1. 动态清理：删除旧标签之间的所有内容（解决重复问题）
+          sed -i '/# CUSTOM_INJECT_START/,/# CUSTOM_INJECT_END/d' "$TARGET"
+          
+          # 2. 注入新内容（解决刻舟求剑问题，始终基于当前最新文件操作）
+          {
+            echo ""
+            echo "# CUSTOM_INJECT_START"
+            cat cron_task.txt
+            echo "# CUSTOM_INJECT_END"
+          } >> "$TARGET"
+          
+          echo "=== 注入结果确认 ==="
+          tail -n 15 "$TARGET"
+
+      - name: Build
+        run: |
+          chmod +x build-custom.sh
+          ./build-custom.sh
+
+      - name: Generate release info
+        id: release_info
+        run: |
+          UPSTREAM_VERSION=$(cat fancyss/ss/version | sed -n 1p | tr -d '\n\r' | sed 's/[^0-9.]//g')
+          echo "tag_name=v${UPSTREAM_VERSION}" >> $GITHUB_OUTPUT
+          echo "release_name=FancySS v${UPSTREAM_VERSION}" >> $GITHUB_OUTPUT
+          echo "body=测试构建时间：$(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M:%S')" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2.6.1
+        with:
+          tag_name: ${{ steps.release_info.outputs.tag_name }}
+          name: ${{ steps.release_info.outputs.release_name }}
+          body: ${{ steps.release_info.outputs.body }}
+          files: packages/*.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
