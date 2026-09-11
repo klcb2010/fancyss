@@ -1,0 +1,303 @@
+name: FancySS Mod Build by klcb2010
+
+on:
+  schedule:
+    - cron: "10 15 * * *"
+  workflow_dispatch:
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      # =========================
+      # 1. Checkout
+      # =========================
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+
+      # =========================
+      # 2. git config
+      # =========================
+      - name: Configure git user
+        run: |
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+
+      # =========================
+      # 3. upstream
+      # =========================
+      - name: Add upstream and fetch
+        run: |
+          git remote add upstream https://github.com/hq450/fancyss.git || true
+          git fetch upstream 3.0 --no-tags
+
+      # =========================
+      # 4. version compare
+      # =========================
+      - name: Compare version
+        id: compare_version
+        run: |
+          set -e
+
+          curl -sL https://raw.githubusercontent.com/hq450/fancyss/3.0/packages/version.json.js \
+            -o /tmp/up_version.json.js
+
+          LOCAL_VERSION=$(jq -r '.version' packages/version.json.js)
+          UPSTREAM_VERSION=$(jq -r '.version' /tmp/up_version.json.js)
+
+          echo "local=$LOCAL_VERSION"
+          echo "upstream=$UPSTREAM_VERSION"
+
+          if [ "$(printf '%s\n%s' "$LOCAL_VERSION" "$UPSTREAM_VERSION" | sort -V | head -n1)" = "$LOCAL_VERSION" ] \
+            && [ "$LOCAL_VERSION" != "$UPSTREAM_VERSION" ]; then
+            echo "needs_sync=true" >> $GITHUB_OUTPUT
+          else
+            echo "needs_sync=false" >> $GITHUB_OUTPUT
+          fi
+
+      # =========================
+      # 5. skip
+      # =========================
+      - name: Skip if no update
+        if: steps.compare_version.outputs.needs_sync == 'false'
+        run: |
+          echo "已是最新版本"
+          exit 0
+
+      # =========================
+      # 6. sync upstream
+      # =========================
+      - name: Sync upstream repository
+        if: steps.compare_version.outputs.needs_sync == 'true'
+        run: |
+          git checkout ${{ github.ref_name }}
+
+          # 强制干净环境
+          git reset --hard
+          git clean -fdx
+
+          OLD_HEAD=$(git rev-parse HEAD)
+
+          if ! git merge upstream/3.0 -X theirs --no-edit --allow-unrelated-histories; then
+
+            echo "检测到 merge 冲突，自动处理..."
+
+            # 先全部使用上游版本（解决 smartdns/dnsclient 等二进制冲突）
+            git checkout --theirs . || true
+
+            # 再恢复自己的自定义文件
+            git checkout --ours \
+              .github/workflows \
+              cron_task.txt \
+              build-custom.sh \
+              README.md \
+              fancyss/ss/ssconfig.sh \
+              white_list.txt \
+              black_list.txt \
+              ss_update.sh \
+              clear.py || true
+
+            # add 全部
+            git add -A
+
+            # 提交冲突解决
+            git commit -m "auto resolve merge conflicts"
+
+          fi
+
+          # merge 后恢复自定义文件（防止被上游覆盖）
+          git restore --source=$OLD_HEAD \
+            .github/workflows/ \
+            cron_task.txt \
+            README.md \
+            fancyss/ss/ssconfig.sh \
+            build-custom.sh \
+            white_list.txt \
+            black_list.txt \
+            ss_update.sh \
+            clear.py || true
+
+      # =========================
+      # 7. sync version files
+      # =========================
+      - name: Sync version files
+        if: steps.compare_version.outputs.needs_sync == 'true'
+        run: |
+          set -e
+
+          # packages version
+          curl -sL https://raw.githubusercontent.com/hq450/fancyss/3.0/packages/version.json.js \
+            -o packages/version.json.js
+
+          # build 真正读取的 runtime version
+          curl -sL https://raw.githubusercontent.com/hq450/fancyss/3.0/fancyss/ss/version \
+            -o fancyss/ss/version
+
+          echo "===== packages/version.json.js ====="
+          cat packages/version.json.js
+
+          echo "===== fancyss/ss/version ====="
+          cat fancyss/ss/version
+
+      # =========================
+      # 8. install jq
+      # =========================
+      - name: Install jq
+        if: steps.compare_version.outputs.needs_sync == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      # =========================
+      # 9. patch rules
+      # =========================
+      - name: Patch ss_rule_update.sh
+        if: steps.compare_version.outputs.needs_sync == 'true'
+        run: |
+          sed -i '9s|.*|URL_MAIN="https://raw.githubusercontent.com/qxzg/Actions/3.0/fancyss_rules"|' \
+            fancyss/scripts/ss_rule_update.sh
+
+      # =========================
+      # 10. inject cron safely
+      # =========================
+      - name: Inject cron_task safely
+        if: steps.compare_version.outputs.needs_sync == 'true'
+        run: |
+          TARGET="fancyss/ss/ssconfig.sh"
+
+          # 删除旧注入块（防止重复注入）
+          sed -i '/# CUSTOM_INJECT_START/,/# CUSTOM_INJECT_END/d' "$TARGET"
+
+          # 重新注入
+          {
+            echo ""
+            echo "# CUSTOM_INJECT_START"
+            cat cron_task.txt
+            echo "# CUSTOM_INJECT_END"
+          } >> "$TARGET"
+
+      # =========================
+      # 11. commit & push
+      # =========================
+      - name: Commit & Push
+        if: steps.compare_version.outputs.needs_sync == 'true'
+        run: |
+          git add -A
+
+          if ! git diff --cached --quiet; then
+            git commit -m "sync upstream + auto patch"
+            git push origin HEAD:${{ github.ref_name }} --force-with-lease
+            echo "已提交并推送"
+          else
+            echo "没有变更，无需提交"
+          fi
+    # 11.5 自动刷新故障转移后节点列表
+      - name: Auto refresh after failover
+        run: |
+          TARGET=$(find . -name "Module_shadowsocks.asp" | head -n1)
+
+          echo "Found: $TARGET"
+
+          python3 <<PY
+          import re
+
+          path = "$TARGET"
+
+          with open(path, "r", encoding="utf-8") as f:
+              data = f.read()
+
+          # 原代码块（保持不变，用于定位替换）
+          old = '''function handle_ss_status_heartbeat(showRefreshPrompt) {
+          	var dbus_post = {};
+          	dbus_post["ss_heart_beat"] = "0";
+          	push_data("dummy_script.sh", "", dbus_post, "2");
+          	if (showRefreshPrompt) {
+          		layer.confirm('<li>科学上网插件页面需要刷新！</li><br /><li>由于故障转移功能已经在后台切换了节点，为了保证页面显示正确配置！需要刷新此页面！</li><br /><li>确定现在刷新吗？</li>', {
+          			time: 3e4,
+          			shade: 0.8
+          		}, function(index) {
+          			layer.close(index);
+          			refreshpage();
+          		}, function(index) {
+          			layer.close(index);
+          			return false;
+          		});
+          	}
+          }'''
+
+          # 新代码块：引入 window.is_reloading 变量作为锁
+          # 只有在没有进行刷新动作时 (!window.is_reloading) 才会触发刷新
+          new = '''function handle_ss_status_heartbeat(showRefreshPrompt) {
+          	var dbus_post = {};
+          	dbus_post["ss_heart_beat"] = "0";
+          	push_data("dummy_script.sh", "", dbus_post, "2");
+          	if (showRefreshPrompt && !window.is_reloading) {
+          		window.is_reloading = true;
+          		setTimeout(function(){
+          			refreshpage();
+          		}, 500);
+          	}
+          }'''
+
+          if old in data:
+              data = data.replace(old, new)
+              with open(path, "w", encoding="utf-8") as f:
+                  f.write(data)
+              print("Patch success")
+          else:
+              print("Target function not found")
+              exit(1)
+          PY
+      # =========================
+      # 12. build
+      # =========================
+      - name: Build packages
+        if: steps.compare_version.outputs.needs_sync == 'true'
+        run: |
+          chmod +x build-custom.sh
+          ./build-custom.sh
+
+      # =========================
+      # 13. release info
+      # =========================
+      - name: Generate release info
+        if: steps.compare_version.outputs.needs_sync == 'true'
+        id: release_info
+        run: |
+          VERSION=$(jq -r '.version' packages/version.json.js)
+
+          if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
+            echo "version error"
+            exit 1
+          fi
+
+          TAG_NAME="v${VERSION}"
+          BUILD_TIME=$(TZ='Asia/Shanghai' date +"%Y-%m-%d %H:%M:%S")
+
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "release_name=FancySS v${VERSION}" >> $GITHUB_OUTPUT
+          echo "body=构建时间：${BUILD_TIME}" >> $GITHUB_OUTPUT
+
+      # =========================
+      # 14. release
+      # =========================
+      - name: Create Release
+        if: steps.compare_version.outputs.needs_sync == 'true'
+        uses: softprops/action-gh-release@v2.6.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        with:
+          tag_name: ${{ steps.release_info.outputs.tag_name }}
+          name: ${{ steps.release_info.outputs.release_name }}
+          body: ${{ steps.release_info.outputs.body }}
+          files: packages/*.tar.gz
+          overwrite_files: true
+          make_latest: true
+          generate_release_notes: false

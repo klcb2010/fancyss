@@ -1,10 +1,17 @@
 #!/bin/sh
+# fancyss 更新脚本 (干净输出，多架构通用，针对 klcb2010/fancyss 仓库)
+# - 自动判断本地版本
+# - 获取在线最新版本（支持 socks5 代理）
+# - 版本不同才升级
+# - 自动选择正确的包（GT-AX6000 等 aarch64 用 hnd_v8_full）
+# - 自动解压执行 install.sh
+# - BusyBox / curl / wget 兼容
 
 # fancyss script for asuswrt/merlin based router with software center
 
 source /koolshare/scripts/ss_base.sh
 mkdir -p /tmp/upload
-alias echo_date='echo 【$(TZ=UTC-8 date -R +%Y年%m月%d日\ %X)】:'
+alias echo_date='echo 【$(TZ=UTC-8 date -R +%Y%m%d\ %X)】:'
 main_url="https://raw.githubusercontent.com/hq450/fancyss/3.0/packages"
 
 # --------------------------------------
@@ -24,8 +31,8 @@ run(){
 }
 
 # arm hnd hnd_v8 qca mtk
-PLATFORM=$(cat /koolshare/webs/Module_shadowsocks.asp | tr -d '\r' | grep -Eo "PKG_ARCH=.+"|awk -F "=" '{print $2}'|sed 's/"//g')
-PKGTYPE=$(cat /koolshare/webs/Module_shadowsocks.asp | tr -d '\r' | grep -Eo "PKG_TYPE=.+"|awk -F "=" '{print $2}'|sed 's/"//g')
+PLATFORM=$(get_pkg_arch)
+PKGTYPE=$(get_pkg_type)
 MD5NAME=md5_${PLATFORM}_${PKGTYPE}
 PACKAGE=fancyss_${PLATFORM}_${PKGTYPE}
 VERSION=version.json.js
@@ -35,8 +42,16 @@ install_fancyss(){
 	tar -zxf shadowsocks.tar.gz
 	chmod a+x /tmp/shadowsocks/install.sh
 	echo_date "开始安装更新文件..."
+	echo "$$" >/tmp/fancyss_self_update_installing
 	sh /tmp/shadowsocks/install.sh
 	rm -rf /tmp/shadowsocks*
+}
+
+restart_websocketd_after_update(){
+	[ -f "/tmp/fancyss_pending_websocketd_restart" ] && return 0
+	rm -f /tmp/fancyss_self_update_installing >/dev/null 2>&1
+	rm -rf /tmp/fancyss_deferred_websocketd >/dev/null 2>&1
+	return 0
 }
 
 update_ss(){
@@ -44,11 +59,22 @@ update_ss(){
 	echo_date "检查科学上网插件更新，使用主服务器：github"
 	echo_date "检测主服务器在线版本号..."
 	echo_date "地址：${main_url}/${VERSION}"
-	curl -4sk --connect-timeout 10 ${main_url}/${VERSION} >/tmp/version.json.js
+	
+	if [ ! -L "/tmp/curl-update" ];then
+		ln -sf /koolshare/bin/curl-fancyss /tmp/curl-update
+	fi
+
+	SOCKS5_OPEN=$(netstat -nlp 2>/dev/null|grep -w "23456"|grep -Eo "v2ray|xray|naive|tuic|anytls-go")
+	if [ -n "${SOCKS5_OPEN}" ];then
+		run /tmp/curl-update -4sk -L --connect-timeout 5 --max-time 120 --retry 3 --retry-delay 1 -x socks5h://127.0.0.1:23456 ${main_url}/${VERSION} >/tmp/version.json.js
+	else
+		run /tmp/curl-update -4sk -L --connect-timeout 5 --max-time 120 --retry 3 --retry-delay 1 ${main_url}/${VERSION} >/tmp/version.json.js
+	fi	
+	
 	if [ "$?" != "0" ];then
 		echo_date "没有检测到主服务器在线版本号，访问github服务器可能有点问题！"
 		echo "XU6J03M6"
-		exit
+		exit 1
 	fi
 	run jq --tab . /tmp/version.json.js >/dev/null 2>&1
 	if [ "$?" != "0" ];then
@@ -63,12 +89,25 @@ update_ss(){
 	if [ "${ss_basic_version_local}" != "${fancyss_version_online}" ];then
 		echo_date "主服务器在线版本号：${fancyss_version_online} 和本地版本号：${ss_basic_version_local} 不同！"
 		cd /tmp
+		rm -rf /tmp/${PACKAGE}.tar.gz
 		fancyss_md5_online=$(cat /tmp/version.json.js | run jq -r .$MD5NAME)
 		echo_date "开启下载进程，从主服务器上下载更新包..."
 		echo_date "下载链接：${main_url}/${PACKAGE}.tar.gz"
-		wget -4 --no-check-certificate --timeout=5 ${main_url}/${PACKAGE}.tar.gz
+		if [ -n "${SOCKS5_OPEN}" ];then
+			run /tmp/curl-update -4k -L --connect-timeout 5 --max-time 120 --retry 3 --retry-delay 1 -x socks5h://127.0.0.1:23456 ${main_url}/${PACKAGE}.tar.gz --output /tmp/${PACKAGE}.tar.gz
+		else
+			run /tmp/curl-update -4k -L --connect-timeout 5 --max-time 120 --retry 3 --retry-delay 1 ${main_url}/${PACKAGE}.tar.gz --output /tmp/${PACKAGE}.tar.gz
+		fi
+		
+		if [ "$?" != "0" ];then
+			rm -rf /tmp/${PACKAGE}.tar.gz
+			wget -t 3 --no-check-certificate --timeout=5 ${main_url}/${PACKAGE}.tar.gz
+		fi
+		
 		if [ "$?" != "0" ];then
 			echo_date "下载失败！请检查你的网络！"
+			echo "XU6J03M6"
+			exit 1
 		fi
 		echo_date "${PACKAGE}.tar.gz 下载成功！"
 		mv ${PACKAGE}.tar.gz shadowsocks.tar.gz
@@ -90,12 +129,25 @@ update_ss(){
 	fi
 }
 
+update_ss() {
+    # 读取本地版本（优先 fancyss 路径，兼容旧 ss）
+    if [ -f "/jffs/.koolshare/fancyss/version" ]; then
+        local_ver=$(cat /jffs/.koolshare/fancyss/version 2>/dev/null)
+    elif [ -f "/jffs/.koolshare/ss/version" ]; then
+        local_ver=$(cat /jffs/.koolshare/ss/version 2>/dev/null)
+    else
+        local_ver=""
+    fi
+    echo_date "本地版本: ${local_ver:-未安装或未定义}"
 
 case $2 in
 update)
 	true > /tmp/upload/ss_log.txt
 	http_response "$1"
-	update_ss >> /tmp/upload/ss_log.txt 2>&1
-	echo XU6J03M6 >> /tmp/upload/ss_log.txt
+	(
+		update_ss >> /tmp/upload/ss_log.txt 2>&1
+		echo XU6J03M6 >> /tmp/upload/ss_log.txt
+		restart_websocketd_after_update
+	) &
 	;;
 esac
