@@ -1,7 +1,7 @@
 #!/bin/sh
 
 source /koolshare/scripts/base.sh
-alias echo_date='echo 【$(TZ=UTC-8 date -R +%Y年%m月%d日\ %X)】:'
+alias echo_date='echo 【$(TZ=UTC-8 date -R +%Y%m%d\ %X)】:'
 rm -rf /tmp/upload/dns*.txt
 LOCK_FILE=/var/lock/koolss_dns.lock
 
@@ -58,10 +58,9 @@ sigterm(){
 	exit 0
 }
 
-TARGET_SET=$(ipset -L chnroute)
-ENTTRIES=$(ipset -L chnroute| grep "Number of entries"|awk '{print $NF}')
+ENTRIES=$(ipset -L chnroute 2>/dev/null | awk '/Number of entries/{print $NF; exit}')
 
-if [ -z "${TARGET_SET}" -o "${ENTTRIES}" == "0" ];then
+if [ -z "${ENTRIES}" ] || [ "${ENTRIES}" = "0" ];then
 	echo "创建ipset chnroute"
 	ipset -! create chnroute nethash && ipset flush chnroute
 	sed -e "s/^/add chnroute &/g" /koolshare/ss/rules/chnroute.txt | awk '{print $0} END{print "COMMIT"}' | ipset -R
@@ -81,9 +80,7 @@ _valid_ip() {
 test(){
 	START=$(date +%s)
 	for line in ${LISTS_FILE}; do
-		IP=$(dnsclient -p 53 -t 3 -i 1 @127.0.0.1 "${line}" 2>/dev/null|grep -E "^IP"|head -n1|awk '{print $2}')
-		#IP=$(nslookup "$line" 127.0.0.1:53 | sed '1,4d' | awk '{print $3}' | grep -v ":" | awk 'NR==1{print}' 2>/dev/null)
-		#IP=$(nslookup www.baidu.com 114.114.114.114|grep Address|grep -v "#"|sed 's/Address: //g'|head -n1)
+		IP=$(dnsclient -46 -p 53 -t 3 -i 1 @127.0.0.1 "${line}" 2>/dev/null|head -n1)
 		IP=$(_valid_ip ${IP})
 		
 		let count++
@@ -138,12 +135,14 @@ resolv_test(){
 		LISTS_FILE=$(cat /koolshare/ss/rules/google_china.txt)
 		;;
 	4|gfw)
+		[ ! -f "/tmp/gfwlist.txt" ] && gzip -d -c /koolshare/ss/rules/gfwlist.gz >/tmp/gfwlist.txt
 		RESULT_FILE=/tmp/upload/dns_gfwlist.txt
-		LISTS_FILE=$(cat /koolshare/ss/rules/gfwlist.conf | sed '/^#/d' | sed "s/server=\/\.//g" | sed "s/server=\///g" | sed -r "s/\/\S{1,30}//g" | sed -r "s/\/\S{1,30}//g" | sed '/^ipset=/d' | shuf -n 100)
+		LISTS_FILE=$(cat /tmp/gfwlist.txt | sed '/^#/d' | sed "s/server=\/\.//g" | sed "s/server=\///g" | sed -r "s/\/\S{1,30}//g" | sed -r "s/\/\S{1,30}//g" | sed '/^ipset=/d' | shuf -n 100)
 		;;
 	5|china)
+		[ ! -f "/tmp/chnlist.txt" ] && gzip -d -c /koolshare/ss/rules/chnlist.gz >/tmp/chnlist.txt
 		RESULT_FILE=/tmp/upload/dns_cdn_china.txt
-		LISTS_FILE=$(cat /koolshare/ss/rules/cdn.txt | shuf -n 100)
+		LISTS_FILE=$(cat /tmp/chnlist.txt | shuf -n 500)
 		;;
 	esac
 	true >${RESULT_FILE}
@@ -274,20 +273,31 @@ dig_test(){
 	# before test, we need to flush dnsmasq cache
 	killall -1 dnsmasq
 	local domain=$(dbus get ss_basic_dig_opt)
-	echo "运行命令：dig -4 ${domain}，请稍后..."
-	local ret=$(${DIG_BIN} -4 ${domain} 2>/dev/null)
+	if [ "${domain}" = "99" ];then
+		domain=$(dbus get ss_basic_dig_opt_usr | tr -d '\r' | awk '{print $1}')
+	fi
+	if [ -z "${domain}" ];then
+		echo "错误：请选择要测试的域名，或填写自定义域名！"
+		return 1
+	fi
+	if ! echo "${domain}" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9._-]*[A-Za-z0-9.]$';then
+		echo "错误：自定义域名格式不正确：${domain}"
+		return 1
+	fi
+	echo "运行命令：dig ${domain}，请稍后..."
+	local ret=$("${DIG_BIN}" "${domain}" 2>/dev/null)
 	echo "--------------------------------------------------------------------------------------------------"
 	echo "${ret}"
 	echo "--------------------------------------------------------------------------------------------------"
 	local IPS=$(echo "${ret}" | grep -Ew "A" | grep -Eo "([0-9]{1,3}[\.]){3}[0-9]{1,3}")
 	if [ -n "${IPS}" ];then
-		local ECS_TAG=$(echo "${ret}" | grep -E "CLIENT-SUBNET" | grep -Eo "([0-9]{1,3}[\.]){3}[0-9]{1,3}")
-		local RESULT_NU=$(echo "${IPS}"|wc -l)
-		if [ -n "${ECS_TAG}" ];then
-			echo "ECS支持：yes ✔️"
-		else
-			echo "ECS支持：no ❌"
-		fi
+		# local ECS_TAG=$(echo "${ret}" | grep -E "CLIENT-SUBNET" | grep -Eo "([0-9]{1,3}[\.]){3}[0-9]{1,3}")
+		# local RESULT_NU=$(echo "${IPS}"|wc -l)
+		# if [ -n "${ECS_TAG}" ];then
+		# 	echo "ECS支持：yes ✔️"
+		# else
+		# 	echo "ECS支持：no ❌"
+		# fi
 		echo "解析小结：共获得${RESULT_NU}条ipv4解析结果"
 		echo "──────────────────────────────"
 		echo "IP地址		IP属地"
