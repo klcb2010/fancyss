@@ -2,23 +2,107 @@
 
 # fancyss script for asuswrt/merlin based router with software center
 
-source /koolshare/scripts/base.sh
-alias echo_date='echo 【$(TZ=UTC-8 date -R +%Y年%m月%d日\ %X)】:'
+source /koolshare/scripts/ss_base.sh
+source /koolshare/scripts/ss_node_common.sh
+[ -f /koolshare/scripts/ss_subscribe_profile_lib.sh ] && source /koolshare/scripts/ss_subscribe_profile_lib.sh
+unalias echo_date >/dev/null 2>&1
+echo_date(){
+	echo "【$(TZ=UTC-8 date -R "+%Y%m%d %X")】: $*"
+}
 LOG_FILE=/tmp/upload/ss_log.txt
 
-backup_conf(){
-	rm -rf /tmp/files
-	rm -rf /koolshare/webs/files
+prepare_download_dir(){
 	mkdir -p /tmp/files
-	ln -sf /tmp/files /koolshare/webs/files
-	dbus list ss | grep -v "ss_basic_enable" | grep -v "ssid_" | sed 's/=/=\"/' | sed 's/$/\"/g'|sed 's/^/dbus set /' | sed '1 isource /koolshare/scripts/base.sh' |sed '1 i#!/bin/sh' > /koolshare/webs/files/ssconf_backup.sh
+	ln -snf /tmp/files /koolshare/webs/files
+}
+
+with_download_job_lock(){
+	local lock_name="$1"
+	shift
+	local lock_dir="/tmp/${lock_name}.lock"
+	local pid_file="${lock_dir}/pid"
+	local owner_pid=""
+
+	while ! mkdir "${lock_dir}" 2>/dev/null
+	do
+		owner_pid=""
+		[ -f "${pid_file}" ] && owner_pid=$(cat "${pid_file}" 2>/dev/null)
+		if [ -n "${owner_pid}" ] && ! kill -0 "${owner_pid}" 2>/dev/null; then
+			rm -rf "${lock_dir}"
+			continue
+		fi
+		echo_date "检测到相同导出任务已在进行，复用当前导出任务..." >&2
+		return 2
+	done
+
+	echo "$$" > "${pid_file}"
+	[ -n "${LOG_FILE}" ] && true > "${LOG_FILE}"
+	"$@"
+	local ret=$?
+	rm -rf "${lock_dir}"
+	return "${ret}"
+}
+
+report_export_progress(){
+	echo_date "$1" >&2
+}
+
+generate_download_file_atomically(){
+	local target_file="$1"
+	local tmp_file="$2"
+	shift 2
+
+	[ -n "${target_file}" ] || return 1
+	[ -n "${tmp_file}" ] || return 1
+
+	rm -f "${target_file}" "${tmp_file}"
+	if "$@" "${tmp_file}"; then
+		mv -f "${tmp_file}" "${target_file}"
+	else
+		local ret=$?
+		rm -f "${tmp_file}" "${target_file}"
+		return "${ret}"
+	fi
+}
+
+generate_legacy_backup_file(){
+	local output_file="$1"
+	echo_date "开始生成旧版兼容配置..." >&2
+	fss_export_legacy_backup "${output_file}" report_export_progress
+	echo_date "旧版兼容配置生成完成，准备下载..." >&2
+}
+
+generate_native_backup_file(){
+	local output_file="$1"
+	echo_date "开始生成新版本JSON配置..." >&2
+	echo_date "新版本JSON配置会完整导出普通配置、ACL配置和全部节点；节点较多时可能耗时较长，请耐心等待。" >&2
+	if ! fss_export_native_backup "${output_file}" report_export_progress;then
+		echo_date "新版本JSON配置生成失败，请检查配置数据后重试。" >&2
+		return 1
+	fi
+	echo_date "新版本JSON配置生成完成，准备下载..." >&2
+}
+
+backup_conf(){
+	prepare_download_dir
+	with_download_job_lock "fancyss_export_legacy" \
+		generate_download_file_atomically \
+			"/tmp/files/ssconf_backup.sh" \
+			"/tmp/files/.ssconf_backup.sh.tmp.$$" \
+			generate_legacy_backup_file
+}
+
+backup_conf_json(){
+	prepare_download_dir
+	with_download_job_lock "fancyss_export_json" \
+		generate_download_file_atomically \
+			"/tmp/files/ssconf_backup_v2.json" \
+			"/tmp/files/.ssconf_backup_v2.json.tmp.$$" \
+			generate_native_backup_file
 }
 
 backup_tar(){
-	rm -rf /tmp/files
-	rm -rf /koolshare/webs/files
-	mkdir -p /tmp/files
-	ln -sf /tmp/files /koolshare/webs/files
+	prepare_download_dir
 	echo_date "开始打包..."
 	cd /tmp
 	mkdir shadowsocks
@@ -27,10 +111,10 @@ backup_tar(){
 	mkdir shadowsocks/webs
 	mkdir shadowsocks/res
 	echo_date "请等待一会儿..."
-	local pkg_name=$(cat /koolshare/webs/Module_shadowsocks.asp | tr -d '\r' | grep -Eo "PKG_NAME=.+"|awk -F "=" '{print $2}'|sed 's/"//g')
-	local pkg_arch=$(cat /koolshare/webs/Module_shadowsocks.asp | tr -d '\r' | grep -Eo "PKG_ARCH=.+"|awk -F "=" '{print $2}'|sed 's/"//g')
-	local pkg_type=$(cat /koolshare/webs/Module_shadowsocks.asp | tr -d '\r' | grep -Eo "PKG_TYPE=.+"|awk -F "=" '{print $2}'|sed 's/"//g')
-	local pkg_exta=$(cat /koolshare/webs/Module_shadowsocks.asp | tr -d '\r' | grep -Eo "PKG_EXTA=.+"|awk -F "=" '{print $2}'|sed 's/"//g')
+	local pkg_name=$(get_pkg_name)
+	local pkg_arch=$(get_pkg_arch)
+	local pkg_type=$(get_pkg_type)
+	local pkg_exta=$(get_pkg_exta)
 	local pkg_vers=$(dbus get ss_basic_version_local)
 	local _pkg_name=${pkg_name}_${pkg_arch}_${pkg_type}${pkg_exta}
 	TARGET_FOLDER=/tmp/shadowsocks
@@ -39,23 +123,36 @@ backup_tar(){
 	cp /koolshare/scripts/ss_* ${TARGET_FOLDER}/scripts/
 	# binary
 	cp /koolshare/bin/isutf8 ${TARGET_FOLDER}/bin/
-	cp /koolshare/bin/ss-local ${TARGET_FOLDER}/bin/
-	cp /koolshare/bin/ss-redir ${TARGET_FOLDER}/bin/
 	cp /koolshare/bin/obfs-local ${TARGET_FOLDER}/bin/
 	cp /koolshare/bin/rss-local ${TARGET_FOLDER}/bin/
 	cp /koolshare/bin/rss-redir ${TARGET_FOLDER}/bin/
-	cp /koolshare/bin/dns2socks ${TARGET_FOLDER}/bin/
+	cp /koolshare/bin/smartdns ${TARGET_FOLDER}/bin/
+	if [ -x "/koolshare/bin/dns_cache_mgr" ];then
+		cp /koolshare/bin/dns_cache_mgr ${TARGET_FOLDER}/bin/
+	fi
 	cp /koolshare/bin/chinadns-ng ${TARGET_FOLDER}/bin/
 	cp /koolshare/bin/sponge ${TARGET_FOLDER}/bin/
 	cp /koolshare/bin/jq ${TARGET_FOLDER}/bin/
 	cp /koolshare/bin/xray ${TARGET_FOLDER}/bin/
+	if [ -x "/koolshare/bin/xapi-tool" ];then
+		cp /koolshare/bin/xapi-tool ${TARGET_FOLDER}/bin/
+	fi
+	if [ -x "/koolshare/bin/sub-tool" ];then
+		cp /koolshare/bin/sub-tool ${TARGET_FOLDER}/bin/
+	fi
+	if [ -x "/koolshare/bin/node-tool" ];then
+		cp /koolshare/bin/node-tool ${TARGET_FOLDER}/bin/
+	fi
+	if [ -x "/koolshare/bin/status-tool" ];then
+		cp /koolshare/bin/status-tool ${TARGET_FOLDER}/bin/
+	fi
+	if [ -x "/koolshare/bin/statusctl" ];then
+		cp /koolshare/bin/statusctl ${TARGET_FOLDER}/bin/
+	fi
 	cp /koolshare/bin/curl-fancyss ${TARGET_FOLDER}/bin/
 	cp /koolshare/bin/dnsclient ${TARGET_FOLDER}/bin/
-	cp /koolshare/bin/dns2tcp ${TARGET_FOLDER}/bin/
-	cp /koolshare/bin/dns-ecs-forcer ${TARGET_FOLDER}/bin/
-	cp /koolshare/bin/ss-tunnel ${TARGET_FOLDER}/bin/
-	if [ -x "/koolshare/bin/uredir" ];then
-		cp /koolshare/bin/uredir ${TARGET_FOLDER}/bin/
+	if [ -f "/koolshare/bin/sslocal" ];then
+		cp /koolshare/bin/sslocal ${TARGET_FOLDER}/bin/
 	fi
 	if [ -x "/koolshare/bin/websocketd" ];then
 		cp /koolshare/bin/websocketd ${TARGET_FOLDER}/bin/
@@ -63,18 +160,14 @@ backup_tar(){
 	if [ "${pkg_type}" != "lite" ];then
 		cp /koolshare/bin/dohclient ${TARGET_FOLDER}/bin/
 		cp /koolshare/bin/dohclient-cache ${TARGET_FOLDER}/bin/
-		cp /koolshare/bin/smartdns ${TARGET_FOLDER}/bin/
-		cp /koolshare/bin/haproxy ${TARGET_FOLDER}/bin/
-		cp /koolshare/bin/kcptun ${TARGET_FOLDER}/bin/
-		cp /koolshare/bin/speeder* ${TARGET_FOLDER}/bin/
-		cp /koolshare/bin/udp2raw ${TARGET_FOLDER}/bin/
-		cp /koolshare/bin/trojan ${TARGET_FOLDER}/bin/
+		#cp /koolshare/bin/smartdns ${TARGET_FOLDER}/bin/
 		cp /koolshare/bin/v2ray ${TARGET_FOLDER}/bin/
-		cp /koolshare/bin/v2ray-plugin ${TARGET_FOLDER}/bin/
-		cp /koolshare/bin/haveged ${TARGET_FOLDER}/bin/
+		[ -f "/koolshare/bin/haveged" ] && cp /koolshare/bin/haveged ${TARGET_FOLDER}/bin/
 		cp /koolshare/bin/ipt2socks ${TARGET_FOLDER}/bin/
 		cp /koolshare/bin/naive ${TARGET_FOLDER}/bin/
 		cp /koolshare/bin/tuic-client ${TARGET_FOLDER}/bin/
+		[ -f "/koolshare/bin/tuic-client" ] && cp /koolshare/bin/tuic-client ${TARGET_FOLDER}/bin/
+		[ -f "/koolshare/bin/anytls-go" ] && cp /koolshare/bin/anytls-go ${TARGET_FOLDER}/bin/
 		cp /koolshare/bin/hysteria2 ${TARGET_FOLDER}/bin/
 	fi
 	cp /koolshare/webs/Module_shadowsocks*.asp ${TARGET_FOLDER}/webs/
@@ -91,6 +184,8 @@ backup_tar(){
 	cp /koolshare/res/fancyss.css ${TARGET_FOLDER}/res/
 	cp -r /koolshare/ss ${TARGET_FOLDER}/
 	rm -rf ${TARGET_FOLDER}/ss/*.json
+	rm -rf ${TARGET_FOLDER}/ss/*.conf
+	rm -rf ${TARGET_FOLDER}/ss/*.yaml
 	# arch
 	echo ${pkg_arch} > ${TARGET_FOLDER}/.valid
 	tar -czv -f /tmp/shadowsocks.tar.gz shadowsocks/
@@ -104,75 +199,47 @@ backup_tar(){
 	echo_date "打包完毕！"
 }
 
+list_ss_clearable_keys(){
+	dbus list ss | cut -d "=" -f 1 | grep -v "version" | grep -v "ssserver_" | grep -v "ssid_" | grep -v "ss_basic_state_china" | grep -v "ss_basic_state_foreign"
+}
+
+clear_ss_config_storage(){
+	local confs conf_count node_count
+	confs=$(list_ss_clearable_keys)
+	conf_count=$(printf '%s
+' "${confs}" | sed '/^$/d' | awk 'END{print NR + 0}')
+	node_count=$(fss_get_node_count)
+	[ -z "${node_count}" ] && node_count=0
+
+	echo_date "开始清理科学上网配置..."
+	echo_date "检测到可清理配置 ${conf_count} 项，节点 ${node_count} 个。"
+	for conf in ${confs}
+	do
+		dbus remove "${conf}"
+	done
+	fss_clear_v2_nodes
+	echo_date "旧配置清理完成：普通配置 ${conf_count} 项，节点 ${node_count} 个。"
+}
+
 remove_now(){
 	# 1. 关闭插件
-	echo_date "尝试关闭科学上网..."
+	echo_date "开始清空科学上网配置..."
+	echo_date "清空配置前先关闭科学上网..."
 	dbus set ss_basic_enable="0"
-	sh /koolshare/ss/ssconfig.sh stop
+	sh /koolshare/ss/ssconfig.sh stop 2>&1 | grep -v "Terminated"
 
 	# 2. 清空配置
-	echo_date "开始清理科学上网配置..."
-	confs=$(dbus list ss | cut -d "=" -f 1 | grep -v "version" | grep -v "ssserver_" | grep -v "ssid_" |grep -v "ss_basic_state_china" | grep -v "ss_basic_state_foreign")
-	for conf in $confs
-	do
-		echo_date "移除$conf"
-		dbus remove $conf
-	done
+	clear_ss_config_storage
 	
 	# 2. 设置默认值
 	echo_date "设置一些默认参数..."
 
 	# default values
 	eval $(dbus export ss)
-	local PKG_TYPE=$(cat /koolshare/webs/Module_shadowsocks.asp | tr -d '\r' | grep -Eo "PKG_TYPE=.+"|awk -F "=" '{print $2}'|sed 's/"//g')
-	# 3.0.4：国内DNS默认使用运营商DNS
-	[ -z "${ss_china_dns}" ] && dbus set ss_china_dns="1"
-	# 3.0.4 从老版本升级到3.0.4，原部分方案需要切换到进阶方案，因为这些方案已经不存在
-	if [ -z "${ss_basic_advdns}" -a -z "${ss_basic_olddns}" ];then
-		# 全新安装的 3.0.4+，或者从3.0.3及其以下版本升级而来
-		if [ -z "${ss_foreign_dns}" ];then
-			# 全新安装的 3.0.4
-			dbus set ss_basic_advdns="1"
-			dbus set ss_basic_olddns="0"
-		else
-			# 从3.0.3及其以下版本升级而来
-			# 因为一些dns选项已经不存在，所以更改一下
-			if [ "${ss_foreign_dns}" == "2" -o "${ss_foreign_dns}" == "5" -o "${ss_foreign_dns}" == "10" -o "${ss_foreign_dns}" == "1" -o "${ss_foreign_dns}" == "6" ];then
-				# 原chinands2、chinadns1、chinadns-ng、cdns、https_dns_proxy已经不存在, 更改为进阶DNS设定：chinadns-ng
-				dbus set ss_basic_advdns="1"
-				dbus set ss_basic_olddns="0"
-			elif [ "${ss_foreign_dns}" == "4" -o "${ss_foreign_dns}" == "9" ];then
-				if [ "${PKG_TYPE}" == "lite" ];then
-					# ss-tunnel、SmartDNS方案在lite版本中不存在
-					dbus set ss_basic_advdns="1"
-					dbus set ss_basic_olddns="0"
-				else
-					# ss-tunnel、SmartDNS方案在full版本中存在
-					dbus set ss_basic_advdns="0"
-					dbus set ss_basic_olddns="1"
-				fi
-			else
-				# dns2socks, v2ray/xray_dns, 直连这些在full和lite版中都在
-				dbus set ss_basic_advdns="0"
-				dbus set ss_basic_olddns="1"
-			fi
-		fi
-	elif [ -z "${ss_basic_advdns}" -a -n "${ss_basic_olddns}" ];then
-		# 不正确，ss_basic_advdns和ss_basic_olddns必须值相反
-		[ "${ss_basic_olddns}" == "0" ] && dbus set ss_basic_advdns="1"
-		[ "${ss_basic_olddns}" == "1" ] && dbus set ss_basic_advdns="0"
-	elif [ -n "${ss_basic_advdns}" -a -z "${ss_basic_olddns}" ];then
-		# 不正确，ss_basic_advdns和ss_basic_olddns必须值相反
-		[ "${ss_basic_advdns}" == "0" ] && dbus set ss_basic_olddns="1"
-		[ "${ss_basic_advdns}" == "1" ] && dbus set ss_basic_olddns="0"
-	elif [ -n "${ss_basic_advdns}" -a -n "${ss_basic_olddns}" ];then
-		if [ "${ss_basic_advdns}" == "${ss_basic_olddns}" ];then
-			[ "${ss_basic_olddns}" == "0" ] && dbus set ss_basic_advdns="1"
-			[ "${ss_basic_olddns}" == "1" ] && dbus set ss_basic_advdns="0"
-		fi
-	fi
+	local PKG_TYPE=$(get_pkg_type)
 
 	[ -z "${ss_basic_proxy_newb}" ] && dbus set ss_basic_proxy_newb=1
+	[ -z "${ss_basic_proxy_ipv6}" ] && dbus set ss_basic_proxy_ipv6=0
 	[ -z "${ss_basic_udpoff}" ] && dbus set ss_basic_udpoff=0
 	[ -z "${ss_basic_udpall}" ] && dbus set ss_basic_udpall=0
 	[ -z "${ss_basic_udpgpt}" ] && dbus set ss_basic_udpgpt=1
@@ -180,19 +247,24 @@ remove_now(){
 	[ -z "${ss_basic_notimecheck}" ] && dbus set ss_basic_notimecheck=1
 	[ -z "${ss_basic_nocdnscheck}" ] && dbus set ss_basic_nocdnscheck=1
 	[ -z "${ss_basic_nofdnscheck}" ] && dbus set ss_basic_nofdnscheck=1
-	
-	[ "${ss_disable_aaaa}" != "1" ] && dbus set ss_basic_chng_no_ipv6=1
-	[ -z "${ss_basic_chng_xact}" ] && dbus set ss_basic_chng_xact=0
-	[ -z "${ss_basic_chng_xgt}" ] && dbus set ss_basic_chng_xgt=1
-	[ -z "${ss_basic_chng_xmc}" ] && dbus set ss_basic_chng_xmc=0
-	
+	[ -z "${ss_basic_qrcode}" ] && dbus set ss_basic_qrcode=1
+	dbus set ss_basic_node_cards=1
+
 	# others
-	[ -z "$(dbus get ss_acl_default_mode)" ] && dbus set ss_acl_default_mode=1
-	[ -z "$(dbus get ss_acl_default_port)" ] && dbus set ss_acl_default_port=all
+	fss_cleanup_acl_default_port_keys >/dev/null 2>&1
+	[ -z "$(dbus get ss_acl_default_mode)" ] && dbus set ss_acl_default_mode=follow
+	[ -z "$(dbus get ss_acl_default_mode_format)" ] && dbus set ss_acl_default_mode_format=2
+	[ -z "$(dbus get ss_acl_default_udp)" ] && dbus set ss_acl_default_udp=0
+	[ -z "$(dbus get ss_acl_default_quic)" ] && dbus set ss_acl_default_quic=1
+	[ -z "$(dbus get ss_acl_default_ports)" ] && dbus set ss_acl_default_ports="22,80,443,8080,8443"
 	[ -z "$(dbus get ss_basic_interval)" ] && dbus set ss_basic_interval=2
-	[ -z "$(dbus get ss_basic_wt_furl)" ] && dbus set ss_basic_wt_furl="http://www.google.com.tw"
-	[ -z "$(dbus get ss_basic_wt_curl)" ] && dbus set ss_basic_wt_curl="http://www.baidu.com"
-	[ -z "${ss_basic_latency_opt}" ] && dbus set ss_basic_latency_opt="2"
+	[ -z "$(dbus list ss_basic_status_mode 2>/dev/null | sed -n '1p')" ] && dbus set ss_basic_status_mode=serve
+	[ -z "$(dbus get ss_basic_furl)" ] && dbus set ss_basic_furl="http://www.google.com/generate_204"
+	[ -z "$(dbus get ss_basic_curl)" ] && dbus set ss_basic_curl="http://connectivitycheck.platform.hicloud.com/generate_204"
+
+	# 延迟测试默认开启，所有平台默认显示 web 落地延迟列
+	dbus set ss_basic_latency_val=2
+	dbus set ss_basic_latency_batch=1
 	
 	# lite
 	if [ ! -x "/koolshare/bin/v2ray" ];then
@@ -200,6 +272,7 @@ remove_now(){
 	else
 		dbus set ss_basic_vcore=0
 	fi
+	
 	if [ ! -x "/koolshare/bin/trojan" ];then
 		dbus set ss_basic_tcore=1
 	else
@@ -210,163 +283,125 @@ remove_now(){
 }
 
 remove_silent(){
-	echo_date 先清除已有的参数...
-	confs=$(dbus list ss | cut -d "=" -f 1 | grep -v "version" | grep -v "ssserver_" | grep -v "ssid_" |grep -v "ss_basic_state_china" | grep -v "ss_basic_state_foreign")
-	for conf in $confs
-	do
-		echo_date 移除$conf
-		dbus remove $conf
-	done
-	echo_date 设置一些默认参数...
+	echo_date "先清除已有的参数..."
+	clear_ss_config_storage
+	echo_date "设置一些默认参数..."
 	dbus set ss_basic_version_local=$(cat /koolshare/ss/version) 
 	echo_date "--------------------"
 }
 
 restore_sh(){
-	echo_date 检测到科学上网备份文件...
-	echo_date 开始恢复配置...
+	echo_date "检测到科学上网备份文件..."
+	echo_date "开始恢复配置..."
+	echo_date "兼容SH备份恢复耗时可能较长，请耐心等待..."
 	chmod +x /tmp/upload/ssconf_backup.sh
-	sh /tmp/upload/ssconf_backup.sh
+	if fss_restore_legacy_backup_sh_fast /tmp/upload/ssconf_backup.sh; then
+		echo_date "兼容SH备份快速恢复完成！"
+	else
+		echo_date "快速恢复失败，回退到兼容恢复模式..."
+		echo_date "开始执行备份脚本..."
+		sh /tmp/upload/ssconf_backup.sh
+		echo_date "备份脚本执行完成，开始迁移节点数据..."
+		if fss_auto_migrate_if_needed 1 >/dev/null 2>&1; then
+			echo_date "节点数据迁移完成！"
+		else
+			echo_date "节点数据迁移未执行或无需迁移，继续..."
+		fi
+	fi
 	dbus set ss_basic_enable="0"
 	dbus set ss_basic_version_local=$(cat /koolshare/ss/version) 
-	echo_date 配置恢复成功！
+	fss_refresh_node_direct_cache >/dev/null 2>&1
+	fss_schedule_webtest_cache_warm >/dev/null 2>&1
+	echo_date "配置恢复成功！"
 }
 
 restore_json(){
-	echo_date 检测到ss json配置文件...
-	ss_format=$(echo $confs|grep "obfs")
-	cat /tmp/ssconf_backup.json | jq --tab . > /tmp/ssconf_backup_formated.json
-	if [ -z "$ss_format" ];then
-		# SS json
-		echo_date 检测到shadowsocks json配置文件...
-		servers=$(cat /tmp/ssconf_backup_formated.json |grep -w server|sed 's/"//g'|sed 's/,//g'|sed 's/\s//g'|cut -d ":" -f 2)
-		ports=$(cat /tmp/ssconf_backup_formated.json |grep -w server_port|sed 's/"//g'|sed 's/,//g'|sed 's/\s//g'|cut -d ":" -f 2)
-		passwords=$(cat /tmp/ssconf_backup_formated.json |grep -w password|sed 's/"//g'|sed 's/,//g'|sed 's/\s//g'|cut -d ":" -f 2)
-		methods=$(cat /tmp/ssconf_backup_formated.json |grep -w method|sed 's/"//g'|sed 's/,//g'|sed 's/\s//g'|cut -d ":" -f 2)
-		remarks=$(cat /tmp/ssconf_backup_formated.json |grep -w remarks|sed 's/"//g'|sed 's/,//g'|sed 's/\s//g'|cut -d ":" -f 2)
-		
-		echo_date 开始导入配置...导入json配置不会覆盖原有配置.
-		last_node=$(dbus list ssconf_basic_server|cut -d "=" -f 1| cut -d "_" -f 4| sort -nr|head -n 1)
-		if [ ! -z "$last_node" ];then
-			k=$(expr $last_node + 1)
-		else
-			k=1
-		fi
-		min=1
-		max=$(cat /tmp/ssconf_backup_formated.json |grep -wc server)
-		while [ $min -le $max ]
-		do
-		    echo_date "==============="
-		    echo_date import node $min
-		    echo_date $k
-		    
-		    server=$(echo $servers | awk "{print $"$min"}")
-			port=$(echo $ports | awk "{print $"$min"}")
-			password=$(echo $passwords | awk "{print $"$min"}")
-			method=$(echo $methods | awk "{print $"$min"}")
-			remark=$(echo $remarks | awk "{print $"$min"}")
-			
-			echo_date $server
-			echo_date $port
-			echo_date $password
-			echo_date $method
-			echo_date $remark
-			
-			dbus set ssconf_basic_server_"$k"="$server"
-			dbus set ssconf_basic_port_"$k"="$port"
-			dbus set ssconf_basic_password_"$k"=$(echo "$password" | base64_encode)
-			dbus set ssconf_basic_method_"$k"="$method"
-			dbus set ssconf_basic_name_"$k"="$remark"
-			dbus set ssconf_basic_use_rss_"$k"=0
-			dbus set ssconf_basic_mode_"$k"=2
-		    min=$(expr $min + 1)
-		    k=$(expr $k + 1)
-		done
-		echo_date 导入配置成功！
+	echo_date "检测到科学上网JSON备份文件..."
+	echo_date "开始恢复JSON备份..."
+	echo_date "JSON备份恢复期间可能耗时较长，请耐心等待..."
+	if fss_restore_native_backup_v2 /tmp/upload/ssconf_backup.json; then
+		dbus set ss_basic_enable="0"
+		dbus set ss_basic_version_local=$(cat /koolshare/ss/version)
+		fss_refresh_node_direct_cache >/dev/null 2>&1
+		fss_schedule_webtest_cache_warm >/dev/null 2>&1
+		echo_date "JSON备份恢复成功！"
 	else
-		# SSR json
-		echo_date 检测到ssr json配置文件...
-		servers=$(cat /tmp/ssconf_backup_formated.json |grep -w server|sed 's/"//g'|sed 's/,//g'|sed 's/\s//g'|cut -d ":" -f 2)
-		ports=$(cat /tmp/ssconf_backup_formated.json |grep -w server_port|sed 's/"//g'|sed 's/,//g'|sed 's/\s//g'|cut -d ":" -f 2)
-		passwords=$(cat /tmp/ssconf_backup_formated.json |grep -w password|sed 's/"//g'|sed 's/,//g'|sed 's/\s//g'|cut -d ":" -f 2)
-		methods=$(cat /tmp/ssconf_backup_formated.json |grep -w method|sed 's/"//g'|sed 's/,//g'|sed 's/\s//g'|cut -d ":" -f 2)
-		remarks=$(cat /tmp/ssconf_backup_formated.json |grep -w remarks|sed 's/"//g'|sed 's/,//g'|sed 's/\s//g'|cut -d ":" -f 2)
-		obfs=$(cat /tmp/ssconf_backup_formated.json |grep -w obfs|sed 's/"//g'|sed 's/,//g'|sed 's/\s//g'|cut -d ":" -f 2)
-		obfsparam=$(cat /tmp/ssconf_backup_formated.json |grep -w obfsparam|sed 's/"//g'|sed 's/,//g'|sed 's/\s//g'|cut -d ":" -f 2)
-		protocol=$(cat /tmp/ssconf_backup_formated.json |grep -w protocol|sed 's/"//g'|sed 's/,//g'|sed 's/\s//g'|cut -d ":" -f 2)
-		protocolparam=$(cat /tmp/ssconf_backup_formated.json |grep -w protocolparam|sed 's/"//g'|sed 's/,//g'|sed 's/\s//g'|sed 's/protocolparam://g')
-		
-		echo_date 开始导入配置...导入json配置不会覆盖原有配置.
-		last_node=$(dbus list ssconf_basic_server|cut -d "=" -f 1| cut -d "_" -f 4| sort -nr|head -n 1)
-		if [ ! -z "$last_node" ];then
-			k=$(expr $last_node + 1)
-		else
-			k=1
-		fi
-		min=1
-		max=$(cat /tmp/ssconf_backup_formated.json |grep -wc server)
-		while [ $min -le $max ]
-		do
-		    echo_date "==============="
-		    echo_date import node $min
-		    echo_date $k
-		    
-		    server=$(echo $servers | awk "{print $"$min"}")
-			port=$(echo $ports | awk "{print $"$min"}")
-			password=$(echo $passwords | awk "{print $"$min"}")
-			method=$(echo $methods | awk "{print $"$min"}")
-			remark=$(echo $remarks | awk "{print $"$min"}")
-			obf=$(echo $obfs | awk "{print $"$min"}")
-			obfspara=$(echo $obfsparam | awk "{print $"$min"}")
-			protoco=$(echo $protocol | awk "{print $"$min"}")
-			protocolpara=$(echo $protocolparam | awk "{print $"$min"}")
-			
-			echo_date $server
-			echo_date $port
-			echo_date $password
-			echo_date $method
-			echo_date $remark
-			echo_date $obf
-			echo_date $obfspara
-			echo_date $protoco
-			echo_date $protocolpara
-			
-			dbus set ssconf_basic_server_"$k"="$server"
-			dbus set ssconf_basic_port_"$k"="$port"
-			dbus set ssconf_basic_password_"$k"=$(echo "$password" | base64_encode)
-			dbus set ssconf_basic_method_"$k"="$method"
-			dbus set ssconf_basic_name_"$k"="$remark"
-			dbus set ssconf_basic_rss_obfs_"$k"="$obf"
-			dbus set ssconf_basic_rss_obfs_param_"$k"="$obfspara"
-			dbus set ssconf_basic_rss_protocol_"$k"="$protoco"
-			dbus set ssconf_basic_rss_protocol_para_"$k"="$protocolpara"
-			dbus set ssconf_basic_use_rss_"$k"=1
-			dbus set ssconf_basic_mode_"$k"=2
-		    min=$(expr $min + 1)
-		    k=$(expr $k + 1)
-		done
-		echo_date 导入配置成功！
+		echo_date "JSON备份恢复失败！请检查备份文件格式是否正确。"
+		return 1
 	fi
 }
 
 restore_now(){
-	[ -f "/tmp/upload/ssconf_backup.sh" ] && restore_sh
-	[ -f "/tmp/upload/ssconf_backup.json" ] && restore_json
-	echo_date 一点点清理工作...
+	local json_file="/tmp/upload/ssconf_backup.json"
+	local sh_file="/tmp/upload/ssconf_backup.sh"
+	local latest_file="" restore_rc=0
+
+	if [ -f "${json_file}" ] && [ -f "${sh_file}" ];then
+		latest_file=$(ls -1t "${json_file}" "${sh_file}" 2>/dev/null | sed -n '1p')
+		if [ "${latest_file}" = "${sh_file}" ];then
+			echo_date "同时检测到JSON和兼容SH备份文件，按最新上传的兼容SH备份处理..."
+			restore_sh || restore_rc=$?
+		else
+			echo_date "同时检测到JSON和兼容SH备份文件，按最新上传的JSON备份处理..."
+			restore_json || restore_rc=$?
+		fi
+	elif [ -f "${json_file}" ];then
+		restore_json || restore_rc=$?
+	elif [ -f "${sh_file}" ];then
+		restore_sh || restore_rc=$?
+	else
+		echo_date "没有检测到可恢复的备份文件！"
+		restore_rc=1
+	fi
+	echo_date "一点点清理工作..."
 	rm -rf /tmp/ss_conf_*
-	echo_date 完成！
+	rm -f "${json_file}" "${sh_file}"
+	echo_date "完成！"
+	return "${restore_rc}"
 }
 
 reomve_ping(){
-	# flush previous ping value in the table
-	pings=$(dbus list ssconf_basic_ping | sort -n -t "_" -k 4|cut -d "=" -f 1)
-	if [ -n "$pings" ];then
-		for ping in $pings
-		do
-			echo "remove $ping"
-			dbus remove "$ping"
-		done
+	# schema 1 stores runtime fields as split KVs; schema 2 stores them inside node json.
+	fss_clear_all_runtime_fields
+}
+
+report_migration_progress(){
+	echo_date "$1"
+}
+
+migrate_schema2_now(){
+	local migrated_profiles=""
+	local repaired_sub_nodes=""
+	echo_date "检测到旧版节点数据，开始升级到 schema 2 存储..."
+	if subprof_migrate_legacy_profiles_if_needed >/tmp/sub_profile_migrate.count 2>/dev/null; then
+		migrated_profiles="$(cat /tmp/sub_profile_migrate.count 2>/dev/null)"
+		rm -f /tmp/sub_profile_migrate.count >/dev/null 2>&1
 	fi
+	fss_auto_migrate_if_needed 1 report_migration_progress
+	local rc=$?
+	case "${rc}" in
+	0)
+		[ -n "${migrated_profiles}" ] && echo_date "旧版订阅地址已迁移为 ${migrated_profiles} 个独立订阅配置。"
+		repaired_sub_nodes="$(fss_repair_legacy_subscribe_source_meta 2>/dev/null)"
+		if [ "${repaired_sub_nodes:-0}" -gt 0 ] 2>/dev/null;then
+			echo_date "已修复 ${repaired_sub_nodes} 个旧版订阅节点的来源归属。"
+		fi
+		echo_date "节点数据迁移完成！"
+		return 0
+		;;
+	2)
+		echo_date "当前没有可迁移的旧版节点数据，跳过。"
+		return 0
+		;;
+	*)
+		echo_date "节点数据迁移失败！保留旧版节点结构。"
+		return 1
+		;;
+	esac
+}
+
+shunt_stats_now(){
+	sh /koolshare/scripts/ss_shunt_stats.sh >/dev/null 2>&1
 }
 
 download_ssf(){
@@ -417,119 +452,6 @@ restart_dnsmasq(){
 	echo_date "dnsmasq重启成功，pid: ${DPID}"
 }
 
-remove_doh_cache(){
-	source /koolshare/scripts/ss_base.sh
-	if [ "${ss_basic_advdns}" == "1" -a "${ss_dns_plan}" == "3" ];then
-		if [ -f "/tmp/doh_main.conf" ];then
-			local doh_pid_main=$(ps -w | grep "dohclient" | grep -v "grep" | grep -E "7913|doh_main" | awk '{print $1}')
-			if [ -n "${doh_pid_main}" ]; then
-				echo_date "先关闭dohclient进程！"
-				kill -9 ${doh_pid_main} >/dev/null 2>&1
-				rm -rf /var/run/doh_main.pid
-				rm -rf /tmp/doh_main.log
-			fi
-				
-			if [ -f "/tmp/doh_main.db" ]; then
-				echo_date "删除dohclient缓存文件：/tmp/doh_main.db"
-				rm -rf /tmp/doh_main.db
-			fi
-			echo_date "重启dohclient进程..."
-			#dohclient --config=/tmp/doh_main.conf --pid="/var/run/doh_main.pid" --daemon >/dev/null 2>&1
-			detect_running_status2 dohclient doh_main
-			restart_dnsmasq
-		else
-			echo_date "失败！没有找到dohclient的配置文件，请检查dohclient是否正常运行！"
-		fi
-	else
-		echo_date "当前并未启动dohclient，跳过！"
-	fi
-}
-
-# 1. ----------------------------------------------------
-edit_smartdns_conf(){
-	local flag=$1
-	local temp_path=/tmp
-	local save_path=/koolshare/ss/rules
-	local show_path=/tmp/upload
-	local conf_name=$2
-	local user_conf=${conf_name}_user
-	local ISP_DNS1=$(nvram get wan0_dns | sed 's/ /\n/g' | grep -v 0.0.0.0 | grep -v 127.0.0.1 | sed -n 1p | grep -E "([0-9]{1,3}[\.]){3}[0-9]{1,3}|:")
-	local ISP_DNS2=$(nvram get wan0_dns | sed 's/ /\n/g' | grep -v 0.0.0.0 | grep -v 127.0.0.1 | sed -n 2p | grep -E "([0-9]{1,3}[\.]){3}[0-9]{1,3}|:")
-
-	if [ "${flag}" == "edit" ];then
-		if [ -f "${save_path}/${user_conf}.conf" ];then
-			cp -f ${save_path}/${user_conf}.conf ${show_path}/${conf_name}.conf
-			http_response "11111111" >/dev/null
-		else
-			cp -f ${save_path}/${conf_name}.conf ${show_path}/${conf_name}.conf
-			# these conf shold be edit
-			if [ "${conf_name}" == "smartdns_smrt_1" -o "${conf_name}" == "smartdns_smrt_2" -o "${conf_name}" == "smartdns_smrt_3" ];then
-				if [ -n "${ISP_DNS1}" ]; then
-					sed -i "s/114.114.114.114/${ISP_DNS1}/g" ${show_path}/${conf_name}.conf
-				fi
-				
-				if [ -n "${ISP_DNS2}" ]; then
-					sed -i "s/114.114.115.115/${ISP_DNS2}/g" ${show_path}/${conf_name}.conf
-				else
-					sed -i "/114.114.115.115/d" ${show_path}/${conf_name}.conf
-				fi
-			fi
-			http_response "22222222" >/dev/null
-		fi
-	fi
-
-	if [ "${flag}" == "save" ];then
-		http_response "$ID" >/dev/null
-		local conf_rule=$(dbus get ss_basic_smartdns_rule)
-		if [ -n "${conf_rule}" ];then
-			echo ${conf_rule} | base64_decode | sed 's/\\n/\n/g' > ${temp_path}/${user_conf}.conf
-			local md5sum_default=$(md5sum ${save_path}/${conf_name}.conf | awk '{print $1}')
-			local md5sum_usernew=$(md5sum ${temp_path}/${user_conf}.conf | awk '{print $1}')
-			if [ -f "${save_path}/${user_conf}.conf" ];then
-				local md5sum_userold=$(md5sum ${save_path}/${user_conf}.conf | awk '{print $1}')
-				if [ "${md5sum_userold}" == "${md5sum_usernew}" ];then
-					rm -rf ${temp_path}/${user_conf}.conf
-					echo_date "配置文件相较于之前的自定义配置无变化，不保存！"
-				else
-					echo_date "保存新配置到${save_path}/${user_conf}.conf"
-					mv -f ${temp_path}/${user_conf}.conf ${save_path}/${user_conf}.conf
-					cp -f ${save_path}/${user_conf}.conf ${show_path}/${conf_name}.conf
-					dbus remove ss_basic_smartdns_rule
-					echo_date "保存成功！请重启科学上网插件，使用新配置！"
-				fi
-			else
-				if [ "${md5sum_default}" == "${md5sum_usernew}" ];then
-					rm -rf ${temp_path}/${user_conf}.conf
-					rm -rf ${save_path}/${user_conf}.conf
-					echo_date "配置文件相较于默认配置无变化，不保存为自定义配置，继续使用默认配置！"
-				else
-					echo_date "保存新配置到${save_path}/${user_conf}.conf"
-					mv ${temp_path}/${user_conf}.conf ${save_path}/${user_conf}.conf
-					cp -f ${save_path}/${user_conf}.conf ${show_path}/${conf_name}.conf
-					dbus remove ss_basic_smartdns_rule
-					echo_date "保存成功！请重启科学上网插件，使用新配置！"
-				fi
-			fi
-		else
-			echo_date "检测到新配置为空，不保存！"
-		fi
-		echo XU6J03M6 >> ${LOG_FILE}
-	fi
-
-	if [ "${flag}" == "reset" ];then
-		http_response "$ID" >/dev/null
-		if [ -f "${save_path}/${user_conf}.conf" ];then
-			echo_date "切换到smartdns默认配置！"
-			rm -f ${save_path}/${user_conf}.conf
-			cp -f ${save_path}/${conf_name}.conf ${show_path}/${conf_name}.conf
-			echo_date "切换成功！请重启科学上网插件，以使用默认配置！"
-		else
-			echo_date "当前使用的即为默认配置，无需恢复，退出！"
-		fi
-		echo XU6J03M6 >> ${LOG_FILE}
-	fi
-}
-
 download_resv_log(){
 	rm -rf /tmp/files
 	rm -rf /koolshare/webs/files
@@ -549,11 +471,49 @@ download_dig_log(){
 	sed -i '/XU6J03M6/d' /tmp/files/dns_dig_result.txt
 }
 
-case $2 in
+if [ -n "$1" -a -z "$2" ];then
+	# run by ws
+	act=$1
+	ws_flag=1
+elif [ -n "$1" -a -n "$2" ];then
+	# run by httpd
+	act=$2
+	ws_flag=0
+elif [ -z "$1" -a -z "$2" ];then
+	echo_date "缺少运行参数！"
+	exit
+fi
+
+if [ -z "$1" -a -z "$2" ];then
+	prepare
+	get_china_status $1
+	get_foreign_status $1
+	echo "${log1}@@${log2}"
+	exit
+fi
+
+case $act in
 1)
-	true > ${LOG_FILE}
-	backup_conf
-	http_response "$1"
+	if [ "${ws_flag}" == "0" ];then
+		backup_conf >> ${LOG_FILE} 2>&1
+		ret=$?
+		[ "${ret}" != "2" ] && echo XU6J03M6 >> ${LOG_FILE}
+		http_response "$1"
+	else
+		backup_conf 2>&1 | tee -a ${LOG_FILE}
+		echo XU6J03M6 | tee -a ${LOG_FILE}
+	fi
+	;;
+12)
+	if [ "${ws_flag}" == "0" ];then
+		backup_conf_json >> ${LOG_FILE} 2>&1
+		ret=$?
+		[ "${ret}" != "2" ] && echo XU6J03M6 >> ${LOG_FILE}
+		http_response "$1"
+	else
+		backup_conf_json 2>&1 | tee -a ${LOG_FILE}
+		echo XU6J03M6 | tee -a ${LOG_FILE}
+	fi
 	;;
 2)
 	true > ${LOG_FILE}
@@ -565,16 +525,27 @@ case $2 in
 	;;
 3)
 	true > ${LOG_FILE}
-	http_response "$1"
-	remove_now >> ${LOG_FILE}
-	echo XU6J03M6 >> ${LOG_FILE}
+	if [ "${ws_flag}" == "0" ];then
+		http_response "$1"
+		remove_now >> ${LOG_FILE}
+		echo XU6J03M6 >> ${LOG_FILE}
+	else
+		remove_now | tee -a ${LOG_FILE}
+		echo XU6J03M6 | tee -a ${LOG_FILE}
+	fi
 	;;
 4)
 	true > ${LOG_FILE}
-	http_response "$1"
-	remove_silent >> ${LOG_FILE}
-	restore_now >> ${LOG_FILE}
-	echo XU6J03M6 >> ${LOG_FILE}
+	if [ "${ws_flag}" == "0" ];then
+		http_response "$1"
+		remove_silent >> ${LOG_FILE}
+		restore_now >> ${LOG_FILE}
+		echo XU6J03M6 >> ${LOG_FILE}
+	else
+		remove_silent | tee -a ${LOG_FILE}
+		restore_now | tee -a ${LOG_FILE}
+		echo XU6J03M6 | tee -a ${LOG_FILE}
+	fi
 	;;
 5)
 	reomve_ping
@@ -591,15 +562,14 @@ case $2 in
 	;;
 8)
 	true > ${LOG_FILE}
-	http_response "$1"
-	restart_dnsmasq >> ${LOG_FILE}
-	echo XU6J03M6 >> ${LOG_FILE}
-	;;
-9)
-	true > ${LOG_FILE}
-	http_response "$1"
-	remove_doh_cache >> ${LOG_FILE}
-	echo XU6J03M6 >> ${LOG_FILE}
+	if [ "${ws_flag}" == "0" ];then
+		http_response "$1"
+		restart_dnsmasq >> ${LOG_FILE}
+		echo XU6J03M6 >> ${LOG_FILE}
+	else
+		restart_dnsmasq | tee -a ${LOG_FILE}
+		echo XU6J03M6 | tee -a ${LOG_FILE}
+	fi
 	;;
 10)
 	true > ${LOG_FILE}
@@ -611,117 +581,14 @@ case $2 in
 	download_dig_log
 	http_response "$1"
 	;;
-edit_smartdns_conf_china_udp)
-	edit_smartdns_conf edit smartdns_chng_china_udp >> ${LOG_FILE}
-	;;
-save_smartdns_conf_china_udp)
+migrate_schema2)
 	true > ${LOG_FILE}
-	edit_smartdns_conf save smartdns_chng_china_udp >> ${LOG_FILE}
+	http_response "$1"
+	migrate_schema2_now >> ${LOG_FILE} 2>&1
+	echo XU6J03M6 >> ${LOG_FILE}
 	;;
-reset_smartdns_conf_china_udp)
-	true > ${LOG_FILE}
-	edit_smartdns_conf reset smartdns_chng_china_udp >> ${LOG_FILE}
-	;;
-edit_smartdns_conf_china_tcp)
-	edit_smartdns_conf edit smartdns_chng_china_tcp >> ${LOG_FILE}
-	;;
-save_smartdns_conf_china_tcp)
-	true > ${LOG_FILE}
-	edit_smartdns_conf save smartdns_chng_china_tcp >> ${LOG_FILE}
-	;;
-reset_smartdns_conf_china_tcp)
-	true > ${LOG_FILE}
-	edit_smartdns_conf reset smartdns_chng_china_tcp >> ${LOG_FILE}
-	;;
-edit_smartdns_conf_china_doh)
-	edit_smartdns_conf edit smartdns_chng_china_doh >> ${LOG_FILE}
-	;;
-save_smartdns_conf_china_doh)
-	true > ${LOG_FILE}
-	edit_smartdns_conf save smartdns_chng_china_doh >> ${LOG_FILE}
-	;;
-reset_smartdns_conf_china_doh)
-	true > ${LOG_FILE}
-	edit_smartdns_conf reset smartdns_chng_china_doh >> ${LOG_FILE}
-	;;
-edit_smartdns_conf_proxy_5)
-	edit_smartdns_conf edit smartdns_chng_proxy_5 >> ${LOG_FILE}
-	;;
-save_smartdns_conf_proxy_5)
-	true > ${LOG_FILE}
-	edit_smartdns_conf save smartdns_chng_proxy_5 >> ${LOG_FILE}
-	;;
-reset_smartdns_conf_proxy_5)
-	true > ${LOG_FILE}
-	edit_smartdns_conf reset smartdns_chng_proxy_5 >> ${LOG_FILE}
-	;;
-edit_smartdns_conf_proxy_6)
-	edit_smartdns_conf edit smartdns_chng_proxy_6 >> ${LOG_FILE}
-	;;
-save_smartdns_conf_proxy_6)
-	true > ${LOG_FILE}
-	edit_smartdns_conf save smartdns_chng_proxy_6 >> ${LOG_FILE}
-	;;
-reset_smartdns_conf_proxy_6)
-	true > ${LOG_FILE}
-	edit_smartdns_conf reset smartdns_chng_proxy_6 >> ${LOG_FILE}
-	;;
-edit_smartdns_conf_proxy_7)
-	edit_smartdns_conf edit smartdns_chng_proxy_7 >> ${LOG_FILE}
-	;;
-save_smartdns_conf_proxy_7)
-	true > ${LOG_FILE}
-	edit_smartdns_conf save smartdns_chng_proxy_7 >> ${LOG_FILE}
-	;;
-reset_smartdns_conf_proxy_7)
-	true > ${LOG_FILE}
-	edit_smartdns_conf reset smartdns_chng_proxy_7 >> ${LOG_FILE}
-	;;
-edit_smartdns_conf_proxy_8)
-	edit_smartdns_conf edit smartdns_chng_proxy_8 >> ${LOG_FILE}
-	;;
-save_smartdns_conf_proxy_8)
-	true > ${LOG_FILE}
-	edit_smartdns_conf save smartdns_chng_proxy_8 >> ${LOG_FILE}
-	;;
-reset_smartdns_conf_proxy_8)
-	true > ${LOG_FILE}
-	edit_smartdns_conf reset smartdns_chng_proxy_8 >> ${LOG_FILE}
-	;;
-edit_smartdns_conf_direct)
-	edit_smartdns_conf edit smartdns_chng_direct >> ${LOG_FILE}
-	;;
-save_smartdns_conf_direct)
-	true > ${LOG_FILE}
-	edit_smartdns_conf save smartdns_chng_direct >> ${LOG_FILE}
-	;;
-reset_smartdns_conf_direct)
-	true > ${LOG_FILE}
-	edit_smartdns_conf reset smartdns_chng_direct >> ${LOG_FILE}
-	;;
-edit_smartdns_resolver_doh)
-	edit_smartdns_conf edit smartdns_resolver_doh >> ${LOG_FILE}
-	;;
-save_smartdns_resolver_doh)
-	true > ${LOG_FILE}
-	edit_smartdns_conf save smartdns_resolver_doh >> ${LOG_FILE}
-	;;
-reset_smartdns_resolver_doh)
-	true > ${LOG_FILE}
-	edit_smartdns_conf reset smartdns_resolver_doh >> ${LOG_FILE}
-	;;
-edit_smartdns_smrt_*)
-	order=${2##*_}
-	edit_smartdns_conf edit smartdns_smrt_${order} >> ${LOG_FILE}
-	;;
-save_smartdns_smrt_*)
-	order=${2##*_}
-	true > ${LOG_FILE}
-	edit_smartdns_conf save smartdns_smrt_${order} >> ${LOG_FILE}
-	;;
-reset_smartdns_smrt_*)
-	order=${2##*_}
-	true > ${LOG_FILE}
-	edit_smartdns_conf reset smartdns_smrt_${order} >> ${LOG_FILE}
+shunt_stats)
+	shunt_stats_now
+	http_response "$1"
 	;;
 esac

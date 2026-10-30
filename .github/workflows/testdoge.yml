@@ -1,0 +1,141 @@
+name: FancySS Mod Build test doge
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Force sync and clean workspace
+        run: |
+          git fetch origin ${{ github.ref_name }}
+          git reset --hard FETCH_HEAD
+          git clean -fdx
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      # 拉取 doge 仓库
+      - name: Clone doge repo
+        run: |
+          git clone --depth=1 https://github.com/folderdoge/fancyss_doge.git /tmp/doge
+
+      # 同步 chain proxy 核心脚本
+      - name: Sync doge core scripts
+        run: |
+          mkdir -p fancyss/scripts
+
+          cp -af \
+            /tmp/doge/fancyss/scripts/ss_chain_proxy.sh \
+            fancyss/scripts/
+
+          echo "=== 已同步 ss_chain_proxy.sh ==="
+
+      # 同步 doge UI
+      - name: Sync doge UI
+        run: |
+          mkdir -p fancyss/webs
+          mkdir -p fancyss/res
+
+          cp -af \
+            /tmp/doge/fancyss/webs/Module_shadowsocks.asp \
+            fancyss/webs/
+
+          cp -af \
+            /tmp/doge/fancyss/res/ss-menu.js \
+            fancyss/res/
+
+          echo "=== 已同步 doge UI ==="
+
+      # 注入 chain proxy hook
+      - name: Dynamic Inject chain proxy hooks
+        run: |
+          TARGET="fancyss/ss/ssconfig.sh"
+
+          echo "=== 开始注入 chain proxy ==="
+
+          # 删除旧注入
+          sed -i '/# DOGE_CHAIN_PROXY_START/,/# DOGE_CHAIN_PROXY_END/d' "$TARGET"
+
+          # 创建 hook 文件
+          printf '%s\n' \
+          '# DOGE_CHAIN_PROXY_START' \
+          '[ -f /koolshare/scripts/ss_chain_proxy.sh ] && . /koolshare/scripts/ss_chain_proxy.sh' \
+          '# DOGE_CHAIN_PROXY_END' \
+          > /tmp/doge_hook.txt
+
+          # 注入 source hook
+          sed -i '/source.*base.sh/r /tmp/doge_hook.txt' "$TARGET"
+
+          # 注入 xray apply
+          if ! grep -q "fss_chain_apply /koolshare/ss/xray.json" "$TARGET"; then
+            sed -i '/xray.json/a fss_chain_apply /koolshare/ss/xray.json' "$TARGET"
+          fi
+
+          echo "=== chain proxy hook 注入完成 ==="
+
+      # ASUSGO 配置
+      - name: Dynamic Inject ASUSGO whitelist
+        run: |
+          TARGET="fancyss/ss/ssconfig.sh"
+
+          if ! grep -q "ss_basic_direct_asusgo" "$TARGET"; then
+            printf '\n# ASUSGO WHITE LIST\ndbus set ss_basic_direct_asusgo=1\n' >> "$TARGET"
+          fi
+
+          echo "=== ASUSGO 配置注入完成 ==="
+
+      # 注入 cron_task
+      - name: Dynamic Inject cron_task
+        run: |
+          TARGET="fancyss/ss/ssconfig.sh"
+
+          # 删除旧注入
+          sed -i '/# CUSTOM_INJECT_START/,/# CUSTOM_INJECT_END/d' "$TARGET"
+
+          # 注入 cron
+          {
+            echo ""
+            echo "# CUSTOM_INJECT_START"
+            cat cron_task.txt
+            echo "# CUSTOM_INJECT_END"
+          } >> "$TARGET"
+
+          echo "=== cron_task 注入确认 ==="
+          tail -n 20 "$TARGET"
+
+      # Build
+      - name: Build
+        run: |
+          chmod +x build-custom.sh
+          ./build-custom.sh
+
+      # Release 信息
+      - name: Generate release info
+        id: release_info
+        run: |
+          UPSTREAM_VERSION=$(cat fancyss/ss/version | sed -n 1p | tr -d '\n\r' | sed 's/[^0-9.]//g')
+
+          echo "tag_name=v${UPSTREAM_VERSION}" >> $GITHUB_OUTPUT
+          echo "release_name=FancySS v${UPSTREAM_VERSION}" >> $GITHUB_OUTPUT
+          echo "body=测试构建时间：$(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M:%S')" >> $GITHUB_OUTPUT
+
+      # 发布
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_info.outputs.tag_name }}
+          name: ${{ steps.release_info.outputs.release_name }}
+          body: ${{ steps.release_info.outputs.body }}
+          files: packages/*.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}

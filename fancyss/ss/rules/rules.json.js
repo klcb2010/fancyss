@@ -1,95 +1,86 @@
 {
   "gfwlist": {
-    "name": "gfwlist.conf",
-    "date": "2024-12-09 21:39",
-    "md5": "ef2b95b13aaf1b016ff762ef586da308",
-    "count": "6828"
+    "name": "gfwlist.gz",
+    "date": "2026-04-29 10:52",
+    "md5": "783507d5ed19d233574a0d8d47fed788",
+    "count": "6451"
   },
-  "chnroute_maxmind": {
-    "name": "chnroute_maxmind.txt",
-    "date": "2024-09-29 11:26",
-    "md5": "41302df69ece45fe11d3e9ddcad2c47e",
-    "count": "7212",
-    "count_ip": "345532148",
-    "source": "maxmind/geolite2",
-    "url": "https://github.com/firehol/blocklist-ipsets/blob/master/geolite2_country/country_cn.netset"
-  },
-  "chnroute_ipip": {
-    "name": "chnroute_ipip.txt",
-    "date": "2024-11-01 00:38",
-    "md5": "4dc3943cb26f84c28cbdcbd46ff3399d",
-    "count": "7395",
-    "count_ip": "354951706",
-    "source": "ipip.net",
-    "url": "https://github.com/firehol/blocklist-ipsets/blob/master/ipip_country/ipip_country_cn.netset"
-  },
-  "chnroute_17mon": {
-    "name": "chnroute_17mon.txt",
-    "date": "2024-09-29 11:26",
-    "md5": "4e37080ae9dddb3349e5491cf6d137b0",
-    "count": "6885",
-    "count_ip": "354433392",
-    "source": "17mon/ipip",
-    "url": "https://raw.githubusercontent.com/17mon/china_ip_list/refs/heads/master/china_ip_list.txt"
-  },
-  "chnroute_misakaio": {
-    "name": "chnroute_misakaio.txt",
-    "date": "2024-12-09 21:39",
-    "md5": "d3aedec301edd8f54e0d0def80649132",
-    "count": "4201",
-    "count_ip": "285666048",
-    "source": "misakaio",
-    "url": "https://github.com/misakaio/chnroutes2/blob/master/chnroutes.txt"
-  },
-  "chnroute_cnisp": {
-    "name": "chnroute_cnisp.txt",
-    "date": "2024-09-29 11:26",
-    "md5": "4e37080ae9dddb3349e5491cf6d137b0",
-    "count": "6885",
-    "count_ip": "354433392",
-    "source": "cnisp",
-    "url": "https://github.com/gaoyifan/china-operator-ip"
-  },
-  "chnroute_apnic": {
-    "name": "chnroute_apnic.txt",
-    "date": "2024-12-09 21:39",
-    "md5": "2ddb60212a1582e76a20218c6c940d39",
-    "count": "8662",
-    "count_ip": "343140864",
-    "source": "apnic",
-    "url": "http://ftp.apnic.net/apnic/stats/apnic/delegated-apnic-latest"
+  "chnlist": {
+    "name": "chnlist.gz",
+    "date": "2026-04-29 10:52",
+    "md5": "5f61abb2fb23d8600ad24cd691882596",
+    "count": "116421",
+    "note": "merged from dnsmasq-china-list"
   },
   "chnroute": {
     "name": "chnroute.txt",
-    "date": "2024-12-09 21:39",
-    "md5": "90652242536462c24df068c005f5121d",
-    "count": "8406",
-    "count_ip": "359385604",
-    "source": "fancyss",
-    "url": "https://github.com/hq450/fancyss/tree/3.0/rules"
+    "date": "2026-04-29 10:52",
+    "md5": "ead568c98220d39173bb4f84c585e99b",
+    "count": "8291",
+    "count_ip": "358747708",
+    "source": "merged"
   },
-  "cdn_china": {
-    "name": "cdn.txt",
-    "date": "2024-12-09 21:39",
-    "md5": "36deefedeb032684f56c366646013b4b",
-    "count": "94075"
+  "chnroute6": {
+    "name": "chnroute6.txt",
+    "date": "2026-04-29 10:52",
+    "md5": "3e03483582f72d0f7d66d84e1d29914f",
+    "count": "2041",
+    "source": "apnic"
+  },
+  "adslist": {
+    "name": "adslist.gz",
+    "date": "2026-04-29 10:52",
+    "md5": "0afb8b3d5807d5c08530fba0a0bb8b40",
+    "count": "114270",
+    "source": "anti-ad",
+    "url": "https://anti-ad.net/domains.txt"
+  },
+  "udplist": {
+    "name": "udplist.txt",
+    "date": "2026-01-23 01:03",
+    "md5": "28323628249066941011e39e18219911",
+    "count": "50"
+  },
+  "rotlist": {
+    "name": "rotlist.txt",
+    "date": "2026-01-23 01:03",
+    "md5": "8205dd76fbdca655a4862b1e37aad583",
+    "count": "28"
+  },
+  "white_list": {
+    "name": "white_list.txt",
+    "date": "2026-01-05 22:45",
+    "md5": "25f05424ba3ecb16e850a56b022f4ec4",
+    "count": "7"
+  },
+  "black_list": {
+    "name": "black_list.txt",
+    "date": "2026-01-06 00:02",
+    "md5": "ca21177ab36d888b1400cc0a4253f0fc",
+    "count": "1"
+  },
+  "block_list": {
+    "name": "block_list.txt",
+    "date": "2026-01-19 00:48",
+    "md5": "3f74ab73534fe82a7c7c226ac3c5dfd5",
+    "count": "898"
   },
   "apple_china": {
     "name": "apple_china.txt",
-    "date": "2024-11-01 00:38",
-    "md5": "216ccd6e184055ba6133687a1c42aa3b",
-    "count": "174"
+    "date": "2026-01-05 22:45",
+    "md5": "616b568666535fe67c8ca9b830fcaa24",
+    "count": "167"
   },
   "google_china": {
     "name": "google_china.txt",
-    "date": "2024-09-29 11:26",
-    "md5": "6899bb37a930b7b4c89528035c90f5f4",
-    "count": "191"
+    "date": "2026-01-05 22:45",
+    "md5": "2003b325844ddc1c5b4702c07c6864c0",
+    "count": "143"
   },
   "cdn_test": {
     "name": "cdn_test.txt",
-    "date": "2024-12-03 01:26",
-    "md5": "84b034525bca6b60fbffb68dc8fbb9cd",
-    "count": "87"
+    "date": "2026-01-05 22:45",
+    "md5": "866e71a7b3c9f6062bf4c5b4d6818fea",
+    "count": "89"
   }
 }
