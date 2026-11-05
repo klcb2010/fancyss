@@ -111,6 +111,15 @@ sync_binary(){
 		cp -rf ${CURR_PATH}/binaries/${BIN}/${version}/${BIN}_armv5 ${CURR_PATH}/fancyss/bin-arm/${BIN}
 	done
 
+	# Confirm each packaged Xray copy matches its verified source binary.
+	for TARGET in "arm64:bin-mtk" "arm64:bin-hnd_v8" "armv7:bin-ipq32" "armv7:bin-hnd" "armv7:bin-qca" "armv5:bin-arm"; do
+		IFS=: read -r XRAY_ARCH TARGET_DIR <<< "${TARGET}"
+		if ! cmp -s "${XRAY_DIR}/xray_${XRAY_ARCH}" "${CURR_PATH}/fancyss/${TARGET_DIR}/xray"; then
+			echo "ERROR: packaged Xray binary mismatch: ${TARGET_DIR}/xray"
+			return 1
+		fi
+	done
+
 	local TUIC_VERSION=$(cat ${CURR_PATH}/binaries/tuic-client/latest.txt)
 	echo ">>> start to copy latest tuic-client, version: ${TUIC_VERSION}"
 	cp -rf ${CURR_PATH}/binaries/tuic-client/${TUIC_VERSION}/tuic-client_arm64 ${CURR_PATH}/fancyss/bin-mtk/tuic-client
