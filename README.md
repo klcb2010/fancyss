@@ -57,4 +57,4 @@ echo "$LOG_TIME: ======================= 自定义任务启动完毕 ===========
 </code></pre>
 
 
-`cron_task.txt` 文件仍保留在仓库中，没有删除；如以后需要恢复，只需取消对应工作流中 `Inject cron_task safely` 步骤的注释即可。
+然后 取消工作流中 `Inject cron_task safely` 步骤的注释即可。
