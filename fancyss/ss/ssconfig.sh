@@ -5168,19 +5168,18 @@ anytls_hostport() {
 start_anytls(){
 	local ret=""
 	local server_addr=""
-	local pass_file="/tmp/anytls_pass"
-	local verify_arg=""
+	local sni_arg=""
 
-	# 使用与安装包匹配的 anytls-zig 客户端
-	if [ -f "/koolshare/bin/anytls-zig" ]; then
+	# 实际使用 anytls-go，保留 anytls-zig 文件名以兼容现有安装和进程管理逻辑。
+	if [ -s "/koolshare/bin/anytls-zig" ]; then
 		chmod +x /koolshare/bin/anytls-zig
-		ret=$(run /koolshare/bin/anytls-zig --version 2>&1)
-		if [ -z "${ret}" ]; then
-			echo_date "错误：/koolshare/bin/anytls-zig 存在，但无法运行，请检查二进制文件和 CPU 架构。"
+		ret=$(run /koolshare/bin/anytls-zig --help 2>&1)
+		if ! printf '%s' "${ret}" | grep -q "Server address or anytls:// link"; then
+			echo_date "错误：AnyTLS Go 客户端无法运行，请检查二进制文件和 CPU 架构。"
 			close_in_five flag
 		fi
 	else
-		echo_date "错误：缺少 AnyTLS 客户端 /koolshare/bin/anytls-zig，请安装 fancyss full 版本。"
+		echo_date "错误：缺少 AnyTLS Go 客户端 /koolshare/bin/anytls-zig，请安装 fancyss full 版本。"
 		close_in_five flag
 	fi
 
@@ -5195,13 +5194,8 @@ start_anytls(){
 	}
 
 	server_addr="$(anytls_hostport "${ss_basic_anytls_server}" "${ss_basic_anytls_port}")"
-	printf '%s' "${ss_basic_anytls_pass}" > "${pass_file}"
-	chmod 600 "${pass_file}"
-
-	if [ "${ss_basic_anytls_ai}" = "1" ]; then
-		verify_arg="--insecure"
-	else
-		verify_arg="--verify"
+	if [ -n "${ss_basic_anytls_sni}" ]; then
+		sni_arg="-sni \"${ss_basic_anytls_sni}\""
 	fi
 
 	killall anytls-zig ipt2socks 2>/dev/null
@@ -5212,11 +5206,7 @@ start_anytls(){
 	detect_running_status2 ipt2socks 23456
 
 	echo_date "开启AnyTLS客户端进程..."
-	if [ -n "${ss_basic_anytls_sni}" ]; then
-		run_bg /koolshare/bin/anytls-zig -server "${server_addr}" --password-file "${pass_file}" -l 127.0.0.1:23456 -sni "${ss_basic_anytls_sni}" "${verify_arg}"
-	else
-		run_bg /koolshare/bin/anytls-zig -server "${server_addr}" --password-file "${pass_file}" -l 127.0.0.1:23456 "${verify_arg}"
-	fi
+	run_bg /koolshare/bin/anytls-zig -s "${server_addr}" -p "${ss_basic_anytls_pass}" -l 127.0.0.1:23456 ${sni_arg}
 	detect_running_status3 anytls-zig 23456 1 force
 }
 write_cron_job() {
