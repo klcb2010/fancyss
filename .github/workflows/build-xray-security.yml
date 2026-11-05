@@ -1,0 +1,73 @@
+name: Build Xray-core security update
+
+on:
+  push:
+    branches:
+      - security/xray-mptcp-2026
+    paths:
+      - ".github/workflows/build-xray-security.yml"
+      - "binaries/xray/make_latest.sh"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-xray:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: security/xray-mptcp-2026
+          fetch-depth: 0
+
+      - name: Check current Xray version
+        id: check
+        shell: bash
+        run: |
+          current="$(tr -d '\r\n' < binaries/xray/latest_2.txt)"
+          echo "Current Xray: $current"
+          if [[ "$current" == v26.10.31-* ]]; then
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "needed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install UPX
+        if: steps.check.outputs.needed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/upx5 /tmp/upx4
+          curl -fL --retry 3 https://github.com/upx/upx/releases/download/v5.0.2/upx-5.0.2-amd64_linux.tar.xz -o /tmp/upx5.tar.xz
+          curl -fL --retry 3 https://github.com/upx/upx/releases/download/v4.2.4/upx-4.2.4-amd64_linux.tar.xz -o /tmp/upx4.tar.xz
+          tar -xJf /tmp/upx5.tar.xz -C /tmp/upx5
+          tar -xJf /tmp/upx4.tar.xz -C /tmp/upx4
+          sudo install /tmp/upx5/upx-5.0.2-amd64_linux/upx /usr/local/bin/upx-5.0.2
+          sudo install /tmp/upx4/upx-4.2.4-amd64_linux/upx /usr/local/bin/upx-4.2.4
+          upx-5.0.2 --version
+          upx-4.2.4 --version
+
+      - name: Build Xray-core v26.10.31 for router architectures
+        if: steps.check.outputs.needed == 'true'
+        run: |
+          set -euo pipefail
+          bash binaries/xray/make_latest.sh v26.10.31
+          version="$(tr -d '\r\n' < binaries/xray/latest_2.txt)"
+          test -s "binaries/xray/$version/xray_arm64"
+          test -s "binaries/xray/$version/xray_armv7"
+          test -s "binaries/xray/$version/xray_armv5"
+          (cd "binaries/xray/$version" && md5sum -c md5sum.txt)
+
+      - name: Commit built binaries
+        if: steps.check.outputs.needed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(tr -d '\r\n' < binaries/xray/latest_2.txt)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add binaries/xray/latest_2.txt "binaries/xray/$version"
+          git commit -m "security: update Xray-core to v26.10.31"
+          git push origin HEAD:security/xray-mptcp-2026
