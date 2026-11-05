@@ -246,23 +246,23 @@ jobs:
       # =========================
       # 15. inject cron safely
       # =========================
-      - name: Inject cron_task safely
-        if: steps.compare_version.outputs.needs_sync == 'true'
-        run: |
-          TARGET="fancyss/ss/ssconfig.sh"
-
-          sed -i '/# CUSTOM_INJECT_START/,/# CUSTOM_INJECT_END/d' "$TARGET"
-
-          {
-            echo ""
-            echo "# CUSTOM_INJECT_START"
-            cat cron_task.txt
-            echo "# CUSTOM_INJECT_END"
-          } >> "$TARGET"
-
-      # =========================
-      # 16. commit & push
-      # =========================
+#       - name: Inject cron_task safely
+#         if: steps.compare_version.outputs.needs_sync == 'true'
+#         run: |
+#           TARGET="fancyss/ss/ssconfig.sh"
+#
+#           sed -i '/# CUSTOM_INJECT_START/,/# CUSTOM_INJECT_END/d' "$TARGET"
+#
+#           {
+#             echo ""
+#             echo "# CUSTOM_INJECT_START"
+#             cat cron_task.txt
+#             echo "# CUSTOM_INJECT_END"
+#           } >> "$TARGET"
+#
+#       # =========================
+#       # 16. commit & push
+#       # =========================
       - name: Commit & Push
         if: steps.compare_version.outputs.needs_sync == 'true'
         run: |
