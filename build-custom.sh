@@ -91,13 +91,14 @@ sync_binary(){
 	# 	rm -rf ${CURR_PATH}/fancyss/bin-ipq64/${BIN_REMOVE}
 	# done
 
-	# AnyTLS: package the Go reference client under the legacy anytls-zig name.
+	# Package AnyTLS Go alongside the original Zig client.
+	# Keep anytls-zig untouched so runtime can automatically fall back.
 	local ANYTLS_GO_BIN="${CURR_PATH}/binaries/anytls-go/anytls-client"
-	if [ ! -s "${ANYTLS_GO_BIN}" ]; then
-		echo "ERROR: missing AnyTLS Go client: ${ANYTLS_GO_BIN}"
-		return 1
+	if [ -s "${ANYTLS_GO_BIN}" ]; then
+		install -m 755 "${ANYTLS_GO_BIN}" "${CURR_PATH}/fancyss/bin-hnd_v8/anytls-go"
+	else
+		echo "WARNING: AnyTLS Go client missing; package will use the original anytls-zig client."
 	fi
-	install -m 755 "${ANYTLS_GO_BIN}" "${CURR_PATH}/fancyss/bin-hnd_v8/anytls-zig"
 
 	# update to latest binary
 	BINS_COPY="xray naive ipt2socks"
