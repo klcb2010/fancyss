@@ -55,6 +55,29 @@ prepare_geodata_assets(){
 }
 
 sync_binary(){
+	# Validate the custom Xray release before copying it into platform packages.
+	local XRAY_VERSION
+	local XRAY_DIR
+	XRAY_VERSION=$(tr -d '\r\n' < "${CURR_PATH}/binaries/xray/latest_2.txt")
+	XRAY_DIR="${CURR_PATH}/binaries/xray/${XRAY_VERSION}"
+
+	if [ -z "${XRAY_VERSION}" ] || [ ! -s "${XRAY_DIR}/md5sum.txt" ]; then
+		echo "ERROR: Xray version marker or checksum file is missing."
+		return 1
+	fi
+
+	for XRAY_ARCH in arm64 armv7 armv5; do
+		if [ ! -s "${XRAY_DIR}/xray_${XRAY_ARCH}" ]; then
+			echo "ERROR: missing Xray binary: xray_${XRAY_ARCH}"
+			return 1
+		fi
+	done
+
+	if ! (cd "${XRAY_DIR}" && md5sum -c md5sum.txt); then
+		echo "ERROR: Xray binary checksum verification failed."
+		return 1
+	fi
+
 	# BINS_REMOVE="naive"
 	# for BIN_REMOVE in $BINS_REMOVE;
 	# do
@@ -417,7 +440,7 @@ papare(){
     cp_rules
     prepare_geodata_assets
     cp_rules_ng2
-    sync_binary
+    sync_binary || exit 1
     cat >${CURR_PATH}/packages/version_tmp.json.js <<-EOF
 {
 "name":"fancyss"
