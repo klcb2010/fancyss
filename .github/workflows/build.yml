@@ -5,7 +5,7 @@ on:
     - cron: "10 15 * * *"
   push:
     branches:
-      - "3.0"
+      - "security/xray-mptcp-2026"
   workflow_dispatch:
 
 jobs:
