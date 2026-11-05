@@ -1781,7 +1781,7 @@ install_now(){
     echo_date "检测jffs分区剩余空间..."
 }
 
-	SPACE_AVAL=$(df | grep -w "/jffs" | awk '{print $4}')
+	SPACE_AVAL=$(df | awk '$NF == "/jffs" {print $4; exit}')
 	JFFS_FS_TYPE=$(mount | awk '$3 == "/jffs" {print $5; exit}')
 	SPACE_TREE_NEED=$(du -s /tmp/shadowsocks 2>/dev/null | awk '{print $1}')
 	cd /tmp
