@@ -5167,23 +5167,43 @@ anytls_hostport() {
 
 start_anytls(){
 	local server_addr=""
-	local verify_arg="--insecure"
-	
-	# 强制使用安装到 bin 目录下的文件
-	ANYTLS_BIN="/koolshare/bin/anytls-go"
-	chmod +x "$ANYTLS_BIN"
+	local ANYTLS_BIN="/koolshare/bin/anytls-go"
+	local PASS=""
+	local SNI=""
+	local HOST=""
+	local PORT=""
+	local BIN_CHECK=""
 
-	# 1. 变量清洗，防止不可见字符干扰
-	local PASS=$(echo "${ss_basic_anytls_pass}" | tr -d '\r')
-	local SNI=$(echo "${ss_basic_anytls_sni}" | tr -d '\r')
-	local HOST=$(echo "${ss_basic_anytls_server}" | tr -d '\r')
-	local PORT=$(echo "${ss_basic_anytls_port}" | tr -d '\r')
+	# 1. 检查客户端二进制
+	if [ ! -s "${ANYTLS_BIN}" ]; then
+		echo_date "错误：缺少 AnyTLS 客户端：${ANYTLS_BIN}"
+		echo_date "请安装包含 AnyTLS 客户端的 fancyss full 版本。"
+		close_in_five flag
+	fi
+	chmod +x "${ANYTLS_BIN}"
+	BIN_CHECK=$("${ANYTLS_BIN}" -h 2>&1)
+	if [ -z "${BIN_CHECK}" ]; then
+		echo_date "错误：AnyTLS 客户端无法运行，请检查二进制文件和 CPU 架构。"
+		close_in_five flag
+	fi
 
-	# 2. 准备地址
-	server_addr="${HOST}:${PORT}"
+	# 2. 读取并清洗节点参数
+	PASS=$(printf '%s' "${ss_basic_anytls_pass}" | tr -d '\r')
+	SNI=$(printf '%s' "${ss_basic_anytls_sni}" | tr -d '\r')
+	HOST=$(printf '%s' "${ss_basic_anytls_server}" | tr -d '\r')
+	PORT=$(printf '%s' "${ss_basic_anytls_port}" | tr -d '\r')
+	[ -n "${PORT}" ] || PORT="443"
 
-	# 3. 清理环境，防止端口占用
-	killall anytls-go anytls-go anytls-client ipt2socks 2>/dev/null
+	if [ -z "${HOST}" ] || [ -z "${PASS}" ]; then
+		echo_date "错误：AnyTLS 节点缺少服务器地址或密码。"
+		close_in_five flag
+	fi
+
+	# 正确处理 IPv4、域名和 IPv6 地址
+	server_addr="$(anytls_hostport "${HOST}" "${PORT}")"
+
+	# 3. 清理旧进程和监听端口
+	killall anytls-go anytls-client ipt2socks 2>/dev/null
 	sleep 1
 
 	# 4. 启动透明代理转换层
@@ -5191,24 +5211,17 @@ start_anytls(){
 	run_bg ipt2socks -p 23456 -l 3333 -b 0.0.0.0 -B :: -n 10000 -R
 	detect_running_status2 ipt2socks 23456
 
-	# 5. 开启 AnyTLS 客户端进程
+	# 5. 使用 anytls-go 官方客户端参数启动 SOCKS5 入站
+	# anytls-go 使用 -l / -s / -p；并不支持 -server / -socks / --insecure
 	echo_date "开启AnyTLS客户端进程..."
-	# 使用你手动测试成功的 -p (密码字符串) 和 -socks (监听端口)
 	if [ -n "${SNI}" ]; then
-		"$ANYTLS_BIN" -server "${server_addr}" \
-			-p "${PASS}" \
-			-socks 127.0.0.1:23456 \
-			-sni "${SNI}" \
-			${verify_arg} > /tmp/anytls_run.log 2>&1 &
+		"${ANYTLS_BIN}" -l 127.0.0.1:23456 -s "${server_addr}" -p "${PASS}" -sni "${SNI}" > /tmp/anytls_run.log 2>&1 &
 	else
-		"$ANYTLS_BIN" -server "${server_addr}" \
-			-p "${PASS}" \
-			-socks 127.0.0.1:23456 \
-			${verify_arg} > /tmp/anytls_run.log 2>&1 &
+		"${ANYTLS_BIN}" -l 127.0.0.1:23456 -s "${server_addr}" -p "${PASS}" > /tmp/anytls_run.log 2>&1 &
 	fi
 
-	# 6. 进程检测（只要包含 anytls 就算运行成功）
-	detect_running_status3 anytls 23456 1 force
+	# 6. 检查客户端是否成功启动
+	detect_running_status3 anytls-go 23456 1 force
 }
 
 write_cron_job() {
