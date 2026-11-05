@@ -121,6 +121,7 @@ jobs:
               white_list.txt \
               black_list.txt \
               ss_update.sh \
+              fancyss/scripts/ss_xray.sh \
               clear.py || true
 
             # add 全部
@@ -141,6 +142,7 @@ jobs:
             white_list.txt \
             black_list.txt \
             ss_update.sh \
+            fancyss/scripts/ss_xray.sh \
             clear.py || true
 
       # =========================
