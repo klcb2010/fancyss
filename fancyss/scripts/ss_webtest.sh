@@ -3497,8 +3497,6 @@ test_13_at(){
 	local anytls_sni=""
 	local anytls_ai=""
 	local sni_arg=""
-	local verify_arg=""
-	local pass_file=""
 
 	case "${file}" in
 	/*)
@@ -3533,19 +3531,12 @@ test_13_at(){
 			continue
 		}
 		server_addr="$(wt_anytls_hostport "${anytls_server}" "${anytls_port}")"
-		pass_file="${TMP2}/conf/${nu}_anytls.pass"
-		printf '%s' "${anytls_pass}" > "${pass_file}"
 		sni_arg=""
 		[ -n "${anytls_sni}" ] && sni_arg=" -sni $(wt_shell_quote "${anytls_sni}")"
-		if [ "${anytls_ai}" = "1" ]; then
-			verify_arg=" --insecure"
-		else
-			verify_arg=" --verify"
-		fi
 		pid_file="${TMP2}/pids/anytls_${nu}.pid"
 		start_script="${hooks_dir}/${nu}.start.sh"
 		stop_script="${hooks_dir}/${nu}.stop.sh"
-		wt_write_pid_hook_scripts "${start_script}" "${stop_script}" "${pid_file}" "\"/koolshare/bin/anytls-zig\" -server $(wt_shell_quote "${server_addr}") --password-file $(wt_shell_quote "${pass_file}") -l $(wt_shell_quote "127.0.0.1:${socks5_port}")${sni_arg}${verify_arg}" || continue
+		wt_write_pid_hook_scripts "${start_script}" "${stop_script}" "${pid_file}" "\"/koolshare/bin/anytls-zig\" -s $(wt_shell_quote "${server_addr}") -p $(wt_shell_quote "${anytls_pass}") -l $(wt_shell_quote "127.0.0.1:${socks5_port}")${sni_arg}" || continue
 		wt_append_protocol_target_row "${targets_file}" "${valid_nodes_file}" "${nu}" "${socks5_port}" "${start_script}" "${stop_script}" "${socks5_port}" "5000" || continue
 	done < "${file_path}"
 	[ -s "${targets_file}" ] || return 0
