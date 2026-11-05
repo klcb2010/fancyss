@@ -96,7 +96,7 @@ GET_PROXY_TOOL(){
 		echo "xray-core"
 		;;
 	9)
-		echo "anytls-go"
+		echo "anytls-zig"
 		;;
 	esac
 }
@@ -650,13 +650,13 @@ if [ "${current_type}" == "1" ]; then
 			fi
 		fi
 	elif [ "${current_type}" == "9" ]; then
-		local ANYTLS_PID=$(pidof anytls-go)
+		local ANYTLS_PID=$(pidof anytls-zig)
 		local ANYTLS_RSS=$(GET_VM_RSS_MULTI ${ANYTLS_PID})
 		local ANYTLS_UPTIME=$(GET_PROC_UPTIME_MULTI ${ANYTLS_PID})
 		if [ -n "${ANYTLS_PID}" ]; then
-			echo "anytls-go	运行中🟢		socks5		${ANYTLS_PID}		${ANYTLS_RSS}		${ANYTLS_UPTIME}"
+			echo "anytls-zig	运行中🟢		socks5		${ANYTLS_PID}		${ANYTLS_RSS}		${ANYTLS_UPTIME}"
 		else
-			echo "anytls-go	未运行🔴		socks5"
+			echo "anytls-zig	未运行🔴		socks5"
 		fi
 		local IPT2SOCKS_PID=$(pidof ipt2socks)
 		local IPT2SOCKS_RSS=$(GET_VM_RSS_MULTI ${IPT2SOCKS_PID})
@@ -768,7 +768,7 @@ get_zig_tool_version() {
 	node-tool|sub-tool|xapi-tool)
 		"${bin}" version 2>&1 | sed '/^[[:space:]]*$/d; 1q' | tr -d '\r'
 		;;
-		anytls-go|geotool|status-tool|statusctl|webtest-tool|webtestctl|websocketd)
+		anytls-zig|geotool|status-tool|statusctl|webtest-tool|webtestctl|websocketd)
 			"${bin}" --version 2>&1 | sed '/^[[:space:]]*$/d; 1q' | tr -d '\r'
 			;;
 	*)
@@ -803,8 +803,8 @@ ECHO_VERSION(){
 		if [ -x "/koolshare/bin/tuic-client" ];then
 			printf '%-16s %-16s %s\n' "tuic-client" "$(run tuic-client -V|awk '{print $NF}')" "https://github.com/Itsusinn/tuic"
 		fi
-		if [ -x "/koolshare/bin/anytls-go" ];then
-			print_bin_version_line "anytls-go" "$(get_zig_tool_version /koolshare/bin/anytls-go)" "fancyss Zig / AnyTLS 客户端"
+		if [ -x "/koolshare/bin/anytls-zig" ];then
+			print_bin_version_line "anytls-zig" "$(get_zig_tool_version /koolshare/bin/anytls-zig)" "fancyss Zig / AnyTLS 客户端"
 		fi
 		if [ -x "/koolshare/bin/ipt2socks" ];then
 			printf '%-16s %-16s %s\n' "ipt2socks" "$(run /koolshare/bin/ipt2socks -V|awk '{print $2}')" "https://github.com/zfl9/ipt2socks"
