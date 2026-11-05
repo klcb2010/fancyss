@@ -5170,8 +5170,9 @@ start_anytls(){
 	local server_addr=""
 	local pass_file="/tmp/anytls_pass"
 	local verify_arg="--verify"
-	local anytls_bin=""
-	local anytls_mode="zig"
+	local anytls_bin="/koolshare/bin/anytls-zig"
+	local fallback_bin="/koolshare/bin/anytls-zig.bak"
+	local anytls_mode="go"
 
 	[ -n "${ss_basic_anytls_server}" ] || {
 		echo_date "错误：AnyTLS 节点未配置服务器地址。"
@@ -5186,67 +5187,46 @@ start_anytls(){
 	server_addr="$(anytls_hostport "${ss_basic_anytls_server}" "${ss_basic_anytls_port}")"
 	printf '%s' "${ss_basic_anytls_pass}" > "${pass_file}"
 	chmod 600 "${pass_file}"
+	[ "${ss_basic_anytls_ai}" = "1" ] && verify_arg="--insecure"
 
-	# 优先尝试 Go 客户端；缺失或无法执行时自动回退到原版 Zig 客户端。
-	if [ -s "/koolshare/bin/anytls-go" ]; then
-		chmod +x /koolshare/bin/anytls-go
-		ret=$(run /koolshare/bin/anytls-go --help 2>&1)
-		if printf '%s' "${ret}" | grep -q "Server address or anytls:// link"; then
-			anytls_bin="/koolshare/bin/anytls-go"
-			anytls_mode="go"
-		else
-			echo_date "AnyTLS Go 客户端不可用，自动回退原版 Zig 客户端。"
-		fi
+	# Go occupies the legacy anytls-zig path; verify its CLI before using it.
+	if [ ! -s "${anytls_bin}" ]; then
+		anytls_mode="zig"
+	elif ! run "${anytls_bin}" --help 2>&1 | grep -q "Server address or anytls:// link"; then
+		anytls_mode="zig"
+	fi
+	if [ "${anytls_mode}" = "zig" ] && [ ! -s "${fallback_bin}" ]; then
+		echo_date "错误：AnyTLS Go 不可用，且原版 Zig 回退文件缺失。"
+		close_in_five flag
 	fi
 
-	if [ "${anytls_mode}" = "zig" ]; then
-		if [ ! -s "/koolshare/bin/anytls-zig" ]; then
-			echo_date "错误：Go 客户端不可用，且原版 AnyTLS 客户端缺失。"
-			close_in_five flag
-		fi
-		chmod +x /koolshare/bin/anytls-zig
-		anytls_bin="/koolshare/bin/anytls-zig"
-		[ "${ss_basic_anytls_ai}" = "1" ] && verify_arg="--insecure"
-	fi
-
-	killall anytls-go anytls-zig ipt2socks 2>/dev/null
+	killall anytls-zig anytls-zig.bak ipt2socks 2>/dev/null
 	sleep 1
 	echo_date "开启ipt2socks进程..."
 	run_bg ipt2socks -p 23456 -l 3333 -b 0.0.0.0 -B :: -n 10000 -R
 	detect_running_status2 ipt2socks 23456
 
-	echo_date "开启AnyTLS客户端进程（${anytls_mode}）..."
 	if [ "${anytls_mode}" = "go" ]; then
+		echo_date "开启AnyTLS Go客户端（伪装 anytls-zig）..."
 		if [ -n "${ss_basic_anytls_sni}" ]; then
 			run_bg "${anytls_bin}" -s "${server_addr}" -p "${ss_basic_anytls_pass}" -l 127.0.0.1:23456 -sni "${ss_basic_anytls_sni}"
 		else
 			run_bg "${anytls_bin}" -s "${server_addr}" -p "${ss_basic_anytls_pass}" -l 127.0.0.1:23456
 		fi
 		sleep 1
-		if ! pidof anytls-go >/dev/null 2>&1; then
-			echo_date "AnyTLS Go 客户端启动失败，自动回退原版 Zig 客户端。"
+		if ! pidof anytls-zig >/dev/null 2>&1; then
+			echo_date "AnyTLS Go 启动失败，自动回退原版 Zig 客户端。"
 			anytls_mode="zig"
-			anytls_bin="/koolshare/bin/anytls-zig"
-			if [ ! -s "${anytls_bin}" ]; then
-				echo_date "错误：原版 AnyTLS 客户端缺失，无法回退。"
-				close_in_five flag
-			fi
-			if [ -n "${ss_basic_anytls_sni}" ]; then
-				run_bg "${anytls_bin}" -server "${server_addr}" --password-file "${pass_file}" -l 127.0.0.1:23456 -sni "${ss_basic_anytls_sni}" "${verify_arg}"
-			else
-				run_bg "${anytls_bin}" -server "${server_addr}" --password-file "${pass_file}" -l 127.0.0.1:23456 "${verify_arg}"
-			fi
-		fi
-	else
-		if [ -n "${ss_basic_anytls_sni}" ]; then
-			run_bg "${anytls_bin}" -server "${server_addr}" --password-file "${pass_file}" -l 127.0.0.1:23456 -sni "${ss_basic_anytls_sni}" "${verify_arg}"
-		else
-			run_bg "${anytls_bin}" -server "${server_addr}" --password-file "${pass_file}" -l 127.0.0.1:23456 "${verify_arg}"
 		fi
 	fi
 
-	if [ "${anytls_mode}" = "go" ]; then
-		detect_running_status3 anytls-go 23456 1 force
+	if [ "${anytls_mode}" = "zig" ]; then
+		if [ -n "${ss_basic_anytls_sni}" ]; then
+			run_bg "${fallback_bin}" -server "${server_addr}" --password-file "${pass_file}" -l 127.0.0.1:23456 -sni "${ss_basic_anytls_sni}" "${verify_arg}"
+		else
+			run_bg "${fallback_bin}" -server "${server_addr}" --password-file "${pass_file}" -l 127.0.0.1:23456 "${verify_arg}"
+		fi
+		detect_running_status3 anytls-zig.bak 23456 1 force
 	else
 		detect_running_status3 anytls-zig 23456 1 force
 	fi

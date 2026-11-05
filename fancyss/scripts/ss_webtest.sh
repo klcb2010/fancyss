@@ -3537,12 +3537,16 @@ test_13_at(){
 		start_script="${hooks_dir}/${nu}.start.sh"
 		stop_script="${hooks_dir}/${nu}.stop.sh"
 		anytls_go_help=""
-		if [ -s "/koolshare/bin/anytls-go" ]; then
-			anytls_go_help="$(/koolshare/bin/anytls-go --help 2>&1)"
+		if [ -s "/koolshare/bin/anytls-zig" ]; then
+			anytls_go_help="$(/koolshare/bin/anytls-zig --help 2>&1)"
 		fi
 		if printf '%s' "${anytls_go_help}" | grep -q "Server address or anytls:// link"; then
-			wt_write_pid_hook_scripts "${start_script}" "${stop_script}" "${pid_file}" "\"/koolshare/bin/anytls-go\" -s $(wt_shell_quote "${server_addr}") -p $(wt_shell_quote "${anytls_pass}") -l $(wt_shell_quote "127.0.0.1:${socks5_port}")${sni_arg}" || continue
+			wt_write_pid_hook_scripts "${start_script}" "${stop_script}" "${pid_file}" "\"/koolshare/bin/anytls-zig\" -s $(wt_shell_quote "${server_addr}") -p $(wt_shell_quote "${anytls_pass}") -l $(wt_shell_quote "127.0.0.1:${socks5_port}")${sni_arg}" || continue
 		else
+			if [ ! -s "/koolshare/bin/anytls-zig.bak" ]; then
+				wt_mark_failed_result "${nu}"
+				continue
+			fi
 			pass_file="${TMP2}/anytls_${nu}.pass"
 			printf '%s' "${anytls_pass}" > "${pass_file}"
 			chmod 600 "${pass_file}"
@@ -3550,7 +3554,7 @@ test_13_at(){
 			[ "${anytls_ai}" = "1" ] && verify_arg="--insecure"
 			zig_sni_arg=""
 			[ -n "${anytls_sni}" ] && zig_sni_arg=" -sni $(wt_shell_quote "${anytls_sni}")"
-			wt_write_pid_hook_scripts "${start_script}" "${stop_script}" "${pid_file}" "\"/koolshare/bin/anytls-zig\" -server $(wt_shell_quote "${server_addr}") --password-file $(wt_shell_quote "${pass_file}") -l $(wt_shell_quote "127.0.0.1:${socks5_port}")${zig_sni_arg} ${verify_arg}" || continue
+			wt_write_pid_hook_scripts "${start_script}" "${stop_script}" "${pid_file}" "\"/koolshare/bin/anytls-zig.bak\" -server $(wt_shell_quote "${server_addr}") --password-file $(wt_shell_quote "${pass_file}") -l $(wt_shell_quote "127.0.0.1:${socks5_port}")${zig_sni_arg} ${verify_arg}" || continue
 		fi
 		wt_append_protocol_target_row "${targets_file}" "${valid_nodes_file}" "${nu}" "${socks5_port}" "${start_script}" "${stop_script}" "${socks5_port}" "5000" || continue
 	done < "${file_path}"
