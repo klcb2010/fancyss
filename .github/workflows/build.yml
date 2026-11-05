@@ -3,6 +3,9 @@ name: FancySS Mod Build by klcb2010
 on:
   schedule:
     - cron: "10 15 * * *"
+  push:
+    branches:
+      - "3.0"
   workflow_dispatch:
 
 jobs:
@@ -63,12 +66,28 @@ jobs:
           fi
 
       # =========================
-      # 5. skip
+      # 5. decide whether to build
       # =========================
-      - name: Skip if no update
-        if: steps.compare_version.outputs.needs_sync == 'false'
+      - name: Determine build requirement
+        id: build_decision
         run: |
-          echo "已是最新版本"
+          if [ "${{ steps.compare_version.outputs.needs_sync }}" = "true" ] || \
+             [ "${GITHUB_EVENT_NAME}" = "push" ] || \
+             [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            echo "needs_build=true" >> "$GITHUB_OUTPUT"
+            echo "本地提交、手动触发或上游更新，执行构建"
+          else
+            echo "needs_build=false" >> "$GITHUB_OUTPUT"
+            echo "定时检查：上游版本无更新，跳过构建"
+          fi
+
+      # =========================
+      # 6. skip
+      # =========================
+      - name: Skip if no build needed
+        if: steps.build_decision.outputs.needs_build == 'false'
+        run: |
+          echo "没有需要构建的变更"
           exit 0
 
       # =========================
@@ -150,7 +169,7 @@ jobs:
       # 8. install jq
       # =========================
       - name: Install jq
-        if: steps.compare_version.outputs.needs_sync == 'true'
+        if: steps.build_decision.outputs.needs_build == 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y jq
@@ -159,7 +178,7 @@ jobs:
       # 9. patch rules
       # =========================
       - name: Patch ss_rule_update.sh
-        if: steps.compare_version.outputs.needs_sync == 'true'
+        if: steps.build_decision.outputs.needs_build == 'true'
         run: |
           sed -i '9s|.*|URL_MAIN="https://raw.githubusercontent.com/qxzg/Actions/3.0/fancyss_rules"|' \
             fancyss/scripts/ss_rule_update.sh
@@ -168,7 +187,7 @@ jobs:
       # 10. inject cron safely
       # =========================
       - name: Inject cron_task safely
-        if: steps.compare_version.outputs.needs_sync == 'true'
+        if: steps.build_decision.outputs.needs_build == 'true'
         run: |
           TARGET="fancyss/ss/ssconfig.sh"
 
@@ -187,7 +206,7 @@ jobs:
       # 11. commit & push
       # =========================
       - name: Commit & Push
-        if: steps.compare_version.outputs.needs_sync == 'true'
+        if: steps.build_decision.outputs.needs_build == 'true'
         run: |
           git add -A
 
@@ -200,6 +219,7 @@ jobs:
           fi
     # 11.5 自动刷新故障转移后节点列表
       - name: Auto refresh after failover
+        if: steps.build_decision.outputs.needs_build == 'true'
         run: |
           TARGET=$(find . -name "Module_shadowsocks.asp" | head -n1)
 
@@ -259,7 +279,7 @@ jobs:
       # 12. build
       # =========================
       - name: Build packages
-        if: steps.compare_version.outputs.needs_sync == 'true'
+        if: steps.build_decision.outputs.needs_build == 'true'
         run: |
           chmod +x build-custom.sh
           ./build-custom.sh
@@ -268,7 +288,7 @@ jobs:
       # 13. release info
       # =========================
       - name: Generate release info
-        if: steps.compare_version.outputs.needs_sync == 'true'
+        if: steps.build_decision.outputs.needs_build == 'true'
         id: release_info
         run: |
           VERSION=$(jq -r '.version' packages/version.json.js)
@@ -289,7 +309,7 @@ jobs:
       # 14. release
       # =========================
       - name: Create Release
-        if: steps.compare_version.outputs.needs_sync == 'true'
+        if: steps.build_decision.outputs.needs_build == 'true'
         uses: softprops/action-gh-release@v2.6.1
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
