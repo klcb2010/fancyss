@@ -206,7 +206,7 @@ jobs:
       # 11. commit & push
       # =========================
       - name: Commit & Push
-        if: steps.build_decision.outputs.needs_build == 'true'
+        if: steps.compare_version.outputs.needs_sync == 'true'
         run: |
           git add -A
 
