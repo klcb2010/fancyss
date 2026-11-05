@@ -60,7 +60,7 @@ jobs:
           test -s "binaries/xray/$version/xray_armv5"
           (cd "binaries/xray/$version" && md5sum -c md5sum.txt)
 
-      - name: Commit built binaries
+      - name: Commit and push built binaries
         if: steps.check.outputs.needed == 'true'
         shell: bash
         run: |
@@ -70,4 +70,16 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add binaries/xray/latest_2.txt "binaries/xray/$version"
           git commit -m "security: update Xray-core to v26.10.31"
-          git push origin HEAD:security/xray-mptcp-2026
+
+          # Rebase the generated-binary commit onto the latest remote branch.
+          # Retry if another commit lands between fetch and push.
+          for attempt in 1 2 3; do
+            git fetch origin security/xray-mptcp-2026
+            git rebase origin/security/xray-mptcp-2026
+            if git push origin HEAD:security/xray-mptcp-2026; then
+              exit 0
+            fi
+            echo "Push attempt $attempt failed; retrying with latest remote branch."
+          done
+          echo "Unable to push after 3 attempts."
+          exit 1
