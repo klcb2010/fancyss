@@ -146,26 +146,6 @@ sync_binary(){
 	cp -rf ${CURR_PATH}/binaries/node-tool/node-tool-${NODETOOL_VER}-linux-armv7a ${CURR_PATH}/fancyss/bin-qca/node-tool
 	cp -rf ${CURR_PATH}/binaries/node-tool/node-tool-${NODETOOL_VER}-linux-armv5te ${CURR_PATH}/fancyss/bin-arm/node-tool
 
-	cp -rf ${CURR_PATH}/binaries/anytls-go/anytls-client \
-    ${CURR_PATH}/fancyss/bin-mtk/anytls-go
-
-    cp -rf ${CURR_PATH}/binaries/anytls-go/anytls-client \
-    ${CURR_PATH}/fancyss/bin-hnd_v8/anytls-go
-
-    cp -rf ${CURR_PATH}/binaries/anytls-go/anytls-client \
-    ${CURR_PATH}/fancyss/bin-ipq64/anytls-go
-
-    cp -rf ${CURR_PATH}/binaries/anytls-go/anytls-client \
-    ${CURR_PATH}/fancyss/bin-ipq32/anytls-go
-
-    cp -rf ${CURR_PATH}/binaries/anytls-go/anytls-client \
-    ${CURR_PATH}/fancyss/bin-hnd/anytls-go
-
-    cp -rf ${CURR_PATH}/binaries/anytls-go/anytls-client \
-    ${CURR_PATH}/fancyss/bin-qca/anytls-go
-
-    cp -rf ${CURR_PATH}/binaries/anytls-go/anytls-client \
-    ${CURR_PATH}/fancyss/bin-arm/anytls-go
 
 	local WEBSOCKETD_VER="v$(zig_tool_version ws-tool)"
 	cp -rf ${CURR_PATH}/binaries/websocketd/websocketd-${WEBSOCKETD_VER}-linux-aarch64 ${CURR_PATH}/fancyss/bin-mtk/websocketd
@@ -267,14 +247,14 @@ verify_zig_tool_binaries(){
 	verify_zig_copy "${CURR_PATH}/binaries/node-tool/node-tool-${NODETOOL_VER}-linux-armv7a" qca node-tool
 	verify_zig_copy "${CURR_PATH}/binaries/node-tool/node-tool-${NODETOOL_VER}-linux-armv5te" arm node-tool
 
-	local ANYTLS_ZIG_VER="v$(zig_tool_version anytls-go)"
-	verify_zig_copy "${CURR_PATH}/binaries/anytls-go/anytls-go-${ANYTLS_ZIG_VER}-linux-aarch64" mtk anytls-go
-	verify_zig_copy "${CURR_PATH}/binaries/anytls-go/anytls-go-${ANYTLS_ZIG_VER}-linux-aarch64" hnd_v8 anytls-go
-	verify_zig_copy "${CURR_PATH}/binaries/anytls-go/anytls-go-${ANYTLS_ZIG_VER}-linux-aarch64" ipq64 anytls-go
-	verify_zig_copy "${CURR_PATH}/binaries/anytls-go/anytls-go-${ANYTLS_ZIG_VER}-linux-armv7a" ipq32 anytls-go
-	verify_zig_copy "${CURR_PATH}/binaries/anytls-go/anytls-go-${ANYTLS_ZIG_VER}-linux-armv7hf" hnd anytls-go
-	verify_zig_copy "${CURR_PATH}/binaries/anytls-go/anytls-go-${ANYTLS_ZIG_VER}-linux-armv7a" qca anytls-go
-	verify_zig_copy "${CURR_PATH}/binaries/anytls-go/anytls-go-${ANYTLS_ZIG_VER}-linux-armv5te" arm anytls-go
+	local ANYTLS_ZIG_VER="v0.1.6"
+	verify_zig_copy "${CURR_PATH}/binaries/anytls-zig/anytls-zig-${ANYTLS_ZIG_VER}-linux-aarch64" mtk anytls-zig
+	verify_zig_copy "${CURR_PATH}/binaries/anytls-zig/anytls-zig-${ANYTLS_ZIG_VER}-linux-aarch64" hnd_v8 anytls-zig
+	verify_zig_copy "${CURR_PATH}/binaries/anytls-zig/anytls-zig-${ANYTLS_ZIG_VER}-linux-aarch64" ipq64 anytls-zig
+	verify_zig_copy "${CURR_PATH}/binaries/anytls-zig/anytls-zig-${ANYTLS_ZIG_VER}-linux-armv7a" ipq32 anytls-zig
+	verify_zig_copy "${CURR_PATH}/binaries/anytls-zig/anytls-zig-${ANYTLS_ZIG_VER}-linux-armv7hf" hnd anytls-zig
+	verify_zig_copy "${CURR_PATH}/binaries/anytls-zig/anytls-zig-${ANYTLS_ZIG_VER}-linux-armv7a" qca anytls-zig
+	verify_zig_copy "${CURR_PATH}/binaries/anytls-zig/anytls-zig-${ANYTLS_ZIG_VER}-linux-armv5te" arm anytls-zig
 
 	local WEBSOCKETD_VER="v$(zig_tool_version ws-tool)"
 	verify_zig_copy "${CURR_PATH}/binaries/websocketd/websocketd-${WEBSOCKETD_VER}-linux-aarch64" mtk websocketd
@@ -448,7 +428,7 @@ gen_folder(){
 		# remove binaries
 		rm -rf ./shadowsocks/bin/naive
 		rm -rf ./shadowsocks/bin/tuic-client
-		rm -rf ./shadowsocks/bin/anytls-go
+		rm -rf ./shadowsocks/bin/anytls-zig
 		rm -rf ./shadowsocks/bin/ipt2socks
 		rm -rf ./shadowsocks/bin/haveged
 
