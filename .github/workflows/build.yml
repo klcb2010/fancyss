@@ -186,25 +186,25 @@ jobs:
       # =========================
       # 10. inject cron safely
       # =========================
-      - name: Inject cron_task safely
-        if: steps.build_decision.outputs.needs_build == 'true'
-        run: |
-          TARGET="fancyss/ss/ssconfig.sh"
-
-          # 删除旧注入块（防止重复注入）
-          sed -i '/# CUSTOM_INJECT_START/,/# CUSTOM_INJECT_END/d' "$TARGET"
-
-          # 重新注入
-          {
-            echo ""
-            echo "# CUSTOM_INJECT_START"
-            cat cron_task.txt
-            echo "# CUSTOM_INJECT_END"
-          } >> "$TARGET"
-
-      # =========================
-      # 11. commit & push
-      # =========================
+#       - name: Inject cron_task safely
+#         if: steps.build_decision.outputs.needs_build == 'true'
+#         run: |
+#           TARGET="fancyss/ss/ssconfig.sh"
+#
+#           # 删除旧注入块（防止重复注入）
+#           sed -i '/# CUSTOM_INJECT_START/,/# CUSTOM_INJECT_END/d' "$TARGET"
+#
+#           # 重新注入
+#           {
+#             echo ""
+#             echo "# CUSTOM_INJECT_START"
+#             cat cron_task.txt
+#             echo "# CUSTOM_INJECT_END"
+#           } >> "$TARGET"
+#
+#       # =========================
+#       # 11. commit & push
+#       # =========================
       - name: Commit & Push
         if: steps.compare_version.outputs.needs_sync == 'true'
         run: |
