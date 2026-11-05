@@ -14,3 +14,9 @@
 
 # 相关脚本在 [Asuswrt-Merlin-Custom-Scripts](https://github.com/klcb2010/Asuswrt-Merlin-Custom-Scripts)
 - 国外游戏玩家取消 QUIC流量屏蔽 否则提示网络异常
+
+## cron_task.txt 注入状态
+
+目前已在两个自动构建工作流（普通版与 Doge 版）中，**临时注释停用 cron_task.txt 注入步骤**。因此构建时不会再把该文件中的自定义定时任务及后台启动代码注入到 `ssconfig.sh`。
+
+`cron_task.txt` 文件仍保留在仓库中，没有删除；如以后需要恢复，只需取消对应工作流中 `Inject cron_task safely` 步骤的注释即可。
