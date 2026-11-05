@@ -1341,10 +1341,10 @@ kill_process() {
 		killall tuic-client
 	fi
 
-	local ANYTLS_PID=$(ps | grep "anytls-go" | grep -v grep | awk '{print $1}')
+	local ANYTLS_PID=$(ps | grep "anytls-zig" | grep -v grep | awk '{print $1}')
 	if [ -n "${ANYTLS_PID}" ];then
-		echo_date "关闭anytls-go进程..."
-		killall anytls-go
+		echo_date "关闭anytls-zig进程..."
+		killall anytls-zig
 	fi
 
 	local OBFSLOCAL_PID=$(ps | grep "obfs-local" | grep -v grep | awk '{print $1}')
@@ -5166,64 +5166,59 @@ anytls_hostport() {
 }
 
 start_anytls(){
+	local ret=""
 	local server_addr=""
-	local ANYTLS_BIN="/koolshare/bin/anytls-go"
-	local PASS=""
-	local SNI=""
-	local HOST=""
-	local PORT=""
-	local BIN_CHECK=""
+	local pass_file="/tmp/anytls_pass"
+	local verify_arg=""
 
-	# 1. 检查客户端二进制
-	if [ ! -s "${ANYTLS_BIN}" ]; then
-		echo_date "错误：缺少 AnyTLS 客户端：${ANYTLS_BIN}"
-		echo_date "请安装包含 AnyTLS 客户端的 fancyss full 版本。"
-		close_in_five flag
-	fi
-	chmod +x "${ANYTLS_BIN}"
-	BIN_CHECK=$("${ANYTLS_BIN}" -h 2>&1)
-	if [ -z "${BIN_CHECK}" ]; then
-		echo_date "错误：AnyTLS 客户端无法运行，请检查二进制文件和 CPU 架构。"
+	# 使用与安装包匹配的 anytls-zig 客户端
+	if [ -f "/koolshare/bin/anytls-zig" ]; then
+		chmod +x /koolshare/bin/anytls-zig
+		ret=$(run /koolshare/bin/anytls-zig --version 2>&1)
+		if [ -z "${ret}" ]; then
+			echo_date "错误：/koolshare/bin/anytls-zig 存在，但无法运行，请检查二进制文件和 CPU 架构。"
+			close_in_five flag
+		fi
+	else
+		echo_date "错误：缺少 AnyTLS 客户端 /koolshare/bin/anytls-zig，请安装 fancyss full 版本。"
 		close_in_five flag
 	fi
 
-	# 2. 读取并清洗节点参数
-	PASS=$(printf '%s' "${ss_basic_anytls_pass}" | tr -d '\r')
-	SNI=$(printf '%s' "${ss_basic_anytls_sni}" | tr -d '\r')
-	HOST=$(printf '%s' "${ss_basic_anytls_server}" | tr -d '\r')
-	PORT=$(printf '%s' "${ss_basic_anytls_port}" | tr -d '\r')
-	[ -n "${PORT}" ] || PORT="443"
-
-	if [ -z "${HOST}" ] || [ -z "${PASS}" ]; then
-		echo_date "错误：AnyTLS 节点缺少服务器地址或密码。"
+	[ -n "${ss_basic_anytls_server}" ] || {
+		echo_date "错误：AnyTLS 节点未配置服务器地址。"
 		close_in_five flag
+	}
+	[ -n "${ss_basic_anytls_port}" ] || ss_basic_anytls_port="443"
+	[ -n "${ss_basic_anytls_pass}" ] || {
+		echo_date "错误：AnyTLS 节点未配置密码。"
+		close_in_five flag
+	}
+
+	server_addr="$(anytls_hostport "${ss_basic_anytls_server}" "${ss_basic_anytls_port}")"
+	printf '%s' "${ss_basic_anytls_pass}" > "${pass_file}"
+	chmod 600 "${pass_file}"
+
+	if [ "${ss_basic_anytls_ai}" = "1" ]; then
+		verify_arg="--insecure"
+	else
+		verify_arg="--verify"
 	fi
 
-	# 正确处理 IPv4、域名和 IPv6 地址
-	server_addr="$(anytls_hostport "${HOST}" "${PORT}")"
-
-	# 3. 清理旧进程和监听端口
-	killall anytls-go anytls-client ipt2socks 2>/dev/null
+	killall anytls-zig ipt2socks 2>/dev/null
 	sleep 1
 
-	# 4. 启动透明代理转换层
 	echo_date "开启ipt2socks进程..."
 	run_bg ipt2socks -p 23456 -l 3333 -b 0.0.0.0 -B :: -n 10000 -R
 	detect_running_status2 ipt2socks 23456
 
-	# 5. 使用 anytls-go 官方客户端参数启动 SOCKS5 入站
-	# anytls-go 使用 -l / -s / -p；并不支持 -server / -socks / --insecure
 	echo_date "开启AnyTLS客户端进程..."
-	if [ -n "${SNI}" ]; then
-		"${ANYTLS_BIN}" -l 127.0.0.1:23456 -s "${server_addr}" -p "${PASS}" -sni "${SNI}" > /tmp/anytls_run.log 2>&1 &
+	if [ -n "${ss_basic_anytls_sni}" ]; then
+		run_bg /koolshare/bin/anytls-zig -server "${server_addr}" --password-file "${pass_file}" -l 127.0.0.1:23456 -sni "${ss_basic_anytls_sni}" "${verify_arg}"
 	else
-		"${ANYTLS_BIN}" -l 127.0.0.1:23456 -s "${server_addr}" -p "${PASS}" > /tmp/anytls_run.log 2>&1 &
+		run_bg /koolshare/bin/anytls-zig -server "${server_addr}" --password-file "${pass_file}" -l 127.0.0.1:23456 "${verify_arg}"
 	fi
-
-	# 6. 检查客户端是否成功启动
-	detect_running_status3 anytls-go 23456 1 force
+	detect_running_status3 anytls-zig 23456 1 force
 }
-
 write_cron_job() {
 	# 定时规则更新
 	sed -i '/ssupdate/d' /var/spool/cron/crontabs/* >/dev/null 2>&1
