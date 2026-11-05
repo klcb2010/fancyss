@@ -63,15 +63,6 @@ jobs:
           fi
 
       # =========================
-      # 5. skip
-      # =========================
-      - name: Skip if no update
-        if: steps.compare_version.outputs.needs_sync == 'false'
-        run: |
-          echo "已是最新版本"
-          exit 0
-
-      # =========================
       # 6. sync upstream
       # =========================
       - name: Sync upstream repository
@@ -101,6 +92,7 @@ jobs:
               white_list.txt \
               black_list.txt \
               ss_update.sh \
+              fancyss/scripts/ss_xray.sh \
               clear.py || true
 
             git add -A
@@ -118,6 +110,7 @@ jobs:
             white_list.txt \
             black_list.txt \
             ss_update.sh \
+            fancyss/scripts/ss_xray.sh \
             clear.py || true
 
       # =========================
@@ -144,7 +137,6 @@ jobs:
       # 8. install jq
       # =========================
       - name: Install jq
-        if: steps.compare_version.outputs.needs_sync == 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y jq
@@ -280,7 +272,7 @@ jobs:
       # 17. build
       # =========================
       - name: Build packages
-        if: steps.compare_version.outputs.needs_sync == 'true'
+        if: steps.compare_version.outputs.needs_sync == 'true' || github.event_name == 'workflow_dispatch'
         run: |
           chmod +x build-custom.sh
           ./build-custom.sh
@@ -289,7 +281,7 @@ jobs:
       # 18. release info
       # =========================
       - name: Generate release info
-        if: steps.compare_version.outputs.needs_sync == 'true'
+        if: steps.compare_version.outputs.needs_sync == 'true' || github.event_name == 'workflow_dispatch'
         id: release_info
         run: |
           VERSION=$(jq -r '.version' packages/version.json.js)
@@ -310,7 +302,7 @@ jobs:
       # 19. release
       # =========================
       - name: Create Release
-        if: steps.compare_version.outputs.needs_sync == 'true'
+        if: steps.compare_version.outputs.needs_sync == 'true' || github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
