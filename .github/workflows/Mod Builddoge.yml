@@ -31,6 +31,14 @@ jobs:
           git config user.email "actions@github.com"
 
       # =========================
+      # 3. install jq
+      # =========================
+      - name: Install jq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      # =========================
       # 3. upstream
       # =========================
       - name: Add upstream and fetch
@@ -132,14 +140,6 @@ jobs:
 
           echo "===== fancyss/ss/version ====="
           cat fancyss/ss/version
-
-      # =========================
-      # 8. install jq
-      # =========================
-      - name: Install jq
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y jq
 
       # =========================
       # 9. patch rules
