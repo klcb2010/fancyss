@@ -5168,7 +5168,6 @@ anytls_hostport() {
 start_anytls(){
 	local ret=""
 	local server_addr=""
-	local sni_arg=""
 
 	# 实际使用 anytls-go，保留 anytls-zig 文件名以兼容现有安装和进程管理逻辑。
 	if [ -s "/koolshare/bin/anytls-zig" ]; then
@@ -5194,10 +5193,6 @@ start_anytls(){
 	}
 
 	server_addr="$(anytls_hostport "${ss_basic_anytls_server}" "${ss_basic_anytls_port}")"
-	if [ -n "${ss_basic_anytls_sni}" ]; then
-		sni_arg="-sni \"${ss_basic_anytls_sni}\""
-	fi
-
 	killall anytls-zig ipt2socks 2>/dev/null
 	sleep 1
 
@@ -5206,7 +5201,11 @@ start_anytls(){
 	detect_running_status2 ipt2socks 23456
 
 	echo_date "开启AnyTLS客户端进程..."
-	run_bg /koolshare/bin/anytls-zig -s "${server_addr}" -p "${ss_basic_anytls_pass}" -l 127.0.0.1:23456 ${sni_arg}
+	if [ -n "${ss_basic_anytls_sni}" ]; then
+		run_bg /koolshare/bin/anytls-zig -s "${server_addr}" -p "${ss_basic_anytls_pass}" -l 127.0.0.1:23456 -sni "${ss_basic_anytls_sni}"
+	else
+		run_bg /koolshare/bin/anytls-zig -s "${server_addr}" -p "${ss_basic_anytls_pass}" -l 127.0.0.1:23456
+	fi
 	detect_running_status3 anytls-zig 23456 1 force
 }
 write_cron_job() {
