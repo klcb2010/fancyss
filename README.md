@@ -20,7 +20,7 @@
 目前已在两个自动构建工作中 临时注释停用 cron_task.txt 注入步骤。因此构建时不会再把该文件中的自定义定时任务及后台启动代码注入到 `ssconfig.sh`。如需恢复，需要同时在 ssconfig文件末端增加 
 
 <pre><code class="language-bash">
-CUSTOM_INJECT_START
+#CUSTOM_INJECT_START
 LOG_TIME=$(date '+【%Y%m%d %H:%M:%S】')
 echo "$LOG_TIME: 自定义任务启动" >> /tmp/custom_task.log
 ======================= 自定义任务启动开始 ===========================
@@ -53,7 +53,7 @@ allow_port 8180
 allow_port 8181
 allow_port 2525
 echo "$LOG_TIME: ======================= 自定义任务启动完毕 =========================== "
-CUSTOM_INJECT_END
+#CUSTOM_INJECT_END
 </code></pre>
 
 
