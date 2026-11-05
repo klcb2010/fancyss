@@ -5184,6 +5184,8 @@ start_anytls(){
 	}
 
 	server_addr="$(anytls_hostport "${ss_basic_anytls_server}" "${ss_basic_anytls_port}")"
+	printf '%s' "${ss_basic_anytls_pass}" > "${pass_file}"
+	chmod 600 "${pass_file}"
 
 	# 优先尝试 Go 客户端；缺失或无法执行时自动回退到原版 Zig 客户端。
 	if [ -s "/koolshare/bin/anytls-go" ]; then
@@ -5204,8 +5206,6 @@ start_anytls(){
 		fi
 		chmod +x /koolshare/bin/anytls-zig
 		anytls_bin="/koolshare/bin/anytls-zig"
-		printf '%s' "${ss_basic_anytls_pass}" > "${pass_file}"
-		chmod 600 "${pass_file}"
 		[ "${ss_basic_anytls_ai}" = "1" ] && verify_arg="--insecure"
 	fi
 
