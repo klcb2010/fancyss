@@ -12,7 +12,7 @@ run_bg(){
 	env -i PATH=${PATH} "$@" >/dev/null 2>&1 &
 }
 XRAY_CONFIG_FILE="/koolshare/ss/xray.json"
-url_main="https://raw.githubusercontent.com/hq450/fancyss/3.0/binaries/xray"
+url_main="https://raw.githubusercontent.com/klcb2010/fancyss/3.0/binaries/xray"
 
 # arm hnd hnd_v8 qca mtk
 pkg_arch=$(dbus get ss_basic_pkg_arch)
