@@ -1,5 +1,10 @@
 fancyss Changelog
 
+3.5.31（20261105）
+   - security\tXray-core 升级到 v26.10.31，修复 Go 1.24+ Linux 默认启用 MPTCP 带来的 CVE-2026-98432 暴露条件；重新构建 arm64 / armv7 / armv5 三种路由器架构。
+   - update\tXray 在线更新源改为本仓库，确保插件内“更新 Xray”使用同一套经过校验的安全构建产物。
+   - note\t关闭 MPTCP 仅降低该漏洞的已知攻击面，不能代替 Linux 内核安全补丁；是否受影响仍取决于路由器内核版本。
+
 3.5.30（20260601）
    - update	Xray-core 升级到自编译 `v26.6.1-94ffd50`。
    - update	node-tool 升级到 0.1.16，全平台产物进入 binaries/node-tool。
