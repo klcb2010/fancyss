@@ -48,9 +48,10 @@ download_binary() {
 
     listing="$WORK_DIR/archive-$arch.list"
     tar -tJf "$archive" > "$listing"
-    member="$(awk '$NF == "naive" { print; exit }' "$listing")"
+    member="$(awk '$0 ~ /(^|\/)naive$/ { print; exit }' "$listing")"
     if [ -z "$member" ]; then
         echo "ERROR: archive has no naive executable: $asset"
+        sed -n '1,80p' "$listing"
         return 1
     fi
     tar -xJf "$archive" -C "$extract_dir" "$member"
