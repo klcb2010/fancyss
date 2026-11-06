@@ -15,6 +15,7 @@ require_cmd() {
 }
 
 require_cmd curl
+require_cmd jq
 require_cmd md5sum
 require_cmd awk
 require_cmd sed
@@ -25,7 +26,7 @@ API_URL="${API_URL:-https://api.github.com/repos/pymumu/smartdns/releases/latest
 echo "fetching latest smartdns release info ..."
 JSON="$(curl -fsSL --retry 3 --retry-delay 1 "${API_URL}")"
 
-TAG="$(jq -er '.tag_name | select(type == "string" and length > 0)' <<< "${JSON}")".*/\1/p' | head -n 1)"
+TAG="$(jq -er '.tag_name | select(type == "string" and length > 0)' <<< "${JSON}")"
 if [ -z "${TAG}" ]; then
 	echo "error: failed to parse tag_name from GitHub API response" >&2
 	exit 1
