@@ -17,8 +17,6 @@ require_cmd() {
 require_cmd curl
 require_cmd jq
 require_cmd md5sum
-require_cmd awk
-require_cmd sed
 # UPX is optional; keep upstream binaries intact when compressors are unavailable.
 
 API_URL="${API_URL:-https://api.github.com/repos/pymumu/smartdns/releases/latest}"
