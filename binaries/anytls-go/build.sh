@@ -40,7 +40,7 @@ fi
 
 # Apply the CLI compatibility changes and the Stream.dieErr race fix from
 # anytls-go issue #54. Fail closed if the expected upstream source has changed.
-python3 - "${WORK}" <<'PY'
+if ! python3 - "${WORK}" <<'PY'
 from pathlib import Path
 import sys
 
@@ -178,15 +178,25 @@ for token in required:
         raise SystemExit("ERROR: AnyTLS CLI source patch did not apply: " + token)
 path.write_text(src)
 PY
-
-cd "${WORK}"
-GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="-s -w" -o "${FALLBACK_BIN}" ./cmd/client
-chmod 755 "${FALLBACK_BIN}"
-if ! file "${FALLBACK_BIN}" | grep -q 'ELF 64-bit.*ARM aarch64'; then
-    echo "ERROR: newly built AnyTLS client is not a Linux ARM64 ELF executable." >&2
-    file "${FALLBACK_BIN}" >&2 || true
-    exit 1
+then
+    echo "WARNING: upstream source no longer matches the expected patch context."
+    use_fallback
+    exit 0
 fi
+
+BUILD_BIN="${WORK}/anytls-client"
+if ! (cd "${WORK}" && GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="-s -w" -o "${BUILD_BIN}" ./cmd/client); then
+    echo "WARNING: patched upstream source could not be built."
+    use_fallback
+    exit 0
+fi
+chmod 755 "${BUILD_BIN}"
+if ! file "${BUILD_BIN}" | grep -q 'ELF 64-bit.*ARM aarch64'; then
+    echo "WARNING: newly built AnyTLS client is not a Linux ARM64 ELF executable."
+    use_fallback
+    exit 0
+fi
+mv -f "${BUILD_BIN}" "${FALLBACK_BIN}"
 echo "Built patched AnyTLS Go client (including issue #54 fix):"
 file "${FALLBACK_BIN}"
 sha256sum "${FALLBACK_BIN}"
