@@ -101,3 +101,5 @@ mv "${STAGE_DIR}" "${OUT_DIR}"
 printf '%s\n' "v${VER}" > latest.txt
 
 echo "done: ${SCRIPT_DIR}/${OUT_DIR}"
+
+# Use jq for structured release metadata and asset URL lookup; no producer pipe to awk.
