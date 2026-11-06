@@ -1,5 +1,11 @@
 fancyss Changelog
 
+3.5.42（20261106）
+   - update	fix: write SmartDNS version marker correctly
+   - update	build: package latest official SmartDNS on all router targets
+   - update	build: make SmartDNS updater CI-safe and track latest version
+   - update	Update README.md
+
 3.5.41（20261106）
    - update	fix: write SmartDNS version marker correctly
    - update	build: package latest official SmartDNS on all router targets
