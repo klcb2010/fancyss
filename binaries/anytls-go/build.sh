@@ -5,119 +5,111 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 WORK="$(mktemp -d)"
 trap 'rm -rf "${WORK}"' EXIT
 SOURCE_COMMIT="9666872946857b50a74fdb692896d77b53773cb2"
-FALLBACK_BIN="${ROOT}/binaries/anytls-go/anytls-client"
+SOURCE_ARCHIVE="${ROOT}/binaries/anytls-go/source.tar.gz"
+FETCH_DIR="${WORK}/fetch"
+SOURCE_DIR="${WORK}/source"
+mkdir -p "${FETCH_DIR}" "${SOURCE_DIR}"
 
-use_fallback() {
-    echo "WARNING: AnyTLS upstream source unavailable; using repository fallback binary."
-    if [ ! -s "${FALLBACK_BIN}" ]; then
-        echo "ERROR: fallback AnyTLS binary is missing or empty: ${FALLBACK_BIN}" >&2
+# 优先获取固定版本的上游源码；失败时使用仓库内缓存的完整源码快照。
+git -C "${FETCH_DIR}" init -q
+git -C "${FETCH_DIR}" remote add origin https://github.com/anytls/anytls-go.git
+
+if git -C "${FETCH_DIR}" fetch --depth=1 origin "${SOURCE_COMMIT}"; then
+    git -C "${FETCH_DIR}" archive --format=tar FETCH_HEAD | tar -xf - -C "${SOURCE_DIR}"
+    tar -czf "${SOURCE_ARCHIVE}.tmp" -C "${SOURCE_DIR}" .
+    mv "${SOURCE_ARCHIVE}.tmp" "${SOURCE_ARCHIVE}"
+    echo "AnyTLS source: upstream commit ${SOURCE_COMMIT}"
+else
+    if [ ! -s "${SOURCE_ARCHIVE}" ]; then
+        echo "ERROR: upstream AnyTLS source unavailable and repository fallback is missing."
         exit 1
     fi
-    chmod 755 "${FALLBACK_BIN}"
-    if ! file "${FALLBACK_BIN}" | grep -q 'ELF 64-bit.*ARM aarch64'; then
-        echo "ERROR: fallback AnyTLS binary is not a valid Linux ARM64 ELF executable." >&2
-        file "${FALLBACK_BIN}" >&2 || true
-        exit 1
-    fi
-    sha256sum "${FALLBACK_BIN}"
-    echo "Using the checked-in AnyTLS ARM64 client; build can continue."
-}
-
-git -C "${WORK}" init -q
-git -C "${WORK}" remote add origin https://github.com/anytls/anytls-go.git
-
-# Fetch upstream first. If the repository, commit, or network is unavailable,
-# keep the checked-in ARM64 client instead of failing the entire package build.
-if ! git -C "${WORK}" fetch --depth=1 origin "${SOURCE_COMMIT}"; then
-    use_fallback
-    exit 0
+    tar -xzf "${SOURCE_ARCHIVE}" -C "${SOURCE_DIR}"
+    echo "WARNING: upstream unavailable; using repository source snapshot."
 fi
 
-if ! git -C "${WORK}" checkout -q --detach FETCH_HEAD; then
-    use_fallback
-    exit 0
-fi
-
-# Apply the CLI compatibility changes and the Stream.dieErr race fix from
-# anytls-go issue #54. Fail closed if the expected upstream source has changed.
-if ! python3 - "${WORK}" <<'PY'
+# 修复 issue #54：Stream.dieErr 原先存在并发读写 data race。
+python3 - "${SOURCE_DIR}/proxy/session/stream.go" <<'PY'
 from pathlib import Path
 import sys
 
-root = Path(sys.argv[1])
+path = Path(sys.argv[1])
+src = path.read_text()
 
-def replace_once(path, old, new, label):
-    src = path.read_text()
+def replace_once(old, new, label):
+    global src
     count = src.count(old)
     if count != 1:
-        raise SystemExit(f"ERROR: {label}: expected one match, found {count}")
-    path.write_text(src.replace(old, new, 1))
+        raise SystemExit(f"ERROR: issue #54 patch mismatch ({label}, found {count})")
+    src = src.replace(old, new, 1)
 
-# Fix issue #54: publish the error interface atomically as one immutable value.
-stream = root / "proxy/session/stream.go"
 replace_once(
-    stream,
     '\t"sync"\n',
     '\t"sync"\n\t"sync/atomic"\n',
-    "stream.go atomic import",
+    "atomic import",
 )
 replace_once(
-    stream,
-    '\tdieOnce sync.Once\n\tdieHook func()\n\tdieErr  error\n',
-    '\tdieOnce sync.Once\n\tdieHook func()\n\tdieErr  atomic.Pointer[streamCloseError]\n',
-    "stream.go dieErr field",
+    '\tdieErr  error\n',
+    '\tdieErr  atomic.Pointer[streamCloseError]\n',
+    "dieErr field",
 )
 replace_once(
-    stream,
-    '// newStream initiates a Stream struct\n',
-    '// Publish both words of the error interface together. Stream operations may\n'
-    '// race with session shutdown; sync.Once alone does not protect ordinary reads.\n'
-    'type streamCloseError struct {\n'
-    '\terr error\n'
-    '}\n\n'
-    'func (s *Stream) closeError() error {\n'
-    '\tif state := s.dieErr.Load(); state != nil {\n'
-    '\t\treturn state.err\n'
-    '\t}\n'
-    '\treturn nil\n'
-    '}\n\n'
-    '// newStream initiates a Stream struct\n',
-    "stream.go atomic error helper",
+    '}\n\n// newStream initiates a Stream struct',
+    '''}
+
+// Publish the close error atomically so concurrent Read/Write and Close
+// operations never observe a partially-written error interface.
+type streamCloseError struct {
+	err error
+}
+
+func (s *Stream) closeError() error {
+	if state := s.dieErr.Load(); state != nil {
+		return state.err
+	}
+	return nil
+}
+
+// newStream initiates a Stream struct''',
+    "close error helper",
 )
 replace_once(
-    stream,
-    '\tif n == 0 && s.dieErr != nil {\n\t\terr = s.dieErr\n\t}\n',
-    '\tif closeErr := s.closeError(); n == 0 && closeErr != nil {\n\t\terr = closeErr\n\t}\n',
-    "stream.go Read",
+    '\tif n == 0 && s.dieErr != nil {\n\t\terr = s.dieErr\n\t}',
+    '\tif closeErr := s.closeError(); n == 0 && closeErr != nil {\n\t\terr = closeErr\n\t}',
+    "Read access",
 )
 replace_once(
-    stream,
-    '\tif s.dieErr != nil {\n\t\treturn 0, s.dieErr\n\t}\n',
-    '\tif closeErr := s.closeError(); closeErr != nil {\n\t\treturn 0, closeErr\n\t}\n',
-    "stream.go Write",
+    '\tif s.dieErr != nil {\n\t\treturn 0, s.dieErr\n\t}',
+    '\tif closeErr := s.closeError(); closeErr != nil {\n\t\treturn 0, closeErr\n\t}',
+    "Write access",
 )
 replace_once(
-    stream,
-    '\t\ts.dieErr = net.ErrClosed\n',
-    '\t\ts.dieErr.Store(&streamCloseError{err: net.ErrClosed})\n',
-    "stream.go closeLocally",
+    '\t\ts.dieErr = net.ErrClosed',
+    '\t\ts.dieErr.Store(&streamCloseError{err: net.ErrClosed})',
+    "local close store",
 )
 replace_once(
-    stream,
-    '\t\ts.dieErr = err\n',
-    '\t\ts.dieErr.Store(&streamCloseError{err: err})\n',
-    "stream.go closeWithError store",
+    '\t\ts.dieErr = err',
+    '\t\ts.dieErr.Store(&streamCloseError{err: err})',
+    "error close store",
 )
 replace_once(
-    stream,
-    '\t\treturn s.dieErr\n',
-    '\t\treturn s.closeError()\n',
-    "stream.go closeWithError return",
+    '\t\treturn s.dieErr',
+    '\t\treturn s.closeError()',
+    "close return",
 )
 
-# Existing fancyss command-line compatibility patch.
-path = root / "cmd/client/main.go"
+path.write_text(src)
+PY
+
+# 保留 fancyss 现有命令行参数兼容补丁。
+python3 - "${SOURCE_DIR}/cmd/client/main.go" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
 src = path.read_text()
+
 src = src.replace(
     'serverAddr := flag.String("s", "", "Server address or anytls:// link")',
     'serverAddr := flag.String("s", "", "Server address or anytls:// link")\n'
@@ -175,28 +167,15 @@ required = [
 ]
 for token in required:
     if token not in src:
-        raise SystemExit("ERROR: AnyTLS CLI source patch did not apply: " + token)
+        raise SystemExit("ERROR: AnyTLS client patch did not apply: " + token)
 path.write_text(src)
 PY
-then
-    echo "WARNING: upstream source no longer matches the expected patch context."
-    use_fallback
-    exit 0
-fi
 
-BUILD_BIN="${WORK}/anytls-client"
-if ! (cd "${WORK}" && GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="-s -w" -o "${BUILD_BIN}" ./cmd/client); then
-    echo "WARNING: patched upstream source could not be built."
-    use_fallback
-    exit 0
-fi
-chmod 755 "${BUILD_BIN}"
-if ! file "${BUILD_BIN}" | grep -q 'ELF 64-bit.*ARM aarch64'; then
-    echo "WARNING: newly built AnyTLS client is not a Linux ARM64 ELF executable."
-    use_fallback
-    exit 0
-fi
-mv -f "${BUILD_BIN}" "${FALLBACK_BIN}"
-echo "Built patched AnyTLS Go client (including issue #54 fix):"
-file "${FALLBACK_BIN}"
-sha256sum "${FALLBACK_BIN}"
+cd "${SOURCE_DIR}"
+GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="-s -w" -o "${ROOT}/binaries/anytls-go/anytls-client" ./cmd/client
+chmod 755 "${ROOT}/binaries/anytls-go/anytls-client"
+echo "Built patched AnyTLS Go client:"
+file "${ROOT}/binaries/anytls-go/anytls-client"
+sha256sum "${ROOT}/binaries/anytls-go/anytls-client"
+echo "Source fallback archive:"
+ls -lh "${SOURCE_ARCHIVE}"
