@@ -6640,7 +6640,7 @@ _start_iptables() {
 	insert_if_not_exists filter -I FORWARD 1 -p udp --dport 443 -j SHADOWSOCKS
 
 	if [ "$ss_basic_dns_hijack" == "1" ]; then
-		echo_date "开启DNS劫持功能功能，防止DNS污染"
+		echo_date "开启DNS劫持，防止DNS污染"
 		#INSET_NU_DNS=$(expr "${INSET_NU}" + 1)
 		local INSET_NU_DNS=$((${INSET_NU} + 1))
 		#append_if_not_exists nat -I PREROUTING "$INSET_NU_DNS" -p udp ! -s ${lan_ipaddr} --dport 53 -j SHADOWSOCKS_DNS
