@@ -18,8 +18,7 @@ require_cmd curl
 require_cmd md5sum
 require_cmd awk
 require_cmd sed
-require_cmd "${UPX5}"
-require_cmd "${UPX4}"
+# UPX is optional; keep upstream binaries intact when compressors are unavailable.
 
 API_URL="${API_URL:-https://api.github.com/repos/pymumu/smartdns/releases/latest}"
 
@@ -41,6 +40,11 @@ fi
 
 OUT_DIR="v${VER}"
 if [ -d "${OUT_DIR}" ]; then
+	if [ ! -s "${OUT_DIR}/smartdns_arm64" ] || [ ! -s "${OUT_DIR}/smartdns_armv7" ] || [ ! -s "${OUT_DIR}/smartdns_armv5" ] || [ ! -s "${OUT_DIR}/md5sum.txt" ]; then
+		echo "error: existing release directory is incomplete: ${OUT_DIR}" >&2
+		exit 1
+	fi
+	printf '%s\\n' "v${VER}" > latest.txt
 	echo "already exists: ${SCRIPT_DIR}/${OUT_DIR}"
 	exit 0
 fi
@@ -77,21 +81,32 @@ curl -fL --retry 3 --retry-delay 1 --progress-bar -o "${TMP_DIR}/smartdns-arm" "
 
 chmod +x "${TMP_DIR}/smartdns-aarch64" "${TMP_DIR}/smartdns-arm"
 
-mkdir -p "${OUT_DIR}"
+STAGE_DIR="${TMP_DIR}/release"
+mkdir -p "${STAGE_DIR}"
 
-cp -f "${TMP_DIR}/smartdns-aarch64" "${OUT_DIR}/smartdns_arm64"
-cp -f "${TMP_DIR}/smartdns-arm" "${OUT_DIR}/smartdns_armv7"
-cp -f "${TMP_DIR}/smartdns-arm" "${OUT_DIR}/smartdns_armv5"
+cp -f "${TMP_DIR}/smartdns-aarch64" "${STAGE_DIR}/smartdns_arm64"
+cp -f "${TMP_DIR}/smartdns-arm" "${STAGE_DIR}/smartdns_armv7"
+cp -f "${TMP_DIR}/smartdns-arm" "${STAGE_DIR}/smartdns_armv5"
+chmod +x "${STAGE_DIR}/smartdns_arm64" "${STAGE_DIR}/smartdns_armv7" "${STAGE_DIR}/smartdns_armv5"
 
-chmod +x "${OUT_DIR}/smartdns_arm64" "${OUT_DIR}/smartdns_armv7" "${OUT_DIR}/smartdns_armv5"
+if command -v "${UPX5}" >/dev/null 2>&1; then
+	echo "compressing with ${UPX5}: smartdns_arm64"
+	"${UPX5}" --lzma --ultra-brute "${STAGE_DIR}/smartdns_arm64"
+	echo "compressing with ${UPX5}: smartdns_armv7"
+	"${UPX5}" --lzma --ultra-brute "${STAGE_DIR}/smartdns_armv7"
+else
+	echo "UPX 5 not found; keeping ARM64/ARMv7 SmartDNS binaries uncompressed."
+fi
 
-echo "compressing with ${UPX5}: smartdns_arm64"
-"${UPX5}" --lzma --ultra-brute "${OUT_DIR}/smartdns_arm64"
-echo "compressing with ${UPX5}: smartdns_armv7"
-"${UPX5}" --lzma --ultra-brute "${OUT_DIR}/smartdns_armv7"
-echo "compressing with ${UPX4}: smartdns_armv5"
-"${UPX4}" --lzma --ultra-brute "${OUT_DIR}/smartdns_armv5"
+if command -v "${UPX4}" >/dev/null 2>&1; then
+	echo "compressing with ${UPX4}: smartdns_armv5"
+	"${UPX4}" --lzma --ultra-brute "${STAGE_DIR}/smartdns_armv5"
+else
+	echo "UPX 4 not found; keeping ARMv5 SmartDNS binary uncompressed."
+fi
 
-(cd "${OUT_DIR}" && md5sum smartdns_arm64 smartdns_armv7 smartdns_armv5 > md5sum.txt)
+(cd "${STAGE_DIR}" && md5sum smartdns_arm64 smartdns_armv7 smartdns_armv5 > md5sum.txt)
+mv "${STAGE_DIR}" "${OUT_DIR}"
+printf '%s\\n' "v${VER}" > latest.txt
 
 echo "done: ${SCRIPT_DIR}/${OUT_DIR}"
