@@ -34,6 +34,40 @@ jobs:
           git config user.email "actions@github.com"
 
       # =========================
+      # 3. bump local version and refresh release tag
+      # =========================
+      - name: Bump version for every local push
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+
+          VERSION=$(jq -r '.version' packages/version.json.js)
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+
+          if [[ ! "$MAJOR" =~ ^[0-9]+$ || ! "$MINOR" =~ ^[0-9]+$ || ! "$PATCH" =~ ^[0-9]+$ ]]; then
+            echo "Invalid version in packages/version.json.js: $VERSION"
+            exit 1
+          fi
+
+          NEXT_VERSION="$MAJOR.$MINOR.$((PATCH + 1))"
+          echo "Version: $VERSION -> $NEXT_VERSION"
+
+          jq --arg version "$NEXT_VERSION" '.version = $version' packages/version.json.js > /tmp/version.json.js
+          mv /tmp/version.json.js packages/version.json.js
+
+          git add packages/version.json.js
+          git commit -m "chore: bump version to $NEXT_VERSION"
+
+          # 推送版本号提交，随后将同名标签强制指向最新提交
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+
+          TAG_NAME="v$NEXT_VERSION"
+          git tag -f "$TAG_NAME" HEAD
+          git push origin "refs/tags/$TAG_NAME" --force
+
+          echo "已将 $TAG_NAME 更新到 $(git rev-parse --short HEAD)"
+
+      # =========================
       # 3. upstream
       # =========================
       - name: Add upstream and fetch
