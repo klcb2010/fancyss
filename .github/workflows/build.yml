@@ -289,8 +289,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          # 如果本次提交已经修改版本文件，就沿用提交中的版本；否则自动递增。
-          if git diff --quiet HEAD^ HEAD -- packages/version.json.js fancyss/ss/version; then
+          LAST_SUBJECT=$(git log -1 --format=%s)
+          if [[ "$LAST_SUBJECT" == "chore: changelog for v"* ]]; then
+            VERSION=$(jq -r '.version' packages/version.json.js)
+            echo "检测到仅补写 Changelog 的自动提交，不重复递增版本：$VERSION"
+          elif git diff --quiet HEAD^ HEAD -- packages/version.json.js fancyss/ss/version; then
             VERSION=$(jq -r '.version' packages/version.json.js)
             IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
 
@@ -299,15 +302,11 @@ jobs:
               exit 1
             fi
 
-            NEXT_VERSION="$MAJOR.$MINOR.$((PATCH + 1))"
-            jq --arg version "$NEXT_VERSION" '.version = $version' packages/version.json.js > /tmp/version.json.js
+            VERSION="$MAJOR.$MINOR.$((PATCH + 1))"
+            jq --arg version "$VERSION" '.version = $version' packages/version.json.js > /tmp/version.json.js
             mv /tmp/version.json.js packages/version.json.js
-            printf '%s\n' "$NEXT_VERSION" > fancyss/ss/version
-
-            git add packages/version.json.js fancyss/ss/version
-            git commit -m "chore: bump version to $NEXT_VERSION"
-            git push origin "HEAD:${GITHUB_REF_NAME}"
-            VERSION="$NEXT_VERSION"
+            printf '%s\n' "$VERSION" > fancyss/ss/version
+            echo "自动递增版本至 $VERSION"
           else
             PACKAGE_VERSION=$(jq -r '.version' packages/version.json.js)
             RUNTIME_VERSION=$(tr -d '\r\n' < fancyss/ss/version)
@@ -317,6 +316,63 @@ jobs:
             fi
             VERSION="$PACKAGE_VERSION"
             echo "本次提交已同步修改两个版本文件，使用版本 $VERSION"
+          fi
+
+          # 每个正式版本都必须有对应日志；上游同步步骤已生成的条目不会重复覆盖。
+          python3 - "$VERSION" <<'PY'
+          import datetime
+          import pathlib
+          import re
+          import subprocess
+          import sys
+
+          version = sys.argv[1]
+          path = pathlib.Path("Changelog.txt")
+          content = path.read_text(encoding="utf-8") if path.exists() else "fancyss Changelog\n"
+          heading = re.compile(
+              r"^\s*" + re.escape(version) + r"(?:（[^）]*）|\([^)]*\))?\s*$",
+              re.MULTILINE
+          )
+          if heading.search(content):
+              print(f"Changelog already contains {version}; no duplicate entry")
+              raise SystemExit(0)
+
+          subjects = subprocess.check_output(
+              ["git", "log", "-8", "--pretty=format:%s"], text=True
+          ).splitlines()
+          ignored = (
+              "chore: bump version ",
+              "chore: changelog for v",
+              "chore: cache AnyTLS",
+              "ci: ",
+          )
+          subjects = [s.strip() for s in subjects if s.strip() and not s.startswith(ignored)]
+
+          date = datetime.datetime.now().strftime("%Y%m%d")
+          entries = subjects[:8] or ["本次提交触发版本更新；详细改动可参阅仓库提交记录。"]
+          section = [f"{version}（{date}）"]
+          section.extend(f"   - update\t{s}" for s in entries)
+
+          header, separator, body = content.partition("\n")
+          if not separator:
+              body = ""
+          updated = header + "\n\n" + "\n".join(section)
+          if body.strip():
+              updated += "\n\n" + body.lstrip("\n")
+          path.write_text(updated.rstrip() + "\n", encoding="utf-8")
+          print(f"Generated Changelog entry for {version}")
+          PY
+
+          # 版本号和日志一起提交，避免产生额外的版本递增循环。
+          git add packages/version.json.js fancyss/ss/version Changelog.txt
+          if ! git diff --cached --quiet; then
+            if git diff --cached --quiet -- packages/version.json.js fancyss/ss/version; then
+              COMMIT_MESSAGE="chore: changelog for v$VERSION"
+            else
+              COMMIT_MESSAGE="chore: bump version to $VERSION"
+            fi
+            git commit -m "$COMMIT_MESSAGE"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
           fi
 
           TAG_NAME="v$VERSION"
