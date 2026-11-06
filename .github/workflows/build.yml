@@ -117,6 +117,7 @@ jobs:
               cron_task.txt \
               build-custom.sh \
               README.md \
+              Changelog.txt \
               fancyss/ss/ssconfig.sh \
               white_list.txt \
               black_list.txt \
@@ -137,6 +138,7 @@ jobs:
             .github/workflows/ \
             cron_task.txt \
             README.md \
+            Changelog.txt \
             fancyss/ss/ssconfig.sh \
             build-custom.sh \
             white_list.txt \
@@ -166,6 +168,64 @@ jobs:
 
           echo "===== fancyss/ss/version ====="
           cat fancyss/ss/version
+
+      # =========================
+      # 7.5. update changelog
+      # =========================
+      - name: Update Changelog for upstream version
+        if: steps.compare_version.outputs.needs_sync == 'true'
+        run: |
+          set -euo pipefail
+
+          VERSION=$(jq -r '.version' packages/version.json.js)
+          UPSTREAM_CHANGELOG=$(git show upstream/3.0:Changelog.txt)
+
+          python3 - "$VERSION" "$UPSTREAM_CHANGELOG" <<'PY'
+          import datetime
+          import pathlib
+          import re
+          import sys
+
+          version, upstream_text = sys.argv[1], sys.argv[2]
+          path = pathlib.Path("Changelog.txt")
+          local_text = path.read_text(encoding="utf-8") if path.exists() else "fancyss Changelog\\n"
+
+          # 保留上游该版本的完整日志段落（标题至下一版本标题之前）。
+          lines = upstream_text.splitlines()
+          heading = re.compile(r"^\\s*" + re.escape(version) + r"(?:（[^）]*）|\\([^)]*\\))?\\s*$")
+          start = next((i for i, line in enumerate(lines) if heading.match(line)), None)
+
+          if start is not None:
+              end = next(
+                  (i for i in range(start + 1, len(lines))
+                   if re.match(r"^\\s*\\d+\\.\\d+\\.\\d+(?:（[^）]*）|\\([^)]*\\))?\\s*$", lines[i])),
+                  len(lines)
+              )
+              new_section = "\\n".join(lines[start:end]).strip()
+          else:
+              # 上游未提供对应版本日志时，至少留下准确版本记录，不伪造具体功能。
+              date = datetime.datetime.now().strftime("%Y%m%d")
+              new_section = (
+                  f"{version}（{date}）\\n"
+                  "   - update\\t同步上游版本；本次上游未提供对应版本的 Changelog 条目。"
+              )
+
+          if re.search(r"^\\s*" + re.escape(version) + r"(?:（[^）]*）|\\([^)]*\\))?\\s*$",
+                       local_text, re.MULTILINE):
+              print(f"Changelog already contains {version}; skip duplicate")
+              raise SystemExit(0)
+
+          # 插入到文件标题之后，保留此前所有本地版本记录。
+          header, separator, body = local_text.partition("\\n")
+          if not separator:
+              body = ""
+          updated = header + "\\n\\n" + new_section + ("\\n\\n" + body.lstrip("\\n") if body.strip() else "")
+          path.write_text(updated.rstrip() + "\\n", encoding="utf-8")
+          print(f"Added upstream Changelog section for {version}")
+          PY
+
+          echo "===== New Changelog header ====="
+          sed -n '1,35p' Changelog.txt
 
       # =========================
       # 8. install jq
