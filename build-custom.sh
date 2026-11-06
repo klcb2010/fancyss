@@ -127,7 +127,7 @@ sync_binary(){
 
 	# Refresh NaiveProxy from the latest stable release before packaging.
 	local NAIVE_DIR="${CURR_PATH}/binaries/naive"
-	bash "${NAIVE_DIR}/get_latest.sh"
+	bash "${NAIVE_DIR}/get_latest.sh" || return 1
 	local NAIVE_VERSION
 	local NAIVE_RELEASE_DIR
 	NAIVE_VERSION=$(tr -d '\r\n' < "${NAIVE_DIR}/latest.txt")
@@ -160,7 +160,7 @@ sync_binary(){
 
 	# Refresh SmartDNS from the official stable release before packaging.
 	local SMARTDNS_DIR="${CURR_PATH}/binaries/smartdns"
-	bash "${SMARTDNS_DIR}/get_smartdns.sh"
+	bash "${SMARTDNS_DIR}/get_smartdns.sh" || return 1
 	local SMARTDNS_VERSION
 	local SMARTDNS_RELEASE_DIR
 	SMARTDNS_VERSION=$(tr -d '\r\n' < "${SMARTDNS_DIR}/latest.txt")
