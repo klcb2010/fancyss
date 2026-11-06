@@ -1344,7 +1344,7 @@ kill_process() {
 	local ANYTLS_PID=$(ps | grep "anytls-zig" | grep -v grep | awk '{print $1}')
 	if [ -n "${ANYTLS_PID}" ];then
 		echo_date "关闭anytls-zig进程..."
-		killall anytls-zig
+		killall anytls-zig anytls-zig.bak 2>/dev/null
 	fi
 
 	local OBFSLOCAL_PID=$(ps | grep "obfs-local" | grep -v grep | awk '{print $1}')
