@@ -27,7 +27,7 @@ download_binary() {
     local openwrt_arch="$2"
     local upx_bin="$3"
     local asset="naiveproxy-${TAG}-openwrt-${openwrt_arch}.tar.xz"
-    local url digest archive extract_dir binary backup
+    local url digest archive extract_dir binary backup listing member
 
     url="$(jq -er --arg name "$asset" '.assets[] | select(.name == $name) | .browser_download_url' "$RELEASE_JSON")"
     digest="$(jq -er --arg name "$asset" '.assets[] | select(.name == $name) | .digest // empty' "$RELEASE_JSON")"
@@ -46,7 +46,14 @@ download_binary() {
 
     echo "$digest  $archive" | sha256sum -c -
 
-    tar -xJf "$archive" -C "$extract_dir" --wildcards "*/naive"
+    listing="$WORK_DIR/archive-$arch.list"
+    tar -tJf "$archive" > "$listing"
+    member="$(awk '$NF == "naive" { print; exit }' "$listing")"
+    if [ -z "$member" ]; then
+        echo "ERROR: archive has no naive executable: $asset"
+        return 1
+    fi
+    tar -xJf "$archive" -C "$extract_dir" "$member"
     binary="$(find "$extract_dir" -type f -name naive -print -quit)"
     if [ -z "$binary" ] || [ ! -s "$binary" ]; then
         echo "ERROR: archive does not contain a valid naive binary: $asset"
