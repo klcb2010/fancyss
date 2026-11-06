@@ -1,5 +1,9 @@
 fancyss Changelog
 
+3.5.46（20261106）
+   - update	Remove trailing ellipsis from SSR schedule cleanup log
+   - update	Remove trailing ellipses from firewall cleanup logs
+
 3.5.45（20261106）
    - update	Remove trailing ellipsis from SSR schedule cleanup log
    - update	Remove trailing ellipses from firewall cleanup logs
