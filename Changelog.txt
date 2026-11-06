@@ -1,5 +1,8 @@
 fancyss Changelog
 
+3.5.39（20261106）
+   - update	fix: correct changelog parser escaping
+
 3.5.38（20261106）
    - update	fix: correct changelog parser escaping
 
