@@ -51,7 +51,7 @@ fi
 
 get_asset_url() {
 	local asset_name="$1"
-	printf '%s\n' "${JSON}" | awk -v name="${asset_name}" '
+	awk -v name="${asset_name}" '
 		$0 ~ ("\"name\": \"" name "\"") { found=1; next }
 		found && /"browser_download_url":/ {
 			sub(/.*"browser_download_url":[[:space:]]*"/, "");
@@ -59,7 +59,7 @@ get_asset_url() {
 			print;
 			exit
 		}
-	'
+	' <<< "${JSON}"
 }
 
 URL_AARCH64="$(get_asset_url "smartdns-aarch64")"
