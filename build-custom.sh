@@ -106,7 +106,7 @@ sync_binary(){
 	fi
 
 	# update to latest binary
-	BINS_COPY="xray naive ipt2socks"
+	BINS_COPY="xray ipt2socks"
 	for BIN in $BINS_COPY;
 	do
 		local VERSION_FLAG="latest.txt"
@@ -125,9 +125,42 @@ sync_binary(){
 		cp -rf ${CURR_PATH}/binaries/${BIN}/${version}/${BIN}_armv5 ${CURR_PATH}/fancyss/bin-arm/${BIN}
 	done
 
+	# Refresh NaiveProxy from the latest stable release before packaging.
+	local NAIVE_DIR="${CURR_PATH}/binaries/naive"
+	bash "${NAIVE_DIR}/get_latest.sh" || return 1
+	local NAIVE_VERSION
+	local NAIVE_RELEASE_DIR
+	NAIVE_VERSION=$(tr -d '\r\n' < "${NAIVE_DIR}/latest.txt")
+	NAIVE_RELEASE_DIR="${NAIVE_DIR}/${NAIVE_VERSION}"
+
+	if [ -z "${NAIVE_VERSION}" ] || [ ! -s "${NAIVE_RELEASE_DIR}/md5sum.txt" ]; then
+		echo "ERROR: NaiveProxy version marker or checksum file is missing."
+		return 1
+	fi
+
+	if ! (cd "${NAIVE_RELEASE_DIR}" && md5sum -c md5sum.txt); then
+		echo "ERROR: NaiveProxy binary checksum verification failed."
+		return 1
+	fi
+
+	cp -f "${NAIVE_RELEASE_DIR}/naive_arm64" "${CURR_PATH}/fancyss/bin-mtk/naive"
+	cp -f "${NAIVE_RELEASE_DIR}/naive_arm64" "${CURR_PATH}/fancyss/bin-hnd_v8/naive"
+	cp -f "${NAIVE_RELEASE_DIR}/naive_armv7" "${CURR_PATH}/fancyss/bin-ipq32/naive"
+	cp -f "${NAIVE_RELEASE_DIR}/naive_armv7" "${CURR_PATH}/fancyss/bin-hnd/naive"
+	cp -f "${NAIVE_RELEASE_DIR}/naive_armv7" "${CURR_PATH}/fancyss/bin-qca/naive"
+	cp -f "${NAIVE_RELEASE_DIR}/naive_armv5" "${CURR_PATH}/fancyss/bin-arm/naive"
+
+	for TARGET in "arm64:bin-mtk" "arm64:bin-hnd_v8" "armv7:bin-ipq32" "armv7:bin-hnd" "armv7:bin-qca" "armv5:bin-arm"; do
+		IFS=: read -r NAIVE_ARCH TARGET_DIR <<< "${TARGET}"
+		if ! cmp -s "${NAIVE_RELEASE_DIR}/naive_${NAIVE_ARCH}" "${CURR_PATH}/fancyss/${TARGET_DIR}/naive"; then
+			echo "ERROR: packaged NaiveProxy binary mismatch: ${TARGET_DIR}/naive"
+			return 1
+		fi
+	done
+
 	# Refresh SmartDNS from the official stable release before packaging.
 	local SMARTDNS_DIR="${CURR_PATH}/binaries/smartdns"
-	bash "${SMARTDNS_DIR}/get_smartdns.sh"
+	bash "${SMARTDNS_DIR}/get_smartdns.sh" || return 1
 	local SMARTDNS_VERSION
 	local SMARTDNS_RELEASE_DIR
 	SMARTDNS_VERSION=$(tr -d '\r\n' < "${SMARTDNS_DIR}/latest.txt")

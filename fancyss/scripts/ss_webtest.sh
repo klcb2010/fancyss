@@ -47,6 +47,18 @@ wt_cache_log() {
 	echo_date "$@"
 }
 
+wt_log_test_method() {
+	local method="$1"
+	local nodes_file="$2"
+	local count="0"
+
+	[ -s "${nodes_file}" ] || return 0
+	count=$(wc -l < "${nodes_file}" | tr -d ' ')
+	[ -n "${count}" ] || count=0
+	[ "${count}" -gt 0 ] || return 0
+	echo_date "ℹ️测速方式：${method}，目标 ${count} 个节点。"
+}
+
 wt_cache_state_count_ids() {
 	local ids_file="$1"
 	local count="0"
@@ -3256,6 +3268,7 @@ test_xray_group(){
 		wt_set_batch_state_from_file "${valid_nodes_file}" "queued..." ""
 	fi
 
+	wt_log_test_method "Xray 多节点共用实例 + webtest-tool HTTP 探测" "${valid_nodes_file}"
 	if wt_try_webtest_tool_batch "${valid_pairs_file}" "${mark}"; then
 		wt_cleanup_xray_group_runtime "${xray_pid}"
 		return 0
@@ -3338,6 +3351,7 @@ test_07_sr(){
 	done < "${file_path}"
 	[ -s "${targets_file}" ] || return 0
 	wt_set_batch_state_from_file "${valid_nodes_file}" "booting..." ""
+	wt_log_test_method "SSR 独立代理进程 + webtest-tool HTTP 探测" "${valid_nodes_file}"
 	if wt_try_webtest_tool_targets_batch "${targets_file}" "${mark}" "${max_threads}"; then
 		killall wt-rss-local >/dev/null 2>&1
 		rm -rf "${hooks_dir}" ${TMP2}/wt-rss-local
@@ -3399,6 +3413,7 @@ test_11_nv(){
 	done < "${file_path}"
 	[ -s "${targets_file}" ] || return 0
 	wt_set_batch_state_from_file "${valid_nodes_file}" "booting..." ""
+	wt_log_test_method "NaiveProxy 独立代理进程 + webtest-tool HTTP 探测" "${valid_nodes_file}"
 	if wt_try_webtest_tool_targets_batch "${targets_file}" "nv" "${max_threads}"; then
 		killall wt-naive >/dev/null 2>&1
 		rm -rf ${TMP2}/wt-naive "${hooks_dir}"
@@ -3467,6 +3482,7 @@ test_12_tc(){
 	done < "${file_path}"
 	[ -s "${targets_file}" ] || return 0
 	wt_set_batch_state_from_file "${valid_nodes_file}" "booting..." ""
+	wt_log_test_method "TUIC 独立代理进程 + webtest-tool HTTP 探测" "${valid_nodes_file}"
 	if wt_try_webtest_tool_targets_batch "${targets_file}" "tc" "${max_threads}"; then
 		killall wt-tuic >/dev/null 2>&1
 		rm -rf ${TMP2}/wt-tuic "${hooks_dir}"
@@ -3563,6 +3579,7 @@ test_13_at(){
 	done < "${file_path}"
 	[ -s "${targets_file}" ] || return 0
 	wt_set_batch_state_from_file "${valid_nodes_file}" "booting..." ""
+	wt_log_test_method "AnyTLS 独立代理进程 + webtest-tool HTTP 探测" "${valid_nodes_file}"
 	if wt_try_webtest_tool_targets_batch "${targets_file}" "${mark}" "${max_threads}"; then
 		rm -rf "${hooks_dir}"
 		return 0
@@ -3855,7 +3872,7 @@ warm_webtest_cache() {
 	end_ts=$(date +%s)
 	duration=$((end_ts - start_ts))
 	if [ "${scanned}" = "0" ]; then
-		wt_cache_log "ℹ️测速配置缓存预热：未发现可由 xray 批量测速的节点，跳过。"
+		wt_cache_log "ℹ️Xray 节点配置缓存预热：当前没有 Xray 类节点，本步骤跳过；其他协议仍按各自测速流程执行。"
 	elif [ "${ret}" != "0" ]; then
 		wt_cache_log "⚠️测速配置缓存预热失败：目标 ${scanned} 个 xray 类节点，耗时 ${duration}s。"
 	elif wt_webtest_cache_is_globally_fresh "${ids_file}"; then
@@ -4350,6 +4367,7 @@ schedule_node_direct_refresh)
 	;;
 warm_cache)
 	warm_webtest_cache
+	exit $?
 	;;
 ensure_cache_ids_file)
 	shift
@@ -4361,9 +4379,11 @@ ensure_cache_ids_file)
 	mkdir -p "${TMP2}"
 	rm -rf "${TMP2}/node_cache" "${TMP2}/node_env" "${TMP2}/nodes_index.txt"
 	wt_ensure_webtest_cache_nodes_file "${ensure_webtest_cache_nodes_file}"
+	exit $?
 	;;
 node_direct_refresh)
 	refresh_node_direct_after_schema2_change
+	exit $?
 	;;
 esac
 

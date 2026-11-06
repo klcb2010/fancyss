@@ -235,7 +235,7 @@ test_xray_conf(){
 	#uset _test_ret
 	local conf=$1
 	local xray_asset_dir=""
-	echo_date "测试xray配置文件..."
+	echo_date "测试xray配置文件"
 	if [ "$(get_runtime_proxy_mode)" = "7" ] && type fss_shunt_xray_asset_dir >/dev/null 2>&1; then
 		xray_asset_dir="$(fss_shunt_xray_asset_dir 2>/dev/null || true)"
 	fi
@@ -266,7 +266,7 @@ check_time(){
 	# 因为vmess代理协议要求本地时间和服务器时间一致才能工作，所以检测下路由器时间是否设置正确
 	# 时间检测优先从worldtimeapi.org获取，如果获取成功，能同时得到公网出口ipv4地址
 	# 如果所有检测方式用光了还无法获取时间，说明可能是DNS无法获取到解析通造成的
-	echo_date "检测路由器本地时间是否正确..."
+	echo_date "检测路由器本地时间是否正确"
 
 	# debug use
 	# get_time "www.weibo.com" debug
@@ -340,7 +340,7 @@ check_time(){
 check_internet4(){
 	# 开启插件之前必须检查网络，如果网络不通，则插件不予开启
 	# 考虑到本插件可能的国外环境用户，最后添加8.8.8.8的检测
-	echo_date "➡️ ipv4网络连通性检测..."
+	echo_date "➡️ ipv4网络连通性检测"
 	if [ -z "${PING4_RET}" ];then
 		local PING4_SRC="223.5.5.5"
 		local PING4_RET=$(ping -c 1 -w 1 ${PING4_SRC} 2>/dev/null|tail -n1|awk -F '/' '{print $4}')
@@ -375,7 +375,7 @@ check_internet4(){
 check_internet6(){
 	# 开启插件之前必须检查网络，如果网络不通，则插件不予开启
 	# 考虑到本插件可能的国外环境用户，最后添加2001:de4::101和2001:4860:4860::8888的检测
-	echo_date "➡️ ipv6网络连通性检测..."
+	echo_date "➡️ ipv6网络连通性检测"
 	if [ -z "${PING6_RET}" ];then
 		local PING6_SRC="2400:3200::1"
 		local PING6_RET=$(ping -c 1 -w 1 ${PING6_SRC} 2>/dev/null|tail -n1|awk -F '/' '{print $4}')
@@ -459,7 +459,7 @@ ipv6_proxy_supported() {
 
 check_ipv6_proxy_prerequisites() {
 	ipv6_proxy_enabled || return 0
-	echo_date "➡️ IPv6透明代理预检查..."
+	echo_date "➡️ IPv6透明代理预检查"
 	if ! ipv6_proxy_supported; then
 		echo_date "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 		echo_date "+ 当前节点类型暂不支持IPv6透明代理，本次将自动回退到IPv4模式！ +"
@@ -558,7 +558,7 @@ sync_dns_ipv6_policy() {
 }
 
 check_chn_public_ip(){
-	echo_date "检测[公网出口IPV4地址]和[路由器WAN口IPV4地址]..."
+	echo_date "检测[公网出口IPV4地址]和[路由器WAN口IPV4地址]"
 
 	# 5.1 检测路由器公网出口IPV4地址
 	if [ -z "${REMOTE_IP_OUT}" -o "${REMOTE_IP_OUT}" == "null" ];then
@@ -675,8 +675,8 @@ check_chn_public_ip(){
 
 prepare_system() {
 	# prepare system
-	echo_date "🛠️ 一些准备工作，请稍后..."
-	echo_date "准备工作：加载当前节点和运行环境..."
+	echo_date "🛠️ 一些准备工作，请稍后"
+	echo_date "准备工作：加载当前节点和运行环境"
 	fss_base_load_current_node_env
 	refresh_runtime_context
 	normalize_ss2022_password
@@ -727,13 +727,13 @@ prepare_system() {
 	
 	# 检查端口占用情况
 	# 3333 3334 23456 7913 1051 1052 1055-1070 2055 2056 1091 1092 1093
-	echo_date "准备工作：检查冲突端口占用..."
+	echo_date "准备工作：检查冲突端口占用"
 	kill_used_port
 
 	# 3. internet detect
-	echo_date "准备工作：检测基础网络连通性..."
+	echo_date "准备工作：检测基础网络连通性"
 	check_internet
-	echo_date "准备工作：同步DNS与IPv6策略..."
+	echo_date "准备工作：同步DNS与IPv6策略"
 	check_ipv6_proxy_prerequisites
 	sync_dns_ipv6_policy
 
@@ -760,7 +760,7 @@ prepare_system() {
 	
 	# 检测路由器公网出口IPV4地址
 	if [ "${ss_basic_nochnipcheck}" != "1" ];then
-		echo_date "准备工作：检查公网出口与WAN口地址..."
+		echo_date "准备工作：检查公网出口与WAN口地址"
 		check_chn_public_ip
 	fi
 	
@@ -811,14 +811,14 @@ prepare_system() {
 	fi
 
 	if [ "${ss_basic_type}" == "0" ];then
-		echo_date "ℹ️使用Xray-core运行ss协议节点..."
+		echo_date "ℹ️使用Xray-core运行ss协议节点"
 		SS_CONFIG_TEMP="/tmp/xray_tmp.json"
 		SS_CONFIG_FILE="/koolshare/ss/xray.json"
 	fi
 
 	
 	if [ "${ss_basic_type}" == "3" ];then
-		echo_date "ℹ️使用Xray-core运行vmess协议节点..."
+		echo_date "ℹ️使用Xray-core运行vmess协议节点"
 		VCORE_NAME=Xray
 		VMESS_CONFIG_TEMP="/tmp/xray_tmp.json"
 		VMESS_CONFIG_FILE="/koolshare/ss/xray.json"
@@ -831,14 +831,14 @@ prepare_system() {
 
 	# 11. set tcore (trojan core) name
 	if [ "${ss_basic_type}" == "5" ];then
-		echo_date "ℹ️使用Xray-core运行trojan协议节点..."
+		echo_date "ℹ️使用Xray-core运行trojan协议节点"
 		TROJAN_CONFIG_TEMP="/tmp/xray_tmp.json"
 		TROJAN_CONFIG_FILE="/koolshare/ss/xray.json"
 	fi
 
 	# 11. set hy2 core name
 	if [ "${ss_basic_type}" == "8" ];then
-		echo_date "ℹ️使用Xray-core运行hysteia2协议节点..."
+		echo_date "ℹ️使用Xray-core运行hysteia2协议节点"
 		HY2_CONFIG_TEMP="/tmp/xray_tmp.json"
 		HY2_CONFIG_FILE="/koolshare/ss/xray.json"
 	fi
@@ -1226,7 +1226,7 @@ rewrite_xray_like_outbound_server() {
 # ================================= ss stop ===============================
 
 restore_conf() {
-	echo_date "删除fancyss相关的名单配置文件..."
+	echo_date "删除fancyss相关的名单配置文件"
 	rm -f /jffs/configs/dnsmasq.d/custom.conf
 	rm -f /jffs/configs/dnsmasq.d/ss_host.conf
 	rm -f /jffs/configs/dnsmasq.d/ss_server.conf
@@ -1258,7 +1258,7 @@ restore_conf() {
 kill_process() {
 	local v2ray_process=$(pidof v2ray)
 	if [ -n "$v2ray_process" ]; then
-		echo_date "关闭V2Ray进程..."
+		echo_date "关闭V2Ray进程"
 		# 有时候killall杀不了v2ray进程，所以用不同方式杀两次
 		killall v2ray >/dev/null 2>&1
 		kill -9 "$v2ray_process" >/dev/null 2>&1
@@ -1266,7 +1266,7 @@ kill_process() {
 
 	local xray_process=$(pidof xray)
 	if [ -n "$xray_process" ]; then
-		echo_date "关闭xray进程..."
+		echo_date "关闭xray进程"
 		if [ -d "/koolshare/perp/xray" ];then
 			perpctl d xray >/dev/null 2>&1
 			rm -rf /koolshare/perp/xray >/dev/null 2>&1
@@ -1277,25 +1277,25 @@ kill_process() {
 
 	local rssredir=$(pidof rss-redir)
 	if [ -n "$rssredir" ]; then
-		echo_date "关闭ssr-redir进程..."
+		echo_date "关闭ssr-redir进程"
 		killall rss-redir >/dev/null 2>&1
 	fi
 
 	local ssrlocal=$(ps | grep -w rss-local | grep -v "grep" | grep -w "23456" | awk '{print $1}')
 	if [ -n "$ssrlocal" ]; then
-		echo_date "关闭ssr-local进程:23456端口..."
+		echo_date "关闭ssr-local进程:23456端口"
 		kill $ssrlocal >/dev/null 2>&1
 	fi
 
 	local sstunnel=$(pidof ss-tunnel)
 	if [ -n "$sstunnel" ]; then
-		echo_date "关闭进程..."
+		echo_date "关闭进程"
 		killall ss-tunnel >/dev/null 2>&1
 	fi
 
 	local CHNG_PID=$(pidof chinadns-ng)
 	if [ -n "${CHNG_PID}" ];then
-		echo_date "关闭chinadns-ng进程..."
+		echo_date "关闭chinadns-ng进程"
 		if [ -d "/koolshare/perp/chinadns-ng" ];then
 			perpctl d chinadns-ng >/dev/null 2>&1
 			rm -rf /koolshare/perp/chinadns-ng >/dev/null 2>&1
@@ -1306,50 +1306,50 @@ kill_process() {
 
 	local smartdns_process=$(pidof smartdns)
 	if [ -n "$smartdns_process" ]; then
-		echo_date "关闭smartdns进程..."
+		echo_date "关闭smartdns进程"
 		killall smartdns >/dev/null 2>&1
 	fi
 
 	# only close haveged form fancyss, not haveged from system
 	local haveged_pid=$(ps |grep "/koolshare/bin/haveged"|grep -v grep|awk '{print $1}')
 	if [ -n "${haveged_pid}" ]; then
-		echo_date "关闭haveged进程..."
+		echo_date "关闭haveged进程"
 		killall -9 ${haveged_pid} >/dev/null 2>&1
 	fi
 
 	local SOCAT_PID=$(ps | grep -E "socat" | grep -E "2055|2056" | awk '{print $1}')
 	if [ -n "${SOCAT_PID}" ];then
-		echo_date "关闭socat进程..."
+		echo_date "关闭socat进程"
 		kill -9 ${SOCAT_PID}
 	fi
 
 	local IPT2SOCKS_PID=$(ps | grep "ipt2socks" | grep -v grep | awk '{print $1}')
 	if [ -n "${IPT2SOCKS_PID}" ];then
-		echo_date "关闭ipt2socks进程..."
+		echo_date "关闭ipt2socks进程"
 		killall ipt2socks
 	fi	
 
 	local NAIVE_PID=$(ps | grep "naive" | grep -v grep | awk '{print $1}')
 	if [ -n "${NAIVE_PID}" ];then
-		echo_date "关闭naive进程..."
+		echo_date "关闭naive进程"
 		killall naive
 	fi
 
 	local TUIC_PID=$(ps | grep "tuic-client" | grep -v grep | awk '{print $1}')
 	if [ -n "${TUIC_PID}" ];then
-		echo_date "关闭tuic-client进程..."
+		echo_date "关闭tuic-client进程"
 		killall tuic-client
 	fi
 
 	local ANYTLS_PID=$(ps | grep "anytls-zig" | grep -v grep | awk '{print $1}')
 	if [ -n "${ANYTLS_PID}" ];then
-		echo_date "关闭anytls-zig进程..."
+		echo_date "关闭anytls-zig进程"
 		killall anytls-zig anytls-zig.bak 2>/dev/null
 	fi
 
 	local OBFSLOCAL_PID=$(ps | grep "obfs-local" | grep -v grep | awk '{print $1}')
 	if [ -n "${OBFSLOCAL_PID}" ];then
-		echo_date "关闭obfs-local进程..."
+		echo_date "关闭obfs-local进程"
 		killall obfs-local
 	fi
 	rm -f /koolshare/ss/start-obfs.sh >/dev/null 2>&1
@@ -1441,7 +1441,7 @@ resolv_server_ip() {
 
 	case "${CURRENT_NODE_SERVER_IS_IP}" in
 	0|1)
-		echo_date "检测到你的$(__get_type_abbr_name)服务器已经是IP格式：${ss_basic_server_orig}，跳过解析... "
+		echo_date "检测到你的$(__get_type_abbr_name)服务器已经是IP格式：${ss_basic_server_orig}，跳过解析 "
 		return 0
 		;;
 	esac
@@ -2069,20 +2069,20 @@ start_smartdns(){
 			mv /tmp/smartdns_${last_node_indx}.cache /tmp/smartdns_${last_node_indx}_${last_node_hash}.cache
 		fi
 		if [ -f "/tmp/smartdns_${idx}_${curr_node_hash}.cache" ];then
-			echo_date "smartdns缓存：检测到节点【${ss_basic_name}】上次使用的缓存，加载到/tmp/smartdns_${idx}.cache..."
+			echo_date "smartdns缓存：检测到节点【${ss_basic_name}】上次使用的缓存，加载到/tmp/smartdns_${idx}.cache"
 			mv /tmp/smartdns_${idx}_${curr_node_hash}.cache /tmp/smartdns_${idx}.cache
 		else
 			echo_date "smartdns缓存：没有检测到节点【${ss_basic_name}】上次使用的缓存"
 		fi
 	elif [ "${_node_change_status}" == "0" ];then
 		if [ -f "/tmp/smartdns_${last_node_indx}.cache" ];then
-			echo_date "smartdns缓存：检测到节点未切换，保留smartdns缓存文件..."
+			echo_date "smartdns缓存：检测到节点未切换，保留smartdns缓存文件"
 		else
-			echo_date "smartdns缓存：检测到节点未切换，新建smartdns缓存文件..."
+			echo_date "smartdns缓存：检测到节点未切换，新建smartdns缓存文件"
 		fi
 	elif [ "${_node_change_status}" == "2" ];then
 		if [ -f "/tmp/smartdns_${idx}_${curr_node_hash}.cache" ];then
-			echo_date "smartdns缓存：检测到节点【${ss_basic_name}】上次使用的缓存，加载到/tmp/smartdns_${idx}.cache...."
+			echo_date "smartdns缓存：检测到节点【${ss_basic_name}】上次使用的缓存，加载到/tmp/smartdns_${idx}.cache"
 			mv /tmp/smartdns_${idx}_${curr_node_hash}.cache /tmp/smartdns_${idx}.cache
 		else
 			echo_date "smartdns缓存：没有检测到节点【${ss_basic_name}】上次使用的缓存!"
@@ -2186,7 +2186,7 @@ start_chinadns_ng(){
 	set_default "ss_basic_chng_dns_query_times" "1"
 
 	echo_date "----------------------- start chinadns-ng -----------------------"
-	echo_date "💾 生成chinadns-ng配置文件，用于国内外DNS分流..."
+	echo_date "💾 生成chinadns-ng配置文件，用于国内外DNS分流"
 
 	check_fix_isp(){
 		local dns_para=$1
@@ -2742,7 +2742,7 @@ start_chinadns_ng(){
 		#verbose
 	EOF
 	echo_date "🆗 chinadns-ng配置文件生成完毕，位于/tmp/chinadns_ng.conf"
-	echo_date "⚡️ 开启chinadns-ng，用于所有域名的DNS解析..."
+	echo_date "⚡️ 开启chinadns-ng，用于所有域名的DNS解析"
 	rm -rf /tmp/chinadns@cache.db >/dev/null 2>&1
 	rm -rf /tmp/chinadns@verdict-cache.db >/dev/null 2>&1
 	rm -rf /tmp/chinadns_log.txt >/dev/null 2>&1
@@ -2753,7 +2753,7 @@ start_chinadns_ng(){
 
 	if [ "${pkg_arch}" == "hnd_v8" -o "${pkg_arch}" == "mtk" -o "${pkg_arch}" == "ipq64" ];then
 		if [ "${pkg_type}" == "full" -a "${pkg_exta}" == "_debug" ];then
-			echo_date "⚡️ 开启chinadns-ng debug模式..."
+			echo_date "⚡️ 开启chinadns-ng debug模式"
 			local _debug_mode=1
 			#sed -i 's/#verbose/verbose/g' /tmp/chinadns_ng.conf
 			#sed -i 's/#cache-db \/tmp\/chinadns_cache.db/cache-db \/tmp\/chinadns_cache.db/g' /tmp/chinadns_ng.conf
@@ -3560,7 +3560,7 @@ start_ss_obfs_helper() {
 	local _script="/koolshare/ss/start-obfs.sh"
 
 	[ -x "${_script}" ] || return 0
-	echo_date "开启simple-obfs混淆辅助进程..."
+	echo_date "开启simple-obfs混淆辅助进程"
 	sh "${_script}"
 	detect_running_status obfs-local /var/run/obfs_local.pid
 }
@@ -3712,7 +3712,7 @@ creat_vmess_json() {
 	rm -rf "${VMESS_CONFIG_TEMP}"
 	rm -rf "${VMESS_CONFIG_FILE}"
 	if [ "${ss_basic_v2ray_use_json}" != "1" ]; then
-		echo_date 生成vmess协议配置文件...
+		echo_date 生成vmess协议配置文件
 		local tcp="null"
 		local kcp="null"
 		local ws="null"
@@ -3940,7 +3940,7 @@ creat_vmess_json() {
 			]
 			}
 		EOF
-		echo_date "解析vmess协议配置文件..."
+		echo_date "解析vmess协议配置文件"
 		run jq 'del(.. | nulls)' ${VMESS_CONFIG_TEMP} > /tmp/jq_strip_tmp.txt 2>/dev/null && mv /tmp/jq_strip_tmp.txt ${VMESS_CONFIG_TEMP}
 		run jq --tab . ${VMESS_CONFIG_TEMP} >/tmp/jq_para_tmp.txt 2>&1
 		if [ "$?" != "0" ];then
@@ -3957,7 +3957,7 @@ creat_vmess_json() {
 			close_in_five flag
 		fi
 	else
-		echo_date "使用自定义的${VCORE_NAME} json配置文件..."
+		echo_date "使用自定义的${VCORE_NAME} json配置文件"
 		echo "$ss_basic_v2ray_json" | base64_decode >"$VMESS_CONFIG_TEMP"
 		local OB=$(cat "$VMESS_CONFIG_TEMP" | run jq .outbound)
 		local OBS=$(cat "$VMESS_CONFIG_TEMP" | run jq .outbounds)
@@ -4001,7 +4001,7 @@ creat_vmess_json() {
 								}
 							]
 						}"
-		echo_date "解析${VCORE_NAME}配置文件..."
+		echo_date "解析${VCORE_NAME}配置文件"
 		echo ${TEMPLATE} | run jq --argjson args "$OUTBOUNDS" '. + {outbounds: [$args]}' >"$VMESS_CONFIG_FILE"
 		echo_date "${VCORE_NAME}配置文件写入成功到$VMESS_CONFIG_FILE"
 		if [ -n "${ss_basic_server}" ];then
@@ -4027,7 +4027,7 @@ creat_vmess_json() {
 	fi
 
 	# test v2ray Configuration generated from user json then run by xray
-	echo_date "测试${VCORE_NAME}配置文件...."
+	echo_date "测试${VCORE_NAME}配置文件"
 	test_xray_conf $VMESS_CONFIG_FILE
 	case $? in
 	0)
@@ -4209,7 +4209,7 @@ creat_xray_ss_json() {
 		EOF
 	fi
 	
-	echo_date "解析Xray配置文件..."
+	echo_date "解析Xray配置文件"
 	run jq 'del(.. | nulls)' ${SS_CONFIG_TEMP} > /tmp/jq_strip_tmp.txt 2>/dev/null && mv /tmp/jq_strip_tmp.txt ${SS_CONFIG_TEMP}
 	if [ "${LINUX_VER}" == "26" ]; then
 		sed -i '/tcpFastOpen/d' ${SS_CONFIG_TEMP} 2>/dev/null
@@ -4244,7 +4244,7 @@ creat_vless_json() {
 	rm -rf "${VLESS_CONFIG_TEMP}"
 	rm -rf "${VLESS_CONFIG_FILE}"
 	if [ "${ss_basic_xray_use_json}" != "1" ]; then
-		echo_date "生成Xray配置文件..."
+		echo_date "生成Xray配置文件"
 		local tcp="null"
 		local kcp="null"
 		local ws="null"
@@ -4527,7 +4527,7 @@ ${xray_user_json}
 			]
 			}
 		EOF
-		echo_date "解析Xray配置文件..."
+		echo_date "解析Xray配置文件"
 		run jq 'del(.. | nulls)' ${VLESS_CONFIG_TEMP} > /tmp/jq_strip_tmp.txt 2>/dev/null && mv /tmp/jq_strip_tmp.txt ${VLESS_CONFIG_TEMP}
 		if [ "${LINUX_VER}" == "26" ]; then
 			sed -i '/tcpFastOpen/d' ${VLESS_CONFIG_TEMP} 2>/dev/null
@@ -4547,7 +4547,7 @@ ${xray_user_json}
 			close_in_five flag
 		fi
 	else
-		echo_date "使用自定义的Xray json配置文件..."
+		echo_date "使用自定义的Xray json配置文件"
 		echo "$ss_basic_xray_json" | base64_decode >"$VLESS_CONFIG_TEMP"
 		local OB=$(cat "$VLESS_CONFIG_TEMP" | run jq .outbound)
 		local OBS=$(cat "$VLESS_CONFIG_TEMP" | run jq .outbounds)
@@ -4592,7 +4592,7 @@ ${xray_user_json}
 							]
 						}"
 		
-		echo_date "解析Xray配置文件..."
+		echo_date "解析Xray配置文件"
 		echo ${TEMPLATE} | run jq --argjson args "$OUTBOUNDS" '. + {outbounds: [$args]}' >"${VLESS_CONFIG_FILE}"
 		echo_date "Xray配置文件写入成功到${VLESS_CONFIG_FILE}"
 		if [ -n "${ss_basic_server}" ];then
@@ -4710,7 +4710,7 @@ start_xray() {
 		fi
 	fi
 	# xray start
-	echo_date "开启Xray主进程..."
+	echo_date "开启Xray主进程"
 	cd /koolshare/bin
 	local xray_asset_dir=""
 	if [ "$(get_runtime_proxy_mode)" = "7" ] && type fss_shunt_xray_asset_dir >/dev/null 2>&1; then
@@ -4818,7 +4818,7 @@ creat_trojan_json(){
 		]
 		}
 	EOF
-	echo_date "解析xray的trojan配置文件..."
+	echo_date "解析xray的trojan配置文件"
 	if [ "${LINUX_VER}" == "26" ]; then
 		sed -i '/tcpFastOpen/d' ${TROJAN_CONFIG_TEMP} 2>/dev/null
 	fi
@@ -4849,7 +4849,7 @@ start_trojan(){
 		fi
 	fi
 
-	echo_date "开启Xray主进程，用以运行trojan协议节点..."
+	echo_date "开启Xray主进程，用以运行trojan协议节点"
 	cd /koolshare/bin
 	run_bg /koolshare/bin/xray run -c $TROJAN_CONFIG_FILE
 	detect_running_status3 xray 23456 0 force
@@ -4998,7 +4998,7 @@ creat_hy2_json(){
 		]
 		}
 	EOF
-	echo_date "解析xray的hysteria2配置文件..."
+	echo_date "解析xray的hysteria2配置文件"
 	if [ "${LINUX_VER}" == "26" ]; then
 		sed -i '/tcpFastOpen/d' ${HY2_CONFIG_TEMP} 2>/dev/null
 	fi
@@ -5029,7 +5029,7 @@ start_hy2(){
 		fi
 	fi
 
-	echo_date "开启Xray主进程，用以运行hysteria2协议节点..."
+	echo_date "开启Xray主进程，用以运行hysteria2协议节点"
 	cd /koolshare/bin
 	run_bg /koolshare/bin/xray run -c $HY2_CONFIG_FILE
 	detect_running_status3 xray 23456 0 force
@@ -5061,11 +5061,11 @@ start_naive(){
 		close_in_five flag
 	fi
 	
-	echo_date "开启ipt2socks进程..."
+	echo_date "开启ipt2socks进程"
 	run_bg ipt2socks -p 23456 -l 3333 -b 0.0.0.0 -B :: -n 10000 -R
 	detect_running_status2 ipt2socks 23456
 	
-	echo_date "开启NaïveProxy主进程..."
+	echo_date "开启NaïveProxy主进程"
 	run_bg naive --listen=socks://127.0.0.1:23456 --proxy=${ss_basic_naive_prot}://${ss_basic_naive_user}:${ss_basic_password}@${ss_basic_server}:${ss_basic_naive_port}
 	detect_running_status2 naive 23456
 }
@@ -5099,7 +5099,7 @@ start_tuic(){
 	echo "${ss_basic_tuic_json}" | base64_decode >/tmp/tuic_tmp_1.json
 	local RELAY=$(cat /tmp/tuic_tmp_1.json | run jq '.relay')
 
-	echo_date "解析tuic配置文件..."
+	echo_date "解析tuic配置文件"
 	echo "{\"local\": {\"server\": \"127.0.0.1:23456\"},\"log_level\": \"warn\"}" | run jq --argjson args "$RELAY" '. + {relay: ($args + {startup_mode: "eager"})}' >/koolshare/ss/tuic.json
 
 	# 检测用户是否配置了ip地址
@@ -5135,11 +5135,11 @@ start_tuic(){
 		echo_date "检测到tuic配置server已直接使用ip地址：${tuic_server}，跳过域名解析。"
 	fi
 	
-	echo_date "开启ipt2socks进程..."
+	echo_date "开启ipt2socks进程"
 	run_bg ipt2socks -p 23456 -l 3333 -b 0.0.0.0 -B :: -n 10000 -R
 	detect_running_status2 ipt2socks 23456
 	
-	echo_date "开启tuic-client主进程..."
+	echo_date "开启tuic-client主进程"
 	run_bg tuic-client -c /koolshare/ss/tuic.json
 	detect_running_status tuic-client
 }
@@ -5202,7 +5202,7 @@ start_anytls(){
 
 	killall anytls-zig anytls-zig.bak ipt2socks 2>/dev/null
 	sleep 1
-	echo_date "开启ipt2socks进程..."
+	echo_date "开启ipt2socks进程"
 	run_bg ipt2socks -p 23456 -l 3333 -b 0.0.0.0 -B :: -n 10000 -R
 	detect_running_status2 ipt2socks 23456
 
@@ -5258,7 +5258,7 @@ write_cron_job() {
 	# 定时webtest
 	sed -i '/sslatencyjob/d' /var/spool/cron/crontabs/* >/dev/null 2>&1
 	if [ "${ss_basic_lt_cru_opts}" == "1" ]; then
-		echo_date "⏰️fancyss 节点web落地延迟检测任务启用，设置每隔${ss_basic_lt_cru_time}分钟检测一次..."
+		echo_date "⏰️fancyss 节点web落地延迟检测任务启用，设置每隔${ss_basic_lt_cru_time}分钟检测一次"
 		sed -i '/sslatencyjob/d' /var/spool/cron/crontabs/* >/dev/null 2>&1
 		cru a sslatencyjob "*/${ss_basic_lt_cru_time} * * * * /koolshare/scripts/ss_webtest.sh 2"
 	else
@@ -5272,7 +5272,7 @@ kill_cron_job() {
 		sed -i '/ssupdate/d' /var/spool/cron/crontabs/* >/dev/null 2>&1
 	fi
 	if [ -n "$(cru l | grep ssnodeupdate)" ]; then
-		echo_date "删除定时订阅任务..."
+		echo_date "删除定时订阅任务"
 		sed -i '/ssnodeupdate/d' /var/spool/cron/crontabs/* >/dev/null 2>&1
 	fi
 	if [ -n "$(cru l | grep sslatencyjob)" ]; then
@@ -5287,10 +5287,10 @@ load_tproxy() {
 	do
 		lsmod | grep ${MODULE} &>/dev/null
 		if [ "$?" != "0" ]; then
-			echo_date "加载${MODULE}模块..."
+			echo_date "加载${MODULE}模块"
 			modprobe ${MODULE}.ko
 		else
-			echo_date "${MODULE}模块已加载..."
+			echo_date "${MODULE}模块已加载"
 		fi
 	done
 }
@@ -6062,7 +6062,7 @@ flush_iptables() {
 stop_dns_process() {
 	local CHNG_PID=$(pidof chinadns-ng)
 	if [ -n "${CHNG_PID}" ];then
-		echo_date "关闭chinadns-ng进程..."
+		echo_date "关闭chinadns-ng进程"
 		if [ -d "/koolshare/perp/chinadns-ng" ];then
 			perpctl d chinadns-ng >/dev/null 2>&1
 			rm -rf /koolshare/perp/chinadns-ng >/dev/null 2>&1
@@ -6073,7 +6073,7 @@ stop_dns_process() {
 
 	local smartdns_process=$(pidof smartdns)
 	if [ -n "$smartdns_process" ]; then
-		echo_date "关闭smartdns进程..."
+		echo_date "关闭smartdns进程"
 		killall smartdns >/dev/null 2>&1
 	fi
 
@@ -6157,7 +6157,7 @@ disable_ipv6_proxy_runtime() {
 }
 
 fallback_ipv6_proxy_to_ipv4() {
-	echo_date "⚠️检测到IPv6透明代理规则写入失败，开始回退到IPv4代理模式..."
+	echo_date "⚠️检测到IPv6透明代理规则写入失败，开始回退到IPv4代理模式"
 	flush_ip6tables
 	disable_ipv6_proxy_runtime
 	echo_date "↪ 已同步关闭前端的IPv6代理开关，并强制开启代理域名IPv6过滤。"
@@ -6182,7 +6182,7 @@ load_iptables() {
 	# creat_ipset
 	# add_white_black
 	if ! _start_iptables; then
-		echo_date "错误：写入iptables透明代理规则失败，正在回滚..."
+		echo_date "错误：写入iptables透明代理规则失败，正在回滚"
 		flush_iptables
 		flush_ipset
 		close_in_five flag
@@ -6389,7 +6389,7 @@ _start_iptables() {
 	fi
 
 	#----------------------BASIC RULES---------------------
-	echo_date "写入iptables规则到nat表中..."
+	echo_date "写入iptables规则到nat表中"
 	local VLAN_INDEXS=$(ifconfig | grep -E "^br" | awk '{print $1}' | sed 's/^br//g')
 
 	# 创建SHADOWSOCKS nat rule
@@ -6640,7 +6640,7 @@ _start_iptables() {
 	insert_if_not_exists filter -I FORWARD 1 -p udp --dport 443 -j SHADOWSOCKS
 
 	if [ "$ss_basic_dns_hijack" == "1" ]; then
-		echo_date "开启DNS劫持功能功能，防止DNS污染..."
+		echo_date "开启DNS劫持，防止DNS污染"
 		#INSET_NU_DNS=$(expr "${INSET_NU}" + 1)
 		local INSET_NU_DNS=$((${INSET_NU} + 1))
 		#append_if_not_exists nat -I PREROUTING "$INSET_NU_DNS" -p udp ! -s ${lan_ipaddr} --dport 53 -j SHADOWSOCKS_DNS
@@ -6668,7 +6668,7 @@ _start_iptables() {
 }
 
 _start_ipv6_iptables() {
-	echo_date "写入ip6tables规则到ipv6 nat/mangle/filter表中..."
+	echo_date "写入ip6tables规则到ipv6 nat/mangle/filter表中"
 
 	resolve_ipv6_default_acl
 
@@ -6840,7 +6840,7 @@ _start_ipv6_iptables() {
 	fi
 
 	if [ "$ss_basic_dns_hijack" == "1" ]; then
-		echo_date "开启IPv6 DNS劫持功能，防止IPv6 DNS污染..."
+		echo_date "开启IPv6 DNS劫持功能，防止IPv6 DNS污染"
 		dns_hijack_control 6 || return 1
 		local INSET_NU_DNS6=1
 		for VLAN_INDEX in ${VLAN_INDEXS}
@@ -6888,7 +6888,7 @@ restart_dnsmasq() {
 		EOF
 	fi
 	# Restart dnsmasq
-	echo_date "重启dnsmasq服务..."
+	echo_date "重启dnsmasq服务"
 	service restart_dnsmasq >/dev/null 2>&1 &
 	detect_running_status dnsmasq
 }
@@ -6941,7 +6941,7 @@ write_numbers() {
 
 remove_ss_reboot_job() {
 	if [ -n "$(cru l | grep ss_reboot)" ]; then
-		echo_date "【科学上网】：删除插件自动重启定时任务..."
+		echo_date "【科学上网】：删除插件自动重启定时任务"
 		sed -i '/ss_reboot/d' /var/spool/cron/crontabs/* >/dev/null 2>&1
 	fi
 }
@@ -6950,28 +6950,28 @@ set_ss_reboot_job() {
 	if [[ "${ss_reboot_check}" == "0" ]]; then
 		remove_ss_reboot_job
 	elif [[ "${ss_reboot_check}" == "1" ]]; then
-		echo_date "【科学上网】：设置每天${ss_basic_time_hour}时${ss_basic_time_min}分重启插件..."
+		echo_date "【科学上网】：设置每天${ss_basic_time_hour}时${ss_basic_time_min}分重启插件"
 		cru a ss_reboot ${ss_basic_time_min} ${ss_basic_time_hour}" * * * /bin/sh /koolshare/ss/ssconfig.sh restart"
 	elif [[ "${ss_reboot_check}" == "2" ]]; then
-		echo_date "【科学上网】：设置每周${ss_basic_week}的${ss_basic_time_hour}时${ss_basic_time_min}分重启插件..."
+		echo_date "【科学上网】：设置每周${ss_basic_week}的${ss_basic_time_hour}时${ss_basic_time_min}分重启插件"
 		cru a ss_reboot ${ss_basic_time_min} ${ss_basic_time_hour}" * * "${ss_basic_week}" /bin/sh /koolshare/ss/ssconfig.sh restart"
 	elif [[ "${ss_reboot_check}" == "3" ]]; then
-		echo_date "【科学上网】：设置每月${ss_basic_day}日${ss_basic_time_hour}时${ss_basic_time_min}分重启插件..."
+		echo_date "【科学上网】：设置每月${ss_basic_day}日${ss_basic_time_hour}时${ss_basic_time_min}分重启插件"
 		cru a ss_reboot ${ss_basic_time_min} ${ss_basic_time_hour} ${ss_basic_day}" * * /bin/sh /koolshare/ss/ssconfig.sh restart"
 	elif [[ "${ss_reboot_check}" == "4" ]]; then
 		if [[ "${ss_basic_inter_pre}" == "1" ]]; then
-			echo_date "【科学上网】：设置每隔${ss_basic_inter_min}分钟重启插件..."
+			echo_date "【科学上网】：设置每隔${ss_basic_inter_min}分钟重启插件"
 			cru a ss_reboot "*/"${ss_basic_inter_min}" * * * * /bin/sh /koolshare/ss/ssconfig.sh restart"
 		elif [[ "${ss_basic_inter_pre}" == "2" ]]; then
-			echo_date "【科学上网】：设置每隔${ss_basic_inter_hour}小时重启插件..."
+			echo_date "【科学上网】：设置每隔${ss_basic_inter_hour}小时重启插件"
 			cru a ss_reboot "0 */"${ss_basic_inter_hour}" * * * /bin/sh /koolshare/ss/ssconfig.sh restart"
 		elif [[ "${ss_basic_inter_pre}" == "3" ]]; then
-			echo_date "【科学上网】：设置每隔${ss_basic_inter_day}天${ss_basic_inter_hour}小时${ss_basic_time_min}分钟重启插件..."
+			echo_date "【科学上网】：设置每隔${ss_basic_inter_day}天${ss_basic_inter_hour}小时${ss_basic_time_min}分钟重启插件"
 			cru a ss_reboot ${ss_basic_time_min} ${ss_basic_time_hour}" */"${ss_basic_inter_day} " * * /bin/sh /koolshare/ss/ssconfig.sh restart"
 		fi
 	elif [[ "${ss_reboot_check}" == "5" ]]; then
 		check_custom_time=$(echo ss_basic_custom | base64_decode)
-		echo_date "【科学上网】：设置每天${check_custom_time}时的${ss_basic_time_min}分重启插件..."
+		echo_date "【科学上网】：设置每天${check_custom_time}时的${ss_basic_time_min}分重启插件"
 		cru a ss_reboot ${ss_basic_time_min} ${check_custom_time}" * * * /bin/sh /koolshare/ss/ssconfig.sh restart"
 	fi
 }
@@ -7017,7 +7017,7 @@ stop_status_kill_pid_list() {
 	local pids=""
 	pids="$(printf '%s\n' "${pids_raw}" | tr ' ' '\n' | sed '/^$/d' | awk '!seen[$0]++')" || pids=""
 	[ -n "${pids}" ] || return 1
-	echo_date "关闭${label}..."
+	echo_date "关闭${label}"
 	printf '%s\n' "${pids}" | while IFS= read -r pid
 	do
 		[ -n "${pid}" ] || continue
@@ -7034,7 +7034,7 @@ stop_status_kill_pidfile() {
 	pid="$(cat "${pidfile}" 2>/dev/null)"
 	[ -n "${pid}" ] || return 1
 	kill -0 "${pid}" >/dev/null 2>&1 || return 1
-	echo_date "关闭${label}..."
+	echo_date "关闭${label}"
 	start-stop-daemon -K -q -p "${pidfile}" >/dev/null 2>&1
 	return 0
 }
@@ -7064,12 +7064,12 @@ stop_status() {
 	}
 
 	if pidof curl-status >/dev/null 2>&1; then
-		echo_date "关闭curl-status进程..."
+		echo_date "关闭curl-status进程"
 		killall curl-status >/dev/null 2>&1
 	fi
 
 	if pidof statusctl >/dev/null 2>&1; then
-		echo_date "关闭statusctl进程..."
+		echo_date "关闭statusctl进程"
 		killall statusctl >/dev/null 2>&1
 	fi
 
@@ -7123,7 +7123,7 @@ detect_ip(){
 }
 
 check_frn_public_ip(){
-	echo_date "开始代理出口ip检测..."
+	echo_date "开始代理出口ip检测"
 
 	local SOCKS5_OPEN=$(netstat -nlp 2>/dev/null | grep -w "23456" | grep -Eo "v2ray|xray|naive|tuic|anytls" | head -n1)
 	if [ -n "${SOCKS5_OPEN}" ];then
@@ -7215,7 +7215,7 @@ finish_start(){
 	# get foreign ip
 	if [ "${ss_basic_nofrnipcheck}" != "1" ];then
 		echo_date "---------------------------------------------------------"
-		echo_date "所有服务和规则加载完毕，运行一些检测..."
+		echo_date "所有服务和规则加载完毕，运行一些检测"
 		check_frn_public_ip
 	fi
 }
