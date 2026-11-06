@@ -46,7 +46,7 @@ download_binary() {
 
     echo "$digest  $archive" | sha256sum -c -
 
-    tar -xJf "$archive" --wildcards "*/naive" -C "$extract_dir"
+    tar -xJf "$archive" -C "$extract_dir" --wildcards "*/naive"
     binary="$(find "$extract_dir" -type f -name naive -print -quit)"
     if [ -z "$binary" ] || [ ! -s "$binary" ]; then
         echo "ERROR: archive does not contain a valid naive binary: $asset"
