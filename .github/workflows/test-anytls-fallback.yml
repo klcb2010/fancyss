@@ -2,6 +2,11 @@ name: Test AnyTLS Go Source Fallback
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - security/xray-mptcp-2026
+    paths:
+      - .github/workflows/test-anytls-fallback.yml
 
 permissions:
   contents: read
