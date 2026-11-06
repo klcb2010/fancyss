@@ -34,40 +34,6 @@ jobs:
           git config user.email "actions@github.com"
 
       # =========================
-      # 3. bump local version and refresh release tag
-      # =========================
-      - name: Bump version for every local push
-        if: github.event_name == 'push'
-        run: |
-          set -euo pipefail
-
-          VERSION=$(jq -r '.version' packages/version.json.js)
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
-
-          if [[ ! "$MAJOR" =~ ^[0-9]+$ || ! "$MINOR" =~ ^[0-9]+$ || ! "$PATCH" =~ ^[0-9]+$ ]]; then
-            echo "Invalid version in packages/version.json.js: $VERSION"
-            exit 1
-          fi
-
-          NEXT_VERSION="$MAJOR.$MINOR.$((PATCH + 1))"
-          echo "Version: $VERSION -> $NEXT_VERSION"
-
-          jq --arg version "$NEXT_VERSION" '.version = $version' packages/version.json.js > /tmp/version.json.js
-          mv /tmp/version.json.js packages/version.json.js
-
-          git add packages/version.json.js
-          git commit -m "chore: bump version to $NEXT_VERSION"
-
-          # 推送版本号提交，随后将同名标签强制指向最新提交
-          git push origin "HEAD:${GITHUB_REF_NAME}"
-
-          TAG_NAME="v$NEXT_VERSION"
-          git tag -f "$TAG_NAME" HEAD
-          git push origin "refs/tags/$TAG_NAME" --force
-
-          echo "已将 $TAG_NAME 更新到 $(git rev-parse --short HEAD)"
-
-      # =========================
       # 3. upstream
       # =========================
       - name: Add upstream and fetch
@@ -253,6 +219,49 @@ jobs:
           else
             echo "没有变更，无需提交"
           fi
+
+      # =========================
+      # 12. synchronize version, commit and tag
+      # =========================
+      - name: Bump version and refresh release tag
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+
+          # 如果本次提交已经修改版本文件，就沿用提交中的版本；否则自动递增。
+          if git diff --quiet HEAD^ HEAD -- packages/version.json.js fancyss/ss/version; then
+            VERSION=$(jq -r '.version' packages/version.json.js)
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+
+            if [[ ! "$MAJOR" =~ ^[0-9]+$ || ! "$MINOR" =~ ^[0-9]+$ || ! "$PATCH" =~ ^[0-9]+$ ]]; then
+              echo "Invalid version in packages/version.json.js: $VERSION"
+              exit 1
+            fi
+
+            NEXT_VERSION="$MAJOR.$MINOR.$((PATCH + 1))"
+            jq --arg version "$NEXT_VERSION" '.version = $version' packages/version.json.js > /tmp/version.json.js
+            mv /tmp/version.json.js packages/version.json.js
+            printf '%s\n' "$NEXT_VERSION" > fancyss/ss/version
+
+            git add packages/version.json.js fancyss/ss/version
+            git commit -m "chore: bump version to $NEXT_VERSION"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+            VERSION="$NEXT_VERSION"
+          else
+            PACKAGE_VERSION=$(jq -r '.version' packages/version.json.js)
+            RUNTIME_VERSION=$(tr -d '\r\n' < fancyss/ss/version)
+            if [ "$PACKAGE_VERSION" != "$RUNTIME_VERSION" ]; then
+              echo "Version mismatch: packages=$PACKAGE_VERSION runtime=$RUNTIME_VERSION"
+              exit 1
+            fi
+            VERSION="$PACKAGE_VERSION"
+            echo "本次提交已同步修改两个版本文件，使用版本 $VERSION"
+          fi
+
+          TAG_NAME="v$VERSION"
+          git tag -f "$TAG_NAME" HEAD
+          git push origin "refs/tags/$TAG_NAME" --force
+          echo "已将 $TAG_NAME 更新到 $(git rev-parse --short HEAD)"
     # 11.5 自动刷新故障转移后节点列表
       - name: Auto refresh after failover
         if: steps.build_decision.outputs.needs_build == 'true'
