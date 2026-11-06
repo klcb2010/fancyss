@@ -1,5 +1,10 @@
 fancyss Changelog
 
+3.5.32（20261106）
+   - fix	修复 AnyTLS Go 客户端在 Stream 并发读写与关闭连接时，关闭错误字段存在 data race、极端情况下可能触发 panic 的问题；按 anytls-go issue #54 的方案改用 atomic.Pointer 安全发布关闭错误。
+   - update	AnyTLS Go 客户端构建改为优先拉取固定版本的上游源码；上游拉取失败时自动使用 fancyss 仓库内保存的源码快照，避免上游仓库不可用或删除导致后续打包失败。
+   - update	构建成功后自动更新并提交 AnyTLS Go 源码快照，确保本地备用源码与最近一次成功构建的上游版本保持同步。
+
 3.5.31（20261105）
    - security  Xray-core 升级到 v26.10.31，利用 Xray 默认关闭 MPTCP 降低 CVE-2026-98432 的已知攻击路径暴露；重新构建 arm64 / armv7 / armv5 三种路由器架构。
    - update   Xray 在线更新源改为本仓库，确保插件内“更新 Xray”使用同一套经过校验的安全构建产物。
