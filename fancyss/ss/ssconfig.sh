@@ -6024,12 +6024,12 @@ flush_iptables() {
 
 	: > "${restore_v4}" || true
 	: > "${restore_v6}" || true
-	flush_iptables_restore_append iptables nat "SHADOWSOCKS|3333" "清除iptables nat规则..." "${restore_v4}" && need_v4="1"
-	flush_iptables_restore_append iptables mangle "SHADOWSOCKS|3333|0x7" "清除iptables mangle规则..." "${restore_v4}" && need_v4="1"
-	flush_iptables_restore_append iptables filter "SHADOWSOCKS" "清除iptables filter规则..." "${restore_v4}" && need_v4="1"
-	flush_iptables_restore_append ip6tables nat "SHADOWSOCKS6|3333|3334" "清除ip6tables nat规则..." "${restore_v6}" && need_v6="1"
-	flush_iptables_restore_append ip6tables mangle "SHADOWSOCKS6|3333|3334|0x7" "清除ip6tables mangle规则..." "${restore_v6}" && need_v6="1"
-	flush_iptables_restore_append ip6tables filter "SHADOWSOCKS6" "清除ip6tables filter规则..." "${restore_v6}" && need_v6="1"
+	flush_iptables_restore_append iptables nat "SHADOWSOCKS|3333" "清除iptables nat规则" "${restore_v4}" && need_v4="1"
+	flush_iptables_restore_append iptables mangle "SHADOWSOCKS|3333|0x7" "清除iptables mangle规则" "${restore_v4}" && need_v4="1"
+	flush_iptables_restore_append iptables filter "SHADOWSOCKS" "清除iptables filter规则" "${restore_v4}" && need_v4="1"
+	flush_iptables_restore_append ip6tables nat "SHADOWSOCKS6|3333|3334" "清除ip6tables nat规则" "${restore_v6}" && need_v6="1"
+	flush_iptables_restore_append ip6tables mangle "SHADOWSOCKS6|3333|3334|0x7" "清除ip6tables mangle规则" "${restore_v6}" && need_v6="1"
+	flush_iptables_restore_append ip6tables filter "SHADOWSOCKS6" "清除ip6tables filter规则" "${restore_v6}" && need_v6="1"
 	if [ "${need_v4}" = "1" ] && iptables-restore -n < "${restore_v4}" >/dev/null 2>&1; then
 		restore_v4_ok="1"
 	fi
@@ -6038,14 +6038,14 @@ flush_iptables() {
 	fi
 	rm -f "${restore_v4}" "${restore_v6}" >/dev/null 2>&1
 	if [ "${need_v4}" = "1" ] && [ "${restore_v4_ok}" != "1" ]; then
-		flush_iptables_legacy_table iptables nat "SHADOWSOCKS|3333" "清除iptables nat规则..."
-		flush_iptables_legacy_table iptables mangle "SHADOWSOCKS|3333|0x7" "清除iptables mangle规则..."
-		flush_iptables_legacy_table iptables filter "SHADOWSOCKS" "清除iptables filter规则..."
+		flush_iptables_legacy_table iptables nat "SHADOWSOCKS|3333" "清除iptables nat规则"
+		flush_iptables_legacy_table iptables mangle "SHADOWSOCKS|3333|0x7" "清除iptables mangle规则"
+		flush_iptables_legacy_table iptables filter "SHADOWSOCKS" "清除iptables filter规则"
 	fi
 	if [ "${need_v6}" = "1" ] && [ "${restore_v6_ok}" != "1" ]; then
-		flush_iptables_legacy_table ip6tables nat "SHADOWSOCKS6|3333|3334" "清除ip6tables nat规则..."
-		flush_iptables_legacy_table ip6tables mangle "SHADOWSOCKS6|3333|3334|0x7" "清除ip6tables mangle规则..."
-		flush_iptables_legacy_table ip6tables filter "SHADOWSOCKS6" "清除ip6tables filter规则..."
+		flush_iptables_legacy_table ip6tables nat "SHADOWSOCKS6|3333|3334" "清除ip6tables nat规则"
+		flush_iptables_legacy_table ip6tables mangle "SHADOWSOCKS6|3333|3334|0x7" "清除ip6tables mangle规则"
+		flush_iptables_legacy_table ip6tables filter "SHADOWSOCKS6" "清除ip6tables filter规则"
 	fi
 
 	local ip6_rule_exist=$(ip -6 rule show 2>/dev/null | grep "lookup 310" | grep -c 310)
