@@ -189,39 +189,39 @@ jobs:
           version, upstream_path = sys.argv[1], sys.argv[2]
           upstream_text = pathlib.Path(upstream_path).read_text(encoding="utf-8")
           path = pathlib.Path("Changelog.txt")
-          local_text = path.read_text(encoding="utf-8") if path.exists() else "fancyss Changelog\\n"
+          local_text = path.read_text(encoding="utf-8") if path.exists() else "fancyss Changelog\n"
 
           # 保留上游该版本的完整日志段落（标题至下一版本标题之前）。
           lines = upstream_text.splitlines()
-          heading = re.compile(r"^\\s*" + re.escape(version) + r"(?:（[^）]*）|\\([^)]*\\))?\\s*$")
+          heading = re.compile(r"^\s*" + re.escape(version) + r"(?:（[^）]*）|\([^)]*\))?\s*$")
           start = next((i for i, line in enumerate(lines) if heading.match(line)), None)
 
           if start is not None:
               end = next(
                   (i for i in range(start + 1, len(lines))
-                   if re.match(r"^\\s*\\d+\\.\\d+\\.\\d+(?:（[^）]*）|\\([^)]*\\))?\\s*$", lines[i])),
+                   if re.match(r"^\s*\d+\.\d+\.\d+(?:（[^）]*）|\([^)]*\))?\s*$", lines[i])),
                   len(lines)
               )
-              new_section = "\\n".join(lines[start:end]).strip()
+              new_section = "\n".join(lines[start:end]).strip()
           else:
               # 上游未提供对应版本日志时，至少留下准确版本记录，不伪造具体功能。
               date = datetime.datetime.now().strftime("%Y%m%d")
               new_section = (
-                  f"{version}（{date}）\\n"
-                  "   - update\\t同步上游版本；本次上游未提供对应版本的 Changelog 条目。"
+                  f"{version}（{date}）\n"
+                  "   - update\t同步上游版本；本次上游未提供对应版本的 Changelog 条目。"
               )
 
-          if re.search(r"^\\s*" + re.escape(version) + r"(?:（[^）]*）|\\([^)]*\\))?\\s*$",
+          if re.search(r"^\s*" + re.escape(version) + r"(?:（[^）]*）|\([^)]*\))?\s*$",
                        local_text, re.MULTILINE):
               print(f"Changelog already contains {version}; skip duplicate")
               raise SystemExit(0)
 
           # 插入到文件标题之后，保留此前所有本地版本记录。
-          header, separator, body = local_text.partition("\\n")
+          header, separator, body = local_text.partition("\n")
           if not separator:
               body = ""
-          updated = header + "\\n\\n" + new_section + ("\\n\\n" + body.lstrip("\\n") if body.strip() else "")
-          path.write_text(updated.rstrip() + "\\n", encoding="utf-8")
+          updated = header + "\n\n" + new_section + ("\n\n" + body.lstrip("\n") if body.strip() else "")
+          path.write_text(updated.rstrip() + "\n", encoding="utf-8")
           print(f"Added upstream Changelog section for {version}")
           PY
 
