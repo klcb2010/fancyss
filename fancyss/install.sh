@@ -1744,42 +1744,37 @@ install_now(){
 		rm -rf /tmp/shadowsocks/bin/uredir
 	fi
 
-	prepare_websocketd_package() {
+	prepare_websocketd_package
 
-    # 将一些较大的二进制文件安装到/data分区，以节约jffs分区空间
-    # 1. 卸载的时候记得删除/data分区内的二进制
-    # 2. 打包的时候应该用/data分区内的二进制
-    # 3. 更新二进制的时候应该检测/koolshare/bin下的是否为软连接，是的话应该更新真实位置的二进制
+	# 将较大的二进制文件优先安装到 /data，减少 /jffs 占用
+	if check_device "/data"; then
+		echo_date "检测/data分区剩余空间..."
+		SPACE_DATA_AVAL=$(df | awk '$NF == "/data" {print $4; exit}')
+		[ -n "${SPACE_DATA_AVAL}" ] || SPACE_DATA_AVAL=0
+		echo_date "/data分区剩余空间为：${SPACE_DATA_AVAL}KB"
+		_BINS="xray v2ray hysteria2 naive anytls-go anytls-zig sslocal rss-local rss-tunnel rss-redir"
+		for _BIN in ${_BINS}
+		do
+			if [ -f "/tmp/shadowsocks/bin/${_BIN}" ]; then
+				SPACE_DATA_AVAL=$(df | awk '$NF == "/data" {print $4; exit}')
+				[ -n "${SPACE_DATA_AVAL}" ] || SPACE_DATA_AVAL=0
+				SPACE_DATA_AVAL2=$((SPACE_DATA_AVAL - 256))
+				BIN_SIZE=$(du -s "/tmp/shadowsocks/bin/${_BIN}" | awk '{print $1}')
+				if [ "${BIN_SIZE}" -lt "${SPACE_DATA_AVAL2}" ]; then
+					echo_date "将${_BIN}安装到/data分区..."
+					mv -f "/tmp/shadowsocks/bin/${_BIN}" /data/
+					chmod 755 "/data/${_BIN}"
+					ln -sf "/data/${_BIN}" "/koolshare/bin/${_BIN}"
+				else
+					echo_date "/data空间不足，${_BIN}保留在安装包中，后续安装到/jffs。"
+				fi
+				sync
+			fi
+		done
+	fi
 
-    # --- 方案 A 改进版安装逻辑 ---
-    echo_date "检测到 /data 分区空间不足，正在将所有二进制文件安装到空间充裕的 /jffs 分区..."
-
-    # 1. 定义所有需要安装的程序
-    local _BINS="xray v2ray hysteria2 naive anytls-go sslocal rss-local rss-tunnel rss-redir"
-
-    # 2. 遍历并直接安装
-    for _BIN in ${_BINS}
-    do
-        if [ -f "/tmp/shadowsocks/bin/${_BIN}" ]; then
-            echo_date "正在安装 ${_BIN} ..."
-
-            # 示例安装逻辑（你原来这里缺失）
-            install -m 755 "/tmp/shadowsocks/bin/${_BIN}" "/koolshare/bin/${_BIN}"
-
-        fi
-    done
-
-    # 4. 清理 /data 分区可能存在的断头链接或残余
-    rm -f /data/anytls-go /data/anytls-client /data/xray /data/v2ray 2>/dev/null
-
-    echo_date "所有二进制文件安装完毕，已避开爆满的 /data 分区。"
-    sync
-
-    # --- 安装逻辑结束 ---
-
-    # 检测jffs储存空间是否足够
-    echo_date "检测jffs分区剩余空间..."
-}
+	# 检测jffs储存空间是否足够
+	echo_date "检测jffs分区剩余空间..."
 
 	SPACE_AVAL=$(df | awk '$NF == "/jffs" {print $4; exit}')
 	JFFS_FS_TYPE=$(mount | awk '$3 == "/jffs" {print $5; exit}')
