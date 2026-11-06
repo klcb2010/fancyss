@@ -125,6 +125,39 @@ sync_binary(){
 		cp -rf ${CURR_PATH}/binaries/${BIN}/${version}/${BIN}_armv5 ${CURR_PATH}/fancyss/bin-arm/${BIN}
 	done
 
+	# Refresh SmartDNS from the official stable release before packaging.
+	local SMARTDNS_DIR="${CURR_PATH}/binaries/smartdns"
+	bash "${SMARTDNS_DIR}/get_smartdns.sh"
+	local SMARTDNS_VERSION
+	local SMARTDNS_RELEASE_DIR
+	SMARTDNS_VERSION=$(tr -d '\r\n' < "${SMARTDNS_DIR}/latest.txt")
+	SMARTDNS_RELEASE_DIR="${SMARTDNS_DIR}/${SMARTDNS_VERSION}"
+
+	if [ -z "${SMARTDNS_VERSION}" ] || [ ! -s "${SMARTDNS_RELEASE_DIR}/md5sum.txt" ]; then
+		echo "ERROR: SmartDNS version marker or checksum file is missing."
+		return 1
+	fi
+
+	if ! (cd "${SMARTDNS_RELEASE_DIR}" && md5sum -c md5sum.txt); then
+		echo "ERROR: SmartDNS binary checksum verification failed."
+		return 1
+	fi
+
+	cp -f "${SMARTDNS_RELEASE_DIR}/smartdns_arm64" "${CURR_PATH}/fancyss/bin-mtk/smartdns"
+	cp -f "${SMARTDNS_RELEASE_DIR}/smartdns_arm64" "${CURR_PATH}/fancyss/bin-hnd_v8/smartdns"
+	cp -f "${SMARTDNS_RELEASE_DIR}/smartdns_armv7" "${CURR_PATH}/fancyss/bin-ipq32/smartdns"
+	cp -f "${SMARTDNS_RELEASE_DIR}/smartdns_armv7" "${CURR_PATH}/fancyss/bin-hnd/smartdns"
+	cp -f "${SMARTDNS_RELEASE_DIR}/smartdns_armv7" "${CURR_PATH}/fancyss/bin-qca/smartdns"
+	cp -f "${SMARTDNS_RELEASE_DIR}/smartdns_armv5" "${CURR_PATH}/fancyss/bin-arm/smartdns"
+
+	for TARGET in "arm64:bin-mtk" "arm64:bin-hnd_v8" "armv7:bin-ipq32" "armv7:bin-hnd" "armv7:bin-qca" "armv5:bin-arm"; do
+		IFS=: read -r SMARTDNS_ARCH TARGET_DIR <<< "${TARGET}"
+		if ! cmp -s "${SMARTDNS_RELEASE_DIR}/smartdns_${SMARTDNS_ARCH}" "${CURR_PATH}/fancyss/${TARGET_DIR}/smartdns"; then
+			echo "ERROR: packaged SmartDNS binary mismatch: ${TARGET_DIR}/smartdns"
+			return 1
+		fi
+	done
+
 	# Confirm each packaged Xray copy matches its verified source binary.
 	for TARGET in "arm64:bin-mtk" "arm64:bin-hnd_v8" "armv7:bin-ipq32" "armv7:bin-hnd" "armv7:bin-qca" "armv5:bin-arm"; do
 		IFS=: read -r XRAY_ARCH TARGET_DIR <<< "${TARGET}"
