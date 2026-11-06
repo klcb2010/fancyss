@@ -44,7 +44,7 @@ if [ -d "${OUT_DIR}" ]; then
 		echo "error: existing release directory is incomplete: ${OUT_DIR}" >&2
 		exit 1
 	fi
-	printf '%s\\n' "v${VER}" > latest.txt
+	printf '%s\n' "v${VER}" > latest.txt
 	echo "already exists: ${SCRIPT_DIR}/${OUT_DIR}"
 	exit 0
 fi
@@ -107,6 +107,6 @@ fi
 
 (cd "${STAGE_DIR}" && md5sum smartdns_arm64 smartdns_armv7 smartdns_armv5 > md5sum.txt)
 mv "${STAGE_DIR}" "${OUT_DIR}"
-printf '%s\\n' "v${VER}" > latest.txt
+printf '%s\n' "v${VER}" > latest.txt
 
 echo "done: ${SCRIPT_DIR}/${OUT_DIR}"
