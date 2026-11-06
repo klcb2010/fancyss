@@ -25,7 +25,7 @@ API_URL="${API_URL:-https://api.github.com/repos/pymumu/smartdns/releases/latest
 echo "fetching latest smartdns release info ..."
 JSON="$(curl -fsSL --retry 3 --retry-delay 1 "${API_URL}")"
 
-TAG="$(printf '%s' "${JSON}" | sed -n 's/.*"tag_name":[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
+TAG="$(jq -er '.tag_name | select(type == "string" and length > 0)' <<< "${JSON}")".*/\1/p' | head -n 1)"
 if [ -z "${TAG}" ]; then
 	echo "error: failed to parse tag_name from GitHub API response" >&2
 	exit 1
@@ -51,15 +51,7 @@ fi
 
 get_asset_url() {
 	local asset_name="$1"
-	printf '%s\n' "${JSON}" | awk -v name="${asset_name}" '
-		$0 ~ ("\"name\": \"" name "\"") { found=1; next }
-		found && /"browser_download_url":/ {
-			sub(/.*"browser_download_url":[[:space:]]*"/, "");
-			sub(/".*/, "");
-			print;
-			exit
-		}
-	'
+	jq -r --arg name "${asset_name}" '[.assets[] | select(.name == $name) | .browser_download_url][0] // empty' <<< "${JSON}"
 }
 
 URL_AARCH64="$(get_asset_url "smartdns-aarch64")"
