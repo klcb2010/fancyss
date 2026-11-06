@@ -1,6 +1,6 @@
 {
   "name": "fancyss",
-  "version": "3.5.43",
+  "version": "3.5.47",
   "md5_hnd_full": "4c347f2a0d1da430e013487a3c67353d",
   "md5_hnd_lite": "b54e50be2df5fc9cb42e7776876bbb7f",
   "md5_hnd_v8_full": "46fbe30fa2ac34c7711fec0dd71fd26f",
