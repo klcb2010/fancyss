@@ -1,5 +1,11 @@
 fancyss Changelog
 
+3.5.43（20261106）
+   - update	Remove custom injection block and legacy AnyTLS log
+   - update	fix: write SmartDNS version marker correctly
+   - update	build: package latest official SmartDNS on all router targets
+   - update	build: make SmartDNS updater CI-safe and track latest version
+
 3.5.42（20261106）
    - update	fix: write SmartDNS version marker correctly
    - update	build: package latest official SmartDNS on all router targets
