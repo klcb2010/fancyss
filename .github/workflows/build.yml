@@ -332,6 +332,24 @@ jobs:
           chmod +x binaries/anytls-go/build.sh
           ./binaries/anytls-go/build.sh
 
+      - name: Save AnyTLS source fallback
+        if: steps.build_decision.outputs.needs_build == 'true'
+        run: |
+          set -euo pipefail
+          if [ -s binaries/anytls-go/source.tar.gz ]; then
+            git add binaries/anytls-go/source.tar.gz
+            if ! git diff --cached --quiet; then
+              git commit -m "chore: cache AnyTLS Go source fallback"
+              git push origin "HEAD:${GITHUB_REF_NAME}"
+              echo "已将 AnyTLS Go 源码快照保存到仓库"
+            else
+              echo "AnyTLS Go 源码快照无变化"
+            fi
+          else
+            echo "ERROR: AnyTLS Go source fallback archive was not generated"
+            exit 1
+          fi
+
       # =========================
       # 12. build
       # =========================
