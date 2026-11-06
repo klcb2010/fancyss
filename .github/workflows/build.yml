@@ -178,15 +178,16 @@ jobs:
           set -euo pipefail
 
           VERSION=$(jq -r '.version' packages/version.json.js)
-          UPSTREAM_CHANGELOG=$(git show upstream/3.0:Changelog.txt)
+          git show upstream/3.0:Changelog.txt > /tmp/upstream_Changelog.txt
 
-          python3 - "$VERSION" "$UPSTREAM_CHANGELOG" <<'PY'
+          python3 - "$VERSION" /tmp/upstream_Changelog.txt <<'PY'
           import datetime
           import pathlib
           import re
           import sys
 
-          version, upstream_text = sys.argv[1], sys.argv[2]
+          version, upstream_path = sys.argv[1], sys.argv[2]
+          upstream_text = pathlib.Path(upstream_path).read_text(encoding="utf-8")
           path = pathlib.Path("Changelog.txt")
           local_text = path.read_text(encoding="utf-8") if path.exists() else "fancyss Changelog\\n"
 
