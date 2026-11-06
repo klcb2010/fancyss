@@ -1,5 +1,10 @@
 fancyss Changelog
 
+3.5.45（20261106）
+   - update	Remove trailing ellipsis from SSR schedule cleanup log
+   - update	Remove trailing ellipses from firewall cleanup logs
+   - update	Remove custom injection block and legacy AnyTLS log
+
 3.5.44（20261106）
    - update	Remove custom injection block and legacy AnyTLS log
    - update	fix: write SmartDNS version marker correctly
