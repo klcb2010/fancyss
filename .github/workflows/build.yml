@@ -8,6 +8,12 @@ on:
       - "security/xray-mptcp-2026"
   workflow_dispatch:
 
+# 同一分支的正式构建必须串行，避免多个运行同时递增版本、写入 Changelog 或推送源码缓存。
+# 不取消正在运行的构建；等待中的运行启动后会重新读取分支最新提交。
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
@@ -24,6 +30,14 @@ jobs:
         with:
           fetch-depth: 0
           submodules: false
+
+      # 并发排队期间分支可能继续前进，因此以启动时的远端最新分支为准，
+      # 避免基于过期的 push 事件 SHA 构建并回推旧提交。
+      - name: Refresh branch tip
+        run: |
+          git fetch origin "${GITHUB_REF_NAME}"
+          git checkout "${GITHUB_REF_NAME}"
+          git reset --hard "origin/${GITHUB_REF_NAME}"
 
       # =========================
       # 2. git config
