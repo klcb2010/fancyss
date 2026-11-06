@@ -1,0 +1,76 @@
+name: Test AnyTLS Go Source Fallback
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fallback-build:
+    name: Offline AnyTLS fallback package build
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          ref: security/xray-mptcp-2026
+          fetch-depth: 1
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.5'
+          cache: false
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq python3
+
+      - name: Verify fallback archive
+        run: |
+          set -euo pipefail
+          test -s binaries/anytls-go/source.tar.gz
+          echo "===== archive size ====="
+          ls -lh binaries/anytls-go/source.tar.gz
+          echo "===== archive contents ====="
+          tar -tzf binaries/anytls-go/source.tar.gz | tee /tmp/anytls-source-files.txt
+          grep -qx './go.mod\|go.mod' /tmp/anytls-source-files.txt
+          grep -Eq '(^|/)proxy/session/stream\.go$' /tmp/anytls-source-files.txt
+          grep -Eq '(^|/)cmd/client/main\.go$' /tmp/anytls-source-files.txt
+          echo "Fallback archive structure looks complete."
+
+      - name: Force upstream fetch failure
+        run: |
+          # Only redirect the AnyTLS source remote to a closed local port.
+          # Other GitHub downloads and the rest of the package build remain available.
+          git config --global url."https://127.0.0.1:9/anytls-go.git".insteadOf "https://github.com/anytls/anytls-go.git"
+
+      - name: Build AnyTLS Go client using repository fallback
+        run: |
+          set -euo pipefail
+          chmod +x binaries/anytls-go/build.sh
+          ./binaries/anytls-go/build.sh
+          test -s binaries/anytls-go/anytls-client
+          file binaries/anytls-go/anytls-client
+          sha256sum binaries/anytls-go/anytls-client
+
+      - name: Build all installation packages
+        run: |
+          set -euo pipefail
+          chmod +x build-custom.sh
+          ./build-custom.sh
+          test -n "$(find packages -maxdepth 1 -type f -name 'fancyss_*.tar.gz' -print -quit)"
+          echo "===== generated packages ====="
+          ls -lh packages/fancyss_*.tar.gz
+
+      - name: Upload test packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: anytls-fallback-test-packages
+          path: packages/fancyss_*.tar.gz
+          if-no-files-found: error
+          retention-days: 7
