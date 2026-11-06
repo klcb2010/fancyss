@@ -5207,11 +5207,11 @@ start_anytls(){
 	detect_running_status2 ipt2socks 23456
 
 	if [ "${anytls_mode}" = "go" ]; then
-		echo_date "开启AnyTLS Go客户端（伪装 anytls-zig）..."
+		echo_date "开启AnyTLS Go客户端（兼容闭源版参数）..."
 		if [ -n "${ss_basic_anytls_sni}" ]; then
-			run_bg "${anytls_bin}" -s "${server_addr}" -p "${ss_basic_anytls_pass}" -l 127.0.0.1:23456 -sni "${ss_basic_anytls_sni}"
+			run_bg "${anytls_bin}" -server "${server_addr}" --password-file "${pass_file}" -l 127.0.0.1:23456 -sni "${ss_basic_anytls_sni}" "${verify_arg}"
 		else
-			run_bg "${anytls_bin}" -s "${server_addr}" -p "${ss_basic_anytls_pass}" -l 127.0.0.1:23456
+			run_bg "${anytls_bin}" -server "${server_addr}" --password-file "${pass_file}" -l 127.0.0.1:23456 "${verify_arg}"
 		fi
 		sleep 1
 		if ! pidof anytls-zig >/dev/null 2>&1; then

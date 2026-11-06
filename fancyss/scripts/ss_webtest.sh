@@ -3497,6 +3497,10 @@ test_13_at(){
 	local anytls_sni=""
 	local anytls_ai=""
 	local sni_arg=""
+	local zig_sni_arg=""
+	local pass_file=""
+	local verify_arg="--verify"
+	local anytls_go_help=""
 
 	case "${file}" in
 	/*)
@@ -3531,27 +3535,26 @@ test_13_at(){
 			continue
 		}
 		server_addr="$(wt_anytls_hostport "${anytls_server}" "${anytls_port}")"
+		pass_file="${TMP2}/anytls_${nu}.pass"
+		printf '%s' "${anytls_pass}" > "${pass_file}"
+		chmod 600 "${pass_file}"
+		verify_arg="--verify"
+		[ "${anytls_ai}" = "1" ] && verify_arg="--insecure"
 		sni_arg=""
 		[ -n "${anytls_sni}" ] && sni_arg=" -sni $(wt_shell_quote "${anytls_sni}")"
 		pid_file="${TMP2}/pids/anytls_${nu}.pid"
 		start_script="${hooks_dir}/${nu}.start.sh"
 		stop_script="${hooks_dir}/${nu}.stop.sh"
-		anytls_go_help=""
 		if [ -s "/koolshare/bin/anytls-zig" ]; then
 			anytls_go_help="$(/koolshare/bin/anytls-zig --help 2>&1)"
 		fi
 		if printf '%s' "${anytls_go_help}" | grep -q "Server address or anytls:// link"; then
-			wt_write_pid_hook_scripts "${start_script}" "${stop_script}" "${pid_file}" "\"/koolshare/bin/anytls-zig\" -s $(wt_shell_quote "${server_addr}") -p $(wt_shell_quote "${anytls_pass}") -l $(wt_shell_quote "127.0.0.1:${socks5_port}")${sni_arg}" || continue
+			wt_write_pid_hook_scripts "${start_script}" "${stop_script}" "${pid_file}" "\"/koolshare/bin/anytls-zig\" -server $(wt_shell_quote "${server_addr}") --password-file $(wt_shell_quote "${pass_file}") -l $(wt_shell_quote "127.0.0.1:${socks5_port}")${sni_arg} ${verify_arg}" || continue
 		else
 			if [ ! -s "/koolshare/bin/anytls-zig.bak" ]; then
 				wt_mark_failed_result "${nu}"
 				continue
 			fi
-			pass_file="${TMP2}/anytls_${nu}.pass"
-			printf '%s' "${anytls_pass}" > "${pass_file}"
-			chmod 600 "${pass_file}"
-			verify_arg="--verify"
-			[ "${anytls_ai}" = "1" ] && verify_arg="--insecure"
 			zig_sni_arg=""
 			[ -n "${anytls_sni}" ] && zig_sni_arg=" -sni $(wt_shell_quote "${anytls_sni}")"
 			wt_write_pid_hook_scripts "${start_script}" "${stop_script}" "${pid_file}" "\"/koolshare/bin/anytls-zig.bak\" -server $(wt_shell_quote "${server_addr}") --password-file $(wt_shell_quote "${pass_file}") -l $(wt_shell_quote "127.0.0.1:${socks5_port}")${zig_sni_arg} ${verify_arg}" || continue

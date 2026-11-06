@@ -277,6 +277,18 @@ jobs:
               print("Target function not found")
               exit(1)
           PY
+      - name: Setup Go
+        if: steps.build_decision.outputs.needs_build == 'true'
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.5'
+
+      - name: Build patched AnyTLS Go client
+        if: steps.build_decision.outputs.needs_build == 'true'
+        run: |
+          chmod +x binaries/anytls-go/build.sh
+          ./binaries/anytls-go/build.sh
+
       # =========================
       # 12. build
       # =========================
