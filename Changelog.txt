@@ -1,5 +1,13 @@
 fancyss Changelog
 
+3.5.49（20261107）
+   - update	Fix plugin changelog button URL
+   - update	Merge pull request #1 from klcb2010/test/component-updates-2026-11
+   - update	Merge branch 'security/xray-mptcp-2026' into test/component-updates-2026-11
+   - update	Resolve SmartDNS release parser merge conflict
+   - update	Keep production package metadata version while resolving merge conflict
+   - update	Keep production package version while resolving merge conflict
+
 3.5.48（20261106）
    - update	Merge pull request #1 from klcb2010/test/component-updates-2026-11
    - update	Merge branch 'security/xray-mptcp-2026' into test/component-updates-2026-11
