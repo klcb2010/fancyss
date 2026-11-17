@@ -394,6 +394,14 @@ resolve_payload_once_only(){
 			printf '%s' "${payload}"
 			return 0
 		fi
+		# serve/ctl 不可用且没有有效缓存时，回退到本地单次检测，
+		# 避免状态服务通信异常导致页面长期停留在 Waiting。
+		if status_tool_bin="$(pick_status_tool)"; then
+			if payload="$(refresh_payload_once "${status_tool_bin}")"; then
+				printf '%s' "${payload}"
+				return 0
+			fi
+		fi
 		set_waiting_status
 		get_status_payload
 		return 0
