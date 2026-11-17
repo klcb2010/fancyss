@@ -1183,9 +1183,19 @@ refresh_current_node_server_ip_runtime() {
 		fi
 	fi
 
-	resolved_ip=$(run dnsclient -46 -p 53 -t 1 -i 1 @127.0.0.1 "${ss_basic_server_orig}" 2>/dev/null | head -n1)
-	__valid_ip46 "${resolved_ip}" >/dev/null 2>&1
-	[ "$?" = "0" -o "$?" = "1" ] || resolved_ip=""
+	# DNS 服务刚重启时可能尚未完成监听或上游初始化，不要只查询一次就判定失败。
+	local attempt=1
+	while [ "${attempt}" -le 3 ]
+	do
+		resolved_ip=$(run dnsclient -46 -p 53 -t 2 -i 1 @127.0.0.1 "${ss_basic_server_orig}" 2>/dev/null | head -n1)
+		__valid_ip46 "${resolved_ip}" >/dev/null 2>&1
+		if [ "$?" = "0" -o "$?" = "1" ];then
+			break
+		fi
+		resolved_ip=""
+		[ "${attempt}" -ge 3 ] || sleep 1
+		attempt=$((attempt + 1))
+	done
 	[ -n "${resolved_ip}" ] || return 1
 	record_current_node_server_ip "${resolved_ip}" || return 1
 	echo_date "节点服务器域名运行时解析成功：${ss_basic_server_orig} -> ${resolved_ip}"
