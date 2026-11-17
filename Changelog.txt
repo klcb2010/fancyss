@@ -1,5 +1,11 @@
 fancyss Changelog
 
+3.5.52（20261117）
+   - update	Fix status serve startup without failover
+   - update	Fix status readiness check for SOCKS5 listener
+   - update	Update README.md
+   - update	Fix status probe detection for AnyTLS-Go
+
 3.5.51（20261117）
    - update	Fix status readiness check for SOCKS5 listener
    - update	Update README.md
