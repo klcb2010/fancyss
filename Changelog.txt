@@ -1,5 +1,11 @@
 fancyss Changelog
 
+3.5.51（20261117）
+   - update	Fix status readiness check for SOCKS5 listener
+   - update	Update README.md
+   - update	Fix status probe detection for AnyTLS-Go
+   - update	Fix plugin changelog button URL
+
 3.5.50（20261117）
    - update	Update README.md
    - update	Fix status probe detection for AnyTLS-Go
