@@ -47,9 +47,9 @@ pick_status_tool(){
 }
 
 status_socks5_ready() {
-	netstat -nlp 2>/dev/null \
-		| grep -w "23456" \
-		| grep -Eq "xray|v2ray|naive|tuic|anytls-go|anytls-zig|rss-local"
+	# 只判断状态检测使用的 SOCKS5 端口是否已监听，不依赖 netstat -p
+	# 返回的进程名；BusyBox/netstat 可能不显示或截断进程信息。
+	netstat -nl 2>/dev/null | grep -Eq '(^|[.:])23456[[:space:]]'
 }
 
 set_waiting_status(){
