@@ -1,5 +1,11 @@
 fancyss Changelog
 
+3.5.53（20261117）
+   - update	Retry runtime DNS bootstrap resolution
+   - update	Fix status probe fallback when serve is unavailable
+   - update	Fix status serve startup without failover
+   - update	Fix status readiness check for SOCKS5 listener
+
 3.5.52（20261117）
    - update	Fix status serve startup without failover
    - update	Fix status readiness check for SOCKS5 listener
