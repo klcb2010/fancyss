@@ -1,5 +1,10 @@
 fancyss Changelog
 
+3.5.54（20261117）
+   - update	Update status-tool binaries to v0.1.3
+   - update	Retry runtime DNS bootstrap resolution
+   - update	Fix status probe fallback when serve is unavailable
+
 3.5.53（20261117）
    - update	Retry runtime DNS bootstrap resolution
    - update	Fix status probe fallback when serve is unavailable
