@@ -333,7 +333,6 @@ status_serve_process_running(){
 }
 
 ensure_status_serve_runtime(){
-	[ "${ss_failover_enable}" != "1" ] || return 1
 	[ -x "${STATUS_CTL_BIN}" ] || return 1
 	if [ -S "${STATUS_SERVE_SOCKET}" ] && status_serve_args_match;then
 		status_serve_process_running && return 0
