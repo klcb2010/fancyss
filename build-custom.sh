@@ -262,7 +262,7 @@ sync_binary(){
 	cp -rf ${CURR_PATH}/binaries/websocketd/websocketd-${WEBSOCKETD_VER}-linux-armv7a ${CURR_PATH}/fancyss/bin-qca/websocketd
 	cp -rf ${CURR_PATH}/binaries/websocketd/websocketd-${WEBSOCKETD_VER}-linux-armv5te ${CURR_PATH}/fancyss/bin-arm/websocketd
 
-	local STATUSTOOL_VER="v0.1.0"
+	local STATUSTOOL_VER="v0.1.3"
 	cp -rf ${CURR_PATH}/binaries/status-tool/status-tool-${STATUSTOOL_VER}-linux-aarch64 ${CURR_PATH}/fancyss/bin-mtk/status-tool
 	cp -rf ${CURR_PATH}/binaries/status-tool/status-tool-${STATUSTOOL_VER}-linux-aarch64 ${CURR_PATH}/fancyss/bin-hnd_v8/status-tool
 	cp -rf ${CURR_PATH}/binaries/status-tool/status-tool-${STATUSTOOL_VER}-linux-aarch64 ${CURR_PATH}/fancyss/bin-ipq64/status-tool
