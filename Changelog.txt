@@ -1,5 +1,11 @@
 fancyss Changelog
 
+3.5.50（20261117）
+   - update	Update README.md
+   - update	Fix status probe detection for AnyTLS-Go
+   - update	Fix plugin changelog button URL
+   - update	Merge pull request #1 from klcb2010/test/component-updates-2026-11
+
 3.5.49（20261107）
    - update	Fix plugin changelog button URL
    - update	Merge pull request #1 from klcb2010/test/component-updates-2026-11
