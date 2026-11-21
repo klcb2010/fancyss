@@ -1,5 +1,8 @@
 fancyss Changelog
 
+3.5.57（20261121）
+   - update	fix: specify workflows for failure notifications
+
 3.5.56（20261121）
    - update	Update status-tool binaries to v0.1.3
 
