@@ -1,5 +1,10 @@
 fancyss Changelog
 
+3.5.60（20261121）
+   - update	fix: make PushPlus failure notifications reliable
+   - update	Fix PushPlus notification line breaks
+   - update	Standardize Actions failure notification
+
 3.5.59（20261121）
    - update	Fix PushPlus notification line breaks
    - update	Standardize Actions failure notification
