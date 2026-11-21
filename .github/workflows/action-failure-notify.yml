@@ -2,7 +2,13 @@ name: Action Failure Notify
 
 on:
   workflow_run:
-    workflows: ["*"]
+    workflows:
+      - "Build Xray-core security update"
+      - "FancySS Mod Build by klcb2010"
+      - "FancySS Mod Build test"
+      - "Delete Old Commits"
+      - "Test AnyTLS Go Source Fallback"
+      - "FancySS Component Update Test Build"
     types: [completed]
 
 permissions:
